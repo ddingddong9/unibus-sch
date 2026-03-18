@@ -1,0 +1,301 @@
+import { useState, useEffect } from "react";
+import { Plus, Edit, Trash2, Pin, Search } from "lucide-react";
+import AdminLayout from "./AdminLayout";
+import { api } from "../services/api";
+
+interface Notice {
+  id: string;
+  title: string;
+  titleKo: string;
+  content: string;
+  contentKo: string;
+  category: string;
+  createdAt: string;
+}
+
+export default function NoticeManagement() {
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [showModal, setShowModal] = useState(false);
+  const [editingNotice, setEditingNotice] = useState<Notice | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [formData, setFormData] = useState({
+    title: "",
+    titleKo: "",
+    content: "",
+    contentKo: "",
+    category: "general",
+  });
+
+  useEffect(() => {
+    loadNotices();
+  }, []);
+
+  const loadNotices = async () => {
+    try {
+      setLoading(true);
+      const data = await api.getNotices();
+      setNotices(data);
+      console.log("Loaded notices:", data);
+    } catch (error) {
+      console.error("Failed to load notices:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreate = () => {
+    setEditingNotice(null);
+    setFormData({
+      title: "",
+      titleKo: "",
+      content: "",
+      contentKo: "",
+      category: "general",
+    });
+    setShowModal(true);
+  };
+
+  const handleEdit = (notice: Notice) => {
+    setEditingNotice(notice);
+    setFormData({
+      title: notice.title,
+      titleKo: notice.titleKo,
+      content: notice.content,
+      contentKo: notice.contentKo,
+      category: notice.category,
+    });
+    setShowModal(true);
+  };
+
+  const handleSave = async () => {
+    try {
+      if (editingNotice) {
+        const updated = await api.updateNotice(editingNotice.id, formData);
+        setNotices(notices.map(n => n.id === editingNotice.id ? updated : n));
+        console.log("Updated notice:", updated);
+      } else {
+        const newNotice = await api.createNotice(formData);
+        setNotices([newNotice, ...notices]);
+        console.log("Created notice:", newNotice);
+      }
+      setShowModal(false);
+    } catch (error) {
+      console.error("Failed to save notice:", error);
+      alert("Failed to save notice");
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    if (confirm("이 공지사항을 삭제하시겠습니까?")) {
+      try {
+        await api.deleteNotice(id);
+        setNotices(notices.filter(n => n.id !== id));
+        console.log("Deleted notice:", id);
+      } catch (error) {
+        console.error("Failed to delete notice:", error);
+        alert("Failed to delete notice");
+      }
+    }
+  };
+
+  const filteredNotices = notices.filter(notice =>
+    notice.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    notice.titleKo.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    notice.content.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    notice.contentKo.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <AdminLayout>
+      <div className="p-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[32px] mb-2">
+              공지사항 관리
+            </h1>
+            <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">
+              총 {notices.length}개의 공지사항
+            </p>
+          </div>
+          <button
+            onClick={handleCreate}
+            className="flex items-center gap-2 px-6 py-3 bg-[#1e3b8a] text-white font-['Public_Sans'] font-semibold text-[15px] rounded-lg hover:bg-[#1e3b8a]/90 transition-colors shadow-sm"
+          >
+            <Plus className="w-5 h-5" />
+            새 공지사항
+          </button>
+        </div>
+
+        {/* Search Bar */}
+        <div className="mb-6">
+          <div className="relative max-w-md">
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-[#94a3b8]" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="공지사항 검색..."
+              className="w-full h-[48px] pl-12 pr-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[15px] text-[#0f172a] placeholder:text-[#94a3b8] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
+            />
+          </div>
+        </div>
+
+        {/* Table */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          <table className="w-full">
+            <thead className="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-6 py-4 text-left font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] w-[50%]">제목</th>
+                <th className="px-6 py-4 text-left font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] w-[15%]">카테고리</th>
+                <th className="px-6 py-4 text-left font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] w-[15%]">작성일</th>
+                <th className="px-6 py-4 text-left font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] w-[10%]">상태</th>
+                <th className="px-6 py-4 text-center font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] w-[10%]">작업</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredNotices.map((notice) => (
+                <tr key={notice.id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-2">
+                      <span className="font-['Public_Sans'] font-medium text-[#0f172a] text-[15px]">
+                        {notice.titleKo}
+                      </span>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <span className="px-3 py-1.5 bg-[#1e3b8a]/10 text-[#1e3b8a] rounded-full font-['Public_Sans'] text-[13px] font-medium">
+                      {notice.category}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 font-['Public_Sans'] text-[#64748b] text-[14px]">
+                    {new Date(notice.createdAt).toLocaleDateString('ko-KR')}
+                  </td>
+                  <td className="px-6 py-4 whitespace-nowrap">
+                    <span className="px-3 py-1.5 bg-green-100 text-green-700 rounded-full font-['Public_Sans'] text-[13px] font-medium">
+                      게시중
+                    </span>
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center justify-center gap-2">
+                      <button
+                        onClick={() => handleEdit(notice)}
+                        className="p-2 text-[#1e3b8a] hover:bg-[#1e3b8a]/10 rounded-lg transition-colors"
+                        title="수정"
+                      >
+                        <Edit className="w-4 h-4" />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(notice.id)}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        title="삭제"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Modal */}
+      {showModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-auto">
+            <div className="p-6 border-b border-gray-200">
+              <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[24px]">
+                {editingNotice ? "공지사항 수정" : "새 공지사항 작성"}
+              </h2>
+            </div>
+            <div className="p-6 space-y-5">
+              <div>
+                <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
+                  제목 (English)
+                </label>
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
+                  placeholder="Enter notice title in English"
+                />
+              </div>
+
+              <div>
+                <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
+                  제목 (한국어)
+                </label>
+                <input
+                  type="text"
+                  value={formData.titleKo}
+                  onChange={(e) => setFormData({ ...formData, titleKo: e.target.value })}
+                  className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
+                  placeholder="공지사항 제목을 입력하세요"
+                />
+              </div>
+
+              <div>
+                <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
+                  카테고리
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
+                >
+                  <option value="general">일반</option>
+                  <option value="schedule">운행시간표</option>
+                  <option value="important">중요</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
+                  내용 (English)
+                </label>
+                <textarea
+                  value={formData.content}
+                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                  rows={6}
+                  className="w-full px-4 py-3 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20 resize-none"
+                  placeholder="Enter notice content in English"
+                />
+              </div>
+
+              <div>
+                <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
+                  내용 (한국어)
+                </label>
+                <textarea
+                  value={formData.contentKo}
+                  onChange={(e) => setFormData({ ...formData, contentKo: e.target.value })}
+                  rows={6}
+                  className="w-full px-4 py-3 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20 resize-none"
+                  placeholder="공지사항 내용을 입력하세요"
+                />
+              </div>
+            </div>
+            <div className="p-6 border-t border-gray-200 flex gap-3 justify-end">
+              <button
+                onClick={() => setShowModal(false)}
+                className="px-5 py-2.5 text-[#64748b] hover:bg-gray-100 rounded-lg font-['Public_Sans'] font-medium text-[15px] transition-colors"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleSave}
+                className="px-5 py-2.5 bg-[#1e3b8a] text-white rounded-lg font-['Public_Sans'] font-semibold text-[15px] hover:bg-[#1e3b8a]/90 transition-colors"
+              >
+                {editingNotice ? "수정" : "작성"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </AdminLayout>
+  );
+}
