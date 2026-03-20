@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import svgPaths from "../../imports/svg-usddjxhhke";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import NaverMapComponent from "../components/NaverMapComponent";
+import { api } from "../services/api";
 
 interface BusStop {
   id: string;
@@ -16,33 +17,53 @@ interface BusStop {
   status: "arriving" | "scheduled" | "waiting";
 }
 
+interface BusMarker {
+  id: string;
+  position: { lat: number; lng: number };
+  label: string;
+}
+
+const FALLBACK_STOPS: BusStop[] = [
+  { id: "1", name: "Main Gate", nameKo: "정문", routes: "Route A • 150m away", routesKo: "A노선 • 150m 거리", distance: "150m", nextBus: 3, status: "arriving" },
+  { id: "2", name: "Engineering Hall", nameKo: "공과대학", routes: "Route A, B • 400m away", routesKo: "A, B노선 • 400m 거리", distance: "400m", nextBus: 8, status: "scheduled" },
+  { id: "3", name: "Central Library", nameKo: "중앙도서관", routes: "Route B • 650m away", routesKo: "B노선 • 650m 거리", distance: "650m", nextBus: 14, status: "waiting" },
+];
+
 export default function CampusShuttleWrapper() {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const [busStops, setBusStops] = useState<BusStop[]>([
-    { id: "1", name: "Main Gate", nameKo: "정문", routes: "Route A • 150m away", routesKo: "A노선 • 150m 거리", distance: "150m", nextBus: 3, status: "arriving" },
-    { id: "2", name: "Engineering Hall", nameKo: "공과대학", routes: "Route A, B • 400m away", routesKo: "A, B노선 • 400m 거리", distance: "400m", nextBus: 8, status: "scheduled" },
-    { id: "3", name: "Central Library", nameKo: "중앙도서관", routes: "Route B • 650m away", routesKo: "B노선 • 650m 거리", distance: "650m", nextBus: 14, status: "waiting" },
-  ]);
+  const [busStops] = useState<BusStop[]>(FALLBACK_STOPS);
+  const [buses, setBuses] = useState<BusMarker[]>([]);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
-  // Mock bus positions on campus
-  const buses = [
-    { id: "SCH-01", position: { lat: 36.8005, lng: 127.0763 }, label: "SCH-01" },
-    { id: "SCH-03", position: { lat: 36.7985, lng: 127.0743 }, label: "SCH-03" },
-  ];
+  const fetchBusLocations = useCallback(async () => {
+    try {
+      const locations = await api.getBusLocations();
+      const markers = locations.map((loc) => ({
+        id: loc.busId,
+        position: { lat: loc.lat, lng: loc.lng },
+        label: loc.busId,
+      }));
+      setBuses(markers);
+      setLocationError(null);
+    } catch {
+      // 폴백: API 실패 시 기본 위치 사용
+      if (buses.length === 0) {
+        setBuses([
+          { id: "SCH-01", position: { lat: 36.8005, lng: 127.0763 }, label: "SCH-01" },
+          { id: "SCH-03", position: { lat: 36.7985, lng: 127.0743 }, label: "SCH-03" },
+        ]);
+        setLocationError("실시간 위치를 불러올 수 없습니다");
+      }
+    }
+  }, [buses.length]);
 
-  // Simulate real-time updates
+  // 최초 로드 + 30초 폴링
   useEffect(() => {
-    const interval = setInterval(() => {
-      setBusStops(prev => prev.map(stop => ({
-        ...stop,
-        nextBus: stop.nextBus > 1 ? stop.nextBus - 1 : 15,
-        status: stop.nextBus <= 3 ? "arriving" : stop.nextBus <= 10 ? "scheduled" : "waiting"
-      })));
-    }, 60000); // Update every minute
-
+    fetchBusLocations();
+    const interval = setInterval(fetchBusLocations, 30000);
     return () => clearInterval(interval);
-  }, []);
+  }, [fetchBusLocations]);
 
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
@@ -53,7 +74,6 @@ export default function CampusShuttleWrapper() {
             center={{ lat: 36.7995, lng: 127.0753 }}
             zoom={16}
             buses={buses}
-            clientId="YOUR_NAVER_CLIENT_ID"
           />
         </div>
 
@@ -132,6 +152,16 @@ export default function CampusShuttleWrapper() {
             </div>
           </div>
         </div>
+
+        {/* Location error banner */}
+        {locationError && (
+          <div className="absolute top-[100px] left-4 right-4 z-40 bg-[rgba(254,226,226,0.95)] backdrop-blur-sm border border-[#fca5a5] rounded-[12px] px-4 py-2 flex items-center gap-2">
+            <svg className="w-4 h-4 text-[#ef4444] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+            </svg>
+            <p className="font-['Public_Sans'] font-medium text-[#ef4444] text-[12px]">{locationError}</p>
+          </div>
+        )}
 
         {/* Top Header */}
         <div className="absolute backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] content-stretch flex items-center justify-between left-0 pb-[12px] pt-[48px] px-[16px] right-0 top-0 z-30">

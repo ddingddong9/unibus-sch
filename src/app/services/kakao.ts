@@ -9,7 +9,7 @@ declare global {
 export class KakaoLoginService {
   private static instance: KakaoLoginService;
   private initialized = false;
-  private readonly APP_KEY = 'YOUR_KAKAO_JAVASCRIPT_KEY'; // 사용자가 교체해야 함
+  private readonly APP_KEY = import.meta.env.VITE_KAKAO_APP_KEY || 'YOUR_KAKAO_JAVASCRIPT_KEY';
 
   private constructor() {}
 

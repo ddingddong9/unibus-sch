@@ -16,6 +16,8 @@ export interface Notice {
   content: string;
   category: 'general' | 'route' | 'system';
   priority: 'low' | 'medium' | 'high';
+  isPinned: boolean;
+  viewCount: number;
   authorId: string;
   authorName: string;
   createdAt: string;
