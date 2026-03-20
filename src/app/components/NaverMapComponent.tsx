@@ -21,7 +21,7 @@ export default function NaverMapComponent({
   center = { lat: 36.7995, lng: 127.0753 }, // 순천향대학교 좌표
   zoom = 16,
   buses = [],
-  clientId = "YOUR_NAVER_CLIENT_ID" // 네이버 클라우드 플랫폼에서 발급받은 Client ID로 교체
+  clientId = import.meta.env.VITE_NAVER_CLIENT_ID || "YOUR_NAVER_CLIENT_ID"
 }: NaverMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);

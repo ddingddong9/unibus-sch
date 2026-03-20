@@ -2,11 +2,13 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import svgPaths from "../../imports/svg-9blebrmjt8";
 import { useLanguage } from "../contexts/LanguageContext";
+import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 
 export default function SignUpWrapper() {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const { login } = useAuth();
   const [formData, setFormData] = useState({
     name: "",
     studentId: "",
@@ -58,9 +60,9 @@ export default function SignUpWrapper() {
       });
       console.log("Signup successful:", result);
       
-      // Auto login after signup
+      // Auto login after signup — AuthContext에 반영
       const loginResult = await api.login(formData.email, formData.password);
-      localStorage.setItem("user", JSON.stringify(loginResult.user));
+      login(loginResult.token, loginResult.user);
       navigate("/home");
     } catch (err: any) {
       console.error("Signup error:", err);

@@ -3,17 +3,7 @@ import { useNavigate } from "react-router";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
-
-interface Notice {
-  id: string;
-  title: string;
-  titleKo: string;
-  content: string;
-  contentKo: string;
-  category: string;
-  createdAt: string;
-  views: number;
-}
+import type { Notice } from "../types";
 
 export default function NoticeWrapper() {
   const navigate = useNavigate();
@@ -22,6 +12,7 @@ export default function NoticeWrapper() {
   const [expandedNotice, setExpandedNotice] = useState<string | null>(null);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadNotices();
@@ -30,11 +21,12 @@ export default function NoticeWrapper() {
   const loadNotices = async () => {
     try {
       setLoading(true);
+      setError(null);
       const data = await api.getNotices();
       setNotices(data);
-      console.log("Loaded notices:", data);
-    } catch (error) {
-      console.error("Failed to load notices:", error);
+    } catch (err) {
+      console.error("Failed to load notices:", err);
+      setError(err instanceof Error ? err.message : "공지사항을 불러오지 못했습니다");
     } finally {
       setLoading(false);
     }
@@ -46,8 +38,8 @@ export default function NoticeWrapper() {
 
   const getCategoryColor = (category: string) => {
     switch(category) {
-      case "schedule": return "bg-[#3b82f6] text-white";
-      case "important": return "bg-[#f59e0b] text-white";
+      case "route": return "bg-[#3b82f6] text-white";
+      case "system": return "bg-[#f59e0b] text-white";
       case "general": return "bg-[#10b981] text-white";
       default: return "bg-[#64748b] text-white";
     }
@@ -55,8 +47,8 @@ export default function NoticeWrapper() {
 
   const getCategoryLabel = (category: string) => {
     const labels: Record<string, { ko: string; en: string }> = {
-      schedule: { ko: "운행시간표", en: "Schedule" },
-      important: { ko: "중요", en: "Important" },
+      route: { ko: "운행정보", en: "Route" },
+      system: { ko: "시스템", en: "System" },
       general: { ko: "일반", en: "General" },
     };
     return language === "ko" ? (labels[category]?.ko || category) : (labels[category]?.en || category);
@@ -116,14 +108,14 @@ export default function NoticeWrapper() {
               {t("전체", "All")}
             </button>
             <button
-              onClick={() => setSelectedCategory("schedule")}
+              onClick={() => setSelectedCategory("route")}
               className={`px-4 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[12px] whitespace-nowrap transition-all ${
-                selectedCategory === "schedule"
+                selectedCategory === "route"
                   ? "bg-[#3b82f6] text-white"
                   : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
               }`}
             >
-              {t("운행시간표", "Schedule")}
+              {t("운행정보", "Route")}
             </button>
             <button
               onClick={() => setSelectedCategory("general")}
@@ -133,17 +125,17 @@ export default function NoticeWrapper() {
                   : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
               }`}
             >
-              {t("공지", "Announcements")}
+              {t("일반", "General")}
             </button>
             <button
-              onClick={() => setSelectedCategory("important")}
+              onClick={() => setSelectedCategory("system")}
               className={`px-4 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[12px] whitespace-nowrap transition-all ${
-                selectedCategory === "important"
+                selectedCategory === "system"
                   ? "bg-[#f59e0b] text-white"
                   : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
               }`}
             >
-              {t("정비", "Maintenance")}
+              {t("시스템", "System")}
             </button>
           </div>
         </div>
@@ -153,14 +145,28 @@ export default function NoticeWrapper() {
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="bg-[#f1f5f9] rounded-full p-6 mb-4">
-                <svg className="w-12 h-12 text-[#94a3b8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
+                <svg className="w-12 h-12 text-[#94a3b8] animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
                 </svg>
               </div>
               <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] mb-1">{t("공지사항 로딩 중", "Loading notices")}</p>
-              <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[14px]">
-                {t("공지사항을 로딩 중입니다", "Loading notices...")}
-              </p>
+            </div>
+          ) : error ? (
+            <div className="flex flex-col items-center justify-center py-12">
+              <div className="bg-[#fee2e2] rounded-full p-6 mb-4">
+                <svg className="w-12 h-12 text-[#ef4444]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+                </svg>
+              </div>
+              <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] mb-1">{t("불러오기 실패", "Failed to load")}</p>
+              <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[14px] mb-4">{error}</p>
+              <button
+                onClick={loadNotices}
+                className="bg-[#1e3a8a] text-white px-6 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[14px] hover:bg-[#1e40af] active:scale-95 transition-all"
+              >
+                {t("다시 시도", "Retry")}
+              </button>
             </div>
           ) : (
             <>
@@ -183,7 +189,7 @@ export default function NoticeWrapper() {
                         )}
                       </div>
                       <h3 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] leading-[24px] mb-1">
-                        {language === "ko" ? notice.titleKo : notice.title}
+                        {notice.title}
                       </h3>
                       <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[12px] leading-[16px]">
                         {formatDate(notice.createdAt)}
@@ -204,7 +210,7 @@ export default function NoticeWrapper() {
                   {expandedNotice === notice.id && (
                     <div className="mt-3 pt-3 border-t border-[#f1f5f9]">
                       <p className="font-['Public_Sans'] font-normal text-[#475569] text-[14px] leading-[22px]">
-                        {language === "ko" ? notice.contentKo : notice.content}
+                        {notice.content}
                       </p>
                     </div>
                   )}

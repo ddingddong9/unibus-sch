@@ -45,18 +45,26 @@ export default function SettingsWrapper() {
         {/* Profile Section */}
         <div className="w-full px-[24px] py-[24px] border-b border-[#f1f5f9]">
           <div className="flex items-center gap-4">
-            <div className="bg-gradient-to-br from-[#1e3a8a] to-[#3b82f6] rounded-full size-[72px] flex items-center justify-center">
-              <span className="font-['Public_Sans'] font-bold text-white text-[28px]">김</span>
+            <div className="bg-gradient-to-br from-[#1e3a8a] to-[#3b82f6] rounded-full size-[72px] flex items-center justify-center overflow-hidden shrink-0">
+              {user?.profileImage ? (
+                <img src={user.profileImage} alt="profile" className="size-full object-cover" />
+              ) : (
+                <span className="font-['Public_Sans'] font-bold text-white text-[28px]">
+                  {user?.name?.charAt(0)?.toUpperCase() ?? "?"}
+                </span>
+              )}
             </div>
-            <div className="flex-1">
-              <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px] leading-[28px] mb-1">
-                김순천
+            <div className="flex-1 min-w-0">
+              <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px] leading-[28px] mb-1 truncate">
+                {user?.name ?? "-"}
               </h2>
-              <p className="font-['Public_Sans'] font-normal text-[#64748b] text-[14px] leading-[20px] mb-1">
-                Student ID: 20240001
-              </p>
-              <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[12px] leading-[16px]">
-                kim.soonchun@sch.ac.kr
+              {user?.studentId && (
+                <p className="font-['Public_Sans'] font-normal text-[#64748b] text-[14px] leading-[20px] mb-1">
+                  {t("학번", "Student ID")}: {user.studentId}
+                </p>
+              )}
+              <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[12px] leading-[16px] truncate">
+                {user?.email ?? "-"}
               </p>
             </div>
           </div>

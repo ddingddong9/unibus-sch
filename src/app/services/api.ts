@@ -8,8 +8,8 @@ import type {
   KakaoUser 
 } from '../types';
 
-// Local development URL (Docker) with correct function name
-const API_BASE_URL = `http://localhost:54321/functions/v1/make-server`;
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'http://localhost:54321';
+const API_BASE_URL = `${SUPABASE_URL}/functions/v1/make-server`;
 
 class ApiClient {
   private token: string | null = null;
@@ -191,6 +191,24 @@ class ApiClient {
     if (!response.success) {
       throw new Error(response.error || 'Failed to delete notice');
     }
+  }
+
+  // ============ BUS ENDPOINTS ============
+
+  async getBusLocations(): Promise<Array<{ busId: string; lat: number; lng: number; speed: number; heading: number; timestamp: string }>> {
+    const response = await this.request<ApiResponse<any[]>>('/buses/locations/latest');
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to fetch bus locations');
+  }
+
+  async getBuses(): Promise<any[]> {
+    const response = await this.request<ApiResponse<any[]>>('/buses');
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to fetch buses');
   }
 
   // ============ UTILITY ============
