@@ -5,6 +5,7 @@ import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
 import type { Notice } from "../types";
+import { NoticeSkeleton } from "../components/SkeletonLoaders";
 
 const listContainer = {
   hidden: { opacity: 0 },
@@ -153,15 +154,15 @@ export default function NoticeWrapper() {
         {/* Notice List */}
         <div className="flex-1 w-full px-[16px] py-[16px] space-y-3 overflow-y-auto scrollbar-hide">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="bg-[#f1f5f9] rounded-full p-6 mb-4">
-                <svg className="w-12 h-12 text-[#94a3b8] animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
-                </svg>
-              </div>
-              <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] mb-1">{t("공지사항 로딩 중", "Loading notices")}</p>
-            </div>
+            <motion.div
+              key="notice-skeleton"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+            >
+              <NoticeSkeleton />
+            </motion.div>
           ) : error ? (
             <div className="flex flex-col items-center justify-center py-12">
               <div className="bg-[#fee2e2] rounded-full p-6 mb-4">
