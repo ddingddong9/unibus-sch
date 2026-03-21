@@ -56,12 +56,12 @@ export default function HomeWrapper() {
 
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-start relative size-full">
-      <div className="bg-white content-stretch flex flex-col items-start max-w-[430px] h-screen overflow-y-auto scrollbar-hide pb-[120px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full">
+      <div className="bg-white content-stretch flex flex-col items-start max-w-[430px] overflow-y-auto scrollbar-hide pb-[120px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full" style={{ height: '100dvh' }}>
 
         {/* Header – sticky, no entrance animation */}
-        <div className="relative shrink-0 w-full bg-white sticky top-0 z-10">
+        <div className="relative shrink-0 w-full bg-white sticky top-0 z-10 pt-safe">
           <div className="flex flex-row items-center size-full">
-            <div className="content-stretch flex items-center justify-between pb-[8px] pt-[24px] px-[24px] relative w-full">
+            <div className="content-stretch flex items-center justify-between pb-[8px] pt-[16px] px-[24px] relative w-full">
               <div className="content-stretch flex flex-col items-start relative shrink-0">
                 <div className="flex flex-col font-['Public_Sans'] font-medium justify-center leading-[0] relative shrink-0 text-[#64748b] text-[12px] tracking-[0.6px] uppercase">
                   <p className="leading-[16px]"></p>

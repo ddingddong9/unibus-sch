@@ -23,7 +23,7 @@ export default function QrScannerWrapper() {
     <div className="bg-[#0f172a] content-stretch flex flex-col items-start relative size-full">
       <div className="content-stretch flex flex-col items-center justify-between p-[24px] relative size-full">
         {/* Header */}
-        <div className="w-full flex items-center justify-between pt-[24px]">
+        <div className="w-full flex items-center justify-between pt-safe" style={{ paddingTop: 'max(24px, env(safe-area-inset-top, 24px))' }}>
           <button
             onClick={() => navigate("/home")}
             className="flex items-center justify-center size-[40px] bg-[rgba(255,255,255,0.1)] rounded-full hover:bg-[rgba(255,255,255,0.2)] active:scale-95 transition-all"

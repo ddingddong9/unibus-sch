@@ -12,4 +12,15 @@
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* iOS PWA: 상태표시줄 배경이 앱과 동일하게 보이도록 */
+  background-color: #ffffff;
+}
+
+/* iOS Safe Area 유틸리티 클래스 */
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.pb-safe-nav {
+  /* 하단 네비게이션: 홈 인디케이터 높이 + 기본 패딩 */
+  padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
 }
