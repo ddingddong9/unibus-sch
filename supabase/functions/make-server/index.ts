@@ -17,10 +17,19 @@ app.use('*', cors({
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
 
+// Production: Kong strips the /functions/v1/make-server prefix before forwarding
 app.route('/auth', auth);
 app.route('/buses', buses);
 app.route('/notices', notices);
 app.route('/routes', routes);
+
+// Local dev: Kong strips /functions/v1 but keeps /make-server, so Hono
+// receives paths like /make-server/auth/signup instead of just /auth/signup
+const DEV_PREFIX = '/make-server';
+app.route(`${DEV_PREFIX}/auth`, auth);
+app.route(`${DEV_PREFIX}/buses`, buses);
+app.route(`${DEV_PREFIX}/notices`, notices);
+app.route(`${DEV_PREFIX}/routes`, routes);
 
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));
 

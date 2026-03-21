@@ -10,8 +10,8 @@
     {
       "name": "Backend (Supabase Edge Functions)",
       "runtimeExecutable": "npx",
-      "runtimeArgs": ["supabase", "functions", "serve", "make-server", "--no-verify-jwt", "--port", "9001"],
-      "port": 9001
+      "runtimeArgs": ["supabase", "functions", "serve", "make-server", "--no-verify-jwt", "--env-file", "supabase/functions/make-server/.env"],
+      "port": 54321
     }
   ]
 }
