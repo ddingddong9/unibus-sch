@@ -37,7 +37,7 @@ export function AnimatedMobileLayout() {
   return (
     // 모바일: 흰 배경(상태표시줄 색 일치) / 데스크탑: 그라디언트 미리보기
     <div className="min-h-screen w-full bg-white md:bg-gradient-to-br md:from-blue-50 md:to-slate-100 flex items-center justify-center p-0 md:p-4">
-      <div className="w-full max-w-[430px] md:h-[844px] bg-white md:shadow-2xl md:rounded-2xl overflow-hidden relative" style={{ height: '100dvh' }}>
+      <div className="w-full max-w-none md:max-w-[430px] md:h-[844px] bg-white md:shadow-2xl md:rounded-2xl overflow-hidden relative" style={{ height: '100dvh' }}>
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
             key={location.pathname}
