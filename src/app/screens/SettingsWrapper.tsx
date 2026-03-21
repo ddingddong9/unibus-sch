@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
+import { SettingsSkeleton } from "../components/SkeletonLoaders";
 
 const sectionVariants = {
   hidden: { opacity: 0 },
@@ -17,7 +18,7 @@ const rowVariant = {
 export default function SettingsWrapper() {
   const navigate = useNavigate();
   const { language, setLanguage, t } = useLanguage();
-  const { logout, user } = useAuth();
+  const { logout, user, isLoading } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [location, setLocation] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
@@ -51,6 +52,29 @@ export default function SettingsWrapper() {
             <div className="w-[40px]" />
           </div>
         </div>
+
+        {/* ── Skeleton / Content switch ─────────────────────── */}
+        <AnimatePresence mode="wait" initial={false}>
+          {isLoading ? (
+            <motion.div
+              key="settings-skeleton"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
+              className="w-full"
+            >
+              <SettingsSkeleton />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="settings-content"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="w-full"
+            >
 
         {/* Profile Section */}
         <motion.div
@@ -303,6 +327,12 @@ export default function SettingsWrapper() {
             {t("로그아웃", "Logout")}
           </motion.button>
         </motion.div>
+
+            </motion.div>
+          )}
+        </AnimatePresence>
+        {/* ── End skeleton / content ────────────────────────── */}
+
       </div>
 
       {/* Bottom Navigation */}
