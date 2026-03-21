@@ -1,8 +1,18 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
+import { motion } from "framer-motion";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
+
+const sectionVariants = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.0 } },
+};
+const rowVariant = {
+  hidden: { opacity: 0, x: -10 },
+  visible: { opacity: 1, x: 0, transition: { type: "spring" as const, stiffness: 380, damping: 28 } },
+};
 
 export default function SettingsWrapper() {
   const navigate = useNavigate();
@@ -43,7 +53,12 @@ export default function SettingsWrapper() {
         </div>
 
         {/* Profile Section */}
-        <div className="w-full px-[24px] py-[24px] border-b border-[#f1f5f9]">
+        <motion.div
+          className="w-full px-[24px] py-[24px] border-b border-[#f1f5f9]"
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ type: "spring", stiffness: 350, damping: 28, delay: 0.05 }}
+        >
           <div className="flex items-center gap-4">
             <div className="bg-gradient-to-br from-[#1e3a8a] to-[#3b82f6] rounded-full size-[72px] flex items-center justify-center overflow-hidden shrink-0">
               {user?.profileImage ? (
@@ -69,19 +84,27 @@ export default function SettingsWrapper() {
             </div>
           </div>
 
-          <button className="w-full mt-4 bg-[#f1f5f9] h-[44px] rounded-[8px] font-['Public_Sans'] font-semibold text-[#1e3a8a] text-[14px] hover:bg-[#e2e8f0] active:scale-[0.98] transition-all">
+          <motion.button
+            whileTap={{ scale: 0.98 }}
+            className="w-full mt-4 bg-[#f1f5f9] h-[44px] rounded-[8px] font-['Public_Sans'] font-semibold text-[#1e3a8a] text-[14px] hover:bg-[#e2e8f0] transition-all"
+          >
             {t("프로필 수정", "Edit Profile")}
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
 
         {/* Preferences Section */}
-        <div className="w-full px-[24px] py-[16px]">
+        <motion.div
+          className="w-full px-[24px] py-[16px]"
+          variants={sectionVariants}
+          initial="hidden"
+          animate="visible"
+        >
           <h3 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] leading-[24px] mb-4">
             {t("환경설정", "Preferences")}
           </h3>
 
           <div className="space-y-3">
-            <div className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">
+            <motion.div variants={rowVariant} className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">
               <div className="flex items-center gap-3">
                 <div className="bg-[#1e3a8a]/10 rounded-[8px] size-[40px] flex items-center justify-center">
                   <svg className="w-5 h-5 text-[#1e3a8a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -109,9 +132,9 @@ export default function SettingsWrapper() {
                   }`}
                 />
               </button>
-            </div>
+            </motion.div>
 
-            <div className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">
+            <motion.div variants={rowVariant} className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">
               <div className="flex items-center gap-3">
                 <div className="bg-[#10b981]/10 rounded-[8px] size-[40px] flex items-center justify-center">
                   <svg className="w-5 h-5 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -140,9 +163,9 @@ export default function SettingsWrapper() {
                   }`}
                 />
               </button>
-            </div>
+            </motion.div>
 
-            <div className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">
+            <motion.div variants={rowVariant} className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">
               <div className="flex items-center gap-3">
                 <div className="bg-[#64748b]/10 rounded-[8px] size-[40px] flex items-center justify-center">
                   <svg className="w-5 h-5 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -171,9 +194,9 @@ export default function SettingsWrapper() {
                   }`}
                 />
               </button>
-            </div>
+            </motion.div>
 
-            <div className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">
+            <motion.div variants={rowVariant} className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">
               <div className="flex items-center gap-3">
                 <div className="bg-[#64748b]/10 rounded-[8px] size-[40px] flex items-center justify-center">
                   <svg className="w-5 h-5 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -211,42 +234,44 @@ export default function SettingsWrapper() {
                   KO
                 </button>
               </div>
-            </div>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Other Options */}
-        <div className="w-full px-[24px] py-[16px]">
+        <motion.div
+          className="w-full px-[24px] py-[16px]"
+          variants={sectionVariants}
+          initial="hidden"
+          animate="visible"
+        >
           <h3 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] leading-[24px] mb-4">
             {t("기타", "Other")}
           </h3>
 
           <div className="space-y-2">
-            <button className="w-full flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px] hover:bg-gray-50 active:scale-[0.98] transition-all">
-              <div className="flex items-center gap-3">
-                <svg className="w-5 h-5 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            {[
+              { label: t("도움말 & 지원", "Help & Support"), icon: "M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
+              { label: t("이용약관", "Terms & Conditions"), icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+            ].map((item) => (
+              <motion.button
+                key={item.label}
+                variants={rowVariant}
+                whileTap={{ scale: 0.98 }}
+                className="w-full flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px] hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-3">
+                  <svg className="w-5 h-5 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+                  </svg>
+                  <p className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px]">{item.label}</p>
+                </div>
+                <svg className="w-5 h-5 text-[#94a3b8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
-                <p className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px]">{t("도움말 & 지원", "Help & Support")}</p>
-              </div>
-              <svg className="w-5 h-5 text-[#94a3b8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-
-            <button className="w-full flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px] hover:bg-gray-50 active:scale-[0.98] transition-all">
-              <div className="flex items-center gap-3">
-                <svg className="w-5 h-5 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                </svg>
-                <p className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px]">{t("이용약관", "Terms & Conditions")}</p>
-              </div>
-              <svg className="w-5 h-5 text-[#94a3b8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-              </svg>
-            </button>
-
-            <button className="w-full flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px] hover:bg-gray-50 active:scale-[0.98] transition-all">
+              </motion.button>
+            ))}
+            <motion.div variants={rowVariant} className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">
               <div className="flex items-center gap-3">
                 <svg className="w-5 h-5 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -259,19 +284,25 @@ export default function SettingsWrapper() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </div>
-            </button>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
 
         {/* Logout Button */}
-        <div className="w-full px-[24px] py-[24px]">
-          <button
+        <motion.div
+          className="w-full px-[24px] py-[24px]"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+        >
+          <motion.button
             onClick={handleLogout}
-            className="w-full h-auto py-3 font-['Public_Sans'] font-normal text-[#94a3b8] text-[14px] hover:text-[#64748b] transition-colors"
+            whileTap={{ scale: 0.97 }}
+            className="w-full h-auto py-3 font-['Public_Sans'] font-normal text-[#94a3b8] text-[14px] hover:text-[#ef4444] transition-colors"
           >
             {t("로그아웃", "Logout")}
-          </button>
-        </div>
+          </motion.button>
+        </motion.div>
       </div>
 
       {/* Bottom Navigation */}

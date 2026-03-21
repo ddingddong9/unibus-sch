@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(lsof -i :54321)",
+      "Bash(python3 -c \":*)",
+      "Bash(python3:*)",
+      "Bash(npm run build)",
+      "Bash(npx tsc --noEmit)",
+      "Bash(git -C /Users/gwonjaewon/Desktop/unibus-sch/.claude/worktrees/determined-jang status)",
+      "Bash(git -C /Users/gwonjaewon/Desktop/unibus-sch/.claude/worktrees/determined-jang log --oneline -3)",
+      "Bash(git -C /Users/gwonjaewon/Desktop/unibus-sch/.claude/worktrees/determined-jang branch develop)",
+      "Bash(git -C /Users/gwonjaewon/Desktop/unibus-sch/.claude/worktrees/determined-jang add .env.example src/app/admin/NoticeManagement.tsx src/app/components/NaverMapComponent.tsx src/app/screens/CampusShuttleWrapper.tsx src/app/screens/NoticeWrapper.tsx src/app/screens/SettingsWrapper.tsx src/app/screens/SignUpWrapper.tsx src/app/services/api.ts src/app/services/kakao.ts src/app/types/index.ts supabase/functions/make-server/index.ts)",
+      "Bash(git -C:*)"
+    ]
+  }
+}
