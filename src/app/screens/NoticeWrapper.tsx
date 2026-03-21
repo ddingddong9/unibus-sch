@@ -1,9 +1,19 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
+import { motion, AnimatePresence } from "framer-motion";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
 import type { Notice } from "../types";
+
+const listContainer = {
+  hidden: { opacity: 0 },
+  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
+};
+const listItem = {
+  hidden: { opacity: 0, y: 12 },
+  visible: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 380, damping: 28 } },
+};
 
 export default function NoticeWrapper() {
   const navigate = useNavigate();
@@ -170,52 +180,72 @@ export default function NoticeWrapper() {
             </div>
           ) : (
             <>
-              {filteredNotices.map((notice) => (
-                <button
-                  key={notice.id}
-                  onClick={() => setExpandedNotice(expandedNotice === notice.id ? null : notice.id)}
-                  className="w-full bg-white border border-[#e2e8f0] rounded-[16px] p-[16px] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] hover:shadow-md transition-all active:scale-[0.98] text-left"
-                >
-                  <div className="flex items-start justify-between gap-3 mb-2">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px] uppercase ${getCategoryColor(notice.category)}`}>
-                          {getCategoryLabel(notice.category)}
-                        </span>
-                        {isNew(notice.createdAt) && (
-                          <span className="bg-[#ef4444] text-white px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px] uppercase">
-                            NEW
+              <motion.div
+                key={selectedCategory}
+                variants={listContainer}
+                initial="hidden"
+                animate="visible"
+                className="space-y-3"
+              >
+                {filteredNotices.map((notice) => (
+                  <motion.button
+                    key={notice.id}
+                    variants={listItem}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={() => setExpandedNotice(expandedNotice === notice.id ? null : notice.id)}
+                    className="w-full bg-white border border-[#e2e8f0] rounded-[16px] p-[16px] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] hover:shadow-md transition-shadow text-left"
+                  >
+                    <div className="flex items-start justify-between gap-3 mb-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className={`px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px] uppercase ${getCategoryColor(notice.category)}`}>
+                            {getCategoryLabel(notice.category)}
                           </span>
-                        )}
+                          {isNew(notice.createdAt) && (
+                            <span className="bg-[#ef4444] text-white px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px] uppercase">
+                              NEW
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] leading-[24px] mb-1">
+                          {notice.title}
+                        </h3>
+                        <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[12px] leading-[16px]">
+                          {formatDate(notice.createdAt)}
+                        </p>
                       </div>
-                      <h3 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] leading-[24px] mb-1">
-                        {notice.title}
-                      </h3>
-                      <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[12px] leading-[16px]">
-                        {formatDate(notice.createdAt)}
-                      </p>
+                      <motion.svg
+                        animate={{ rotate: expandedNotice === notice.id ? 180 : 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="w-5 h-5 text-[#64748b] shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </motion.svg>
                     </div>
-                    <svg
-                      className={`w-5 h-5 text-[#64748b] transition-transform ${
-                        expandedNotice === notice.id ? "rotate-180" : ""
-                      }`}
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
 
-                  {expandedNotice === notice.id && (
-                    <div className="mt-3 pt-3 border-t border-[#f1f5f9]">
-                      <p className="font-['Public_Sans'] font-normal text-[#475569] text-[14px] leading-[22px]">
-                        {notice.content}
-                      </p>
-                    </div>
-                  )}
-                </button>
-              ))}
+                    <AnimatePresence>
+                      {expandedNotice === notice.id && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          transition={{ duration: 0.2, ease: "easeInOut" }}
+                          className="overflow-hidden"
+                        >
+                          <div className="mt-3 pt-3 border-t border-[#f1f5f9]">
+                            <p className="font-['Public_Sans'] font-normal text-[#475569] text-[14px] leading-[22px]">
+                              {notice.content}
+                            </p>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.button>
+                ))}
+              </motion.div>
 
               {filteredNotices.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-12">

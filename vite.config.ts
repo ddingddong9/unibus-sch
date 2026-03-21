@@ -56,11 +56,17 @@ const produceSingleFile = process.env.SINGLE_FILE === 'true'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
-    react(), 
-    tailwindcss(), 
-    figmaAssetsResolver(), 
-    removeVersionSpecifiers(), 
+    react(),
+    tailwindcss(),
+    figmaAssetsResolver(),
+    removeVersionSpecifiers(),
     ...(produceSingleFile ? [viteSingleFile()] : [])
   ],
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
+  optimizeDeps: {
+    include: ['framer-motion'],
+  },
 })
 
