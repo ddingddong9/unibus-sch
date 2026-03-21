@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useNavigate } from "react-router";
 import { motion } from "framer-motion";
 import svgPaths from "../../imports/svg-9blebrmjt8";
-import imgGoogle from "figma:asset/c27e79a6f1f35befb6887de79921e91658cc1739.png";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
@@ -221,27 +220,19 @@ export default function LoginWrapper() {
                 <div className="flex-[1_0_0] h-px min-h-px min-w-px relative border-t border-[#e2e8f0]" />
               </div>
 
-              <div className="content-stretch flex gap-[16px] items-start justify-center relative shrink-0 w-full">
-                <motion.button
-                  whileTap={{ scale: 0.96 }}
-                  className="content-stretch flex flex-[1_0_0] h-[48px] items-center justify-center min-h-px min-w-px p-px relative rounded-[8px] border border-[#e2e8f0] hover:bg-gray-50 transition-colors"
-                >
-                  <img alt="Google" className="size-[20px]" src={imgGoogle} />
-                </motion.button>
-                <motion.button
-                  onClick={handleKakaoLogin}
-                  disabled={loading}
-                  whileTap={{ scale: 0.96 }}
-                  className="bg-[#FEE500] content-stretch flex flex-[1_0_0] gap-[8px] h-[48px] items-center justify-center min-h-px min-w-px px-4 relative rounded-[8px] hover:bg-[#FDD835] transition-colors disabled:opacity-50"
-                >
-                  <svg className="w-[18px] h-[18px]" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M9 0C4.02944 0 0 3.35942 0 7.50208C0 9.97392 1.43686 12.1633 3.64018 13.4946L2.71277 17.2161C2.64485 17.4831 2.93553 17.6989 3.16895 17.5449L7.48731 14.7652C7.98476 14.8471 8.48895 14.8947 9 14.8947C13.9706 14.8947 18 11.5353 18 7.50208C18 3.35942 13.9706 0 9 0Z" fill="#381E1F"/>
-                  </svg>
-                  <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] relative shrink-0 text-[14px] text-[#381E1F] text-center">
-                    <p className="leading-[20px]">{t("카카오 로그인", "Kakao Login")}</p>
-                  </div>
-                </motion.button>
-              </div>
+              <motion.button
+                onClick={handleKakaoLogin}
+                disabled={loading}
+                whileTap={{ scale: 0.96 }}
+                className="bg-[#FEE500] flex gap-[8px] h-[56px] items-center justify-center w-full rounded-[12px] hover:bg-[#FDD835] transition-colors disabled:opacity-50 shadow-[0px_4px_12px_-2px_rgba(254,229,0,0.4)]"
+              >
+                <svg className="w-[20px] h-[20px]" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M9 0C4.02944 0 0 3.35942 0 7.50208C0 9.97392 1.43686 12.1633 3.64018 13.4946L2.71277 17.2161C2.64485 17.4831 2.93553 17.6989 3.16895 17.5449L7.48731 14.7652C7.98476 14.8471 8.48895 14.8947 9 14.8947C13.9706 14.8947 18 11.5353 18 7.50208C18 3.35942 13.9706 0 9 0Z" fill="#381E1F"/>
+                </svg>
+                <div className="font-['Public_Sans'] font-bold text-[16px] text-[#381E1F]">
+                  {t("카카오로 로그인", "Continue with Kakao")}
+                </div>
+              </motion.button>
             </div>
           </motion.div>
 
