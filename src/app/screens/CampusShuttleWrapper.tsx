@@ -218,7 +218,7 @@ export default function CampusShuttleWrapper() {
         )}
 
         {/* Top Header */}
-        <div className="fixed left-0 right-0 top-0 z-30 pt-safe">
+        <div className="fixed left-1/2 -translate-x-1/2 top-0 z-30 pt-safe w-full max-w-[430px]">
           <div className="backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] content-stretch flex items-center justify-between pb-[12px] pt-[16px] px-[16px] w-full">
           <button
             onClick={() => navigate("/home")}
