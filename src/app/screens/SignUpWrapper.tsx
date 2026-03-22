@@ -85,8 +85,8 @@ export default function SignUpWrapper() {
   return (
     <div className="bg-gradient-to-b from-white to-[#f6f6f8] content-stretch flex flex-col items-start relative size-full overflow-auto">
       {/* Header */}
-      <div className="bg-white relative shrink-0 w-full sticky top-0 z-10 border-b border-[#f1f5f9] pt-safe">
-        <div className="flex items-center justify-between pb-[8px] pt-[16px] px-[16px]">
+      <div className="sticky top-0 z-30 w-full pt-safe">
+        <div className="backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] flex items-center justify-between pb-[12px] pt-[16px] px-[16px] border-b border-[#f1f5f9]">
           <button
             onClick={() => navigate("/login")}
             className="flex items-center justify-center size-[40px] hover:bg-gray-100 rounded-full active:scale-95 transition-all"
