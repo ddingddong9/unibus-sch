@@ -38,14 +38,14 @@ export function AnimatedMobileLayout() {
     // 모바일: 흰 배경(상태표시줄 색 일치) / 데스크탑: 그라디언트 미리보기
     <div className="min-h-screen w-full bg-white md:bg-gradient-to-br md:from-blue-50 md:to-slate-100 flex items-center justify-center p-0 md:p-4">
       <div className="w-full max-w-none md:max-w-[430px] md:h-[844px] bg-white md:shadow-2xl md:rounded-2xl overflow-hidden relative" style={{ height: '100dvh' }}>
-        <AnimatePresence mode="wait" initial={false}>
+        <AnimatePresence mode="sync" initial={false}>
           <motion.div
             key={location.pathname}
             initial={variants.initial}
             animate={variants.animate}
             exit={variants.exit}
             transition={{
-              duration: 0.22,
+              duration: TAB_ROUTES.includes(location.pathname) ? 0.15 : 0.22,
               ease: [0.25, 0.46, 0.45, 0.94],
             }}
             className="absolute inset-0 size-full"
