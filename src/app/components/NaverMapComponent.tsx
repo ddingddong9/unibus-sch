@@ -100,6 +100,7 @@ export default function NaverMapComponent({
     const script = document.createElement("script");
     script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
     script.async = true;
+    console.log("[NaverMap] Loading with clientId:", clientId);
     script.onload = () => { if (window.naver?.maps) initializeMap(); };
     script.onerror = () => console.error("네이버 지도 API를 로드할 수 없습니다. Client ID를 확인해주세요.");
     document.head.appendChild(script);
