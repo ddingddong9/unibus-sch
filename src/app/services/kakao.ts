@@ -62,6 +62,7 @@ export class KakaoLoginService {
 
     return new Promise((resolve, reject) => {
       window.Kakao.Auth.login({
+        scope: 'profile_nickname,profile_image',
         success: (authObj: any) => {
           console.log('Kakao login success:', authObj);
           
