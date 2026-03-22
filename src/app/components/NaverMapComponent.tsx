@@ -17,8 +17,21 @@ declare global {
   }
 }
 
+const BUS_MARKER_CONTENT = (label: string) => `
+  <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+    <div style="background: #1e3b8a; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 4px white, 0 10px 15px -3px rgba(0,0,0,0.1);">
+      <svg width="13" height="16" viewBox="0 0 13 16" fill="none">
+        <path d="M11.667 6.667H10V5h1.667v1.667zM10 10h1.667V8.333H10V10zm-8.333 0H3.333V8.333H1.667V10zm0-3.333H3.333V5H1.667v1.667zM5 15h3.333v-1.667H5V15zM12.5 3.333h-1.667V2.5c0-.917-.75-1.667-1.666-1.667h-6.5C1.75.833 1 1.583 1 2.5v10c0 .917.75 1.667 1.667 1.667H3.333v.833c0 .917.75 1.667 1.667 1.667h6.667c.916 0 1.666-.75 1.666-1.667v-10c0-.917-.75-1.667-1.666-1.667zm-10 10V2.5h6.667v1.667H5c-.917 0-1.667.75-1.667 1.666v7.5H2.5z" fill="white"/>
+      </svg>
+    </div>
+    <div style="margin-top: 4px; background: white; padding: 3px 9px; border-radius: 4px; border: 1px solid rgba(30,58,138,0.1); box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); white-space: nowrap;">
+      <span style="font-family: 'Public Sans', sans-serif; font-weight: 900; font-size: 10px; color: #1e3b8a; line-height: 15px;">${label}</span>
+    </div>
+  </div>
+`;
+
 export default function NaverMapComponent({
-  center = { lat: 36.7995, lng: 127.0753 }, // 순천향대학교 좌표
+  center = { lat: 36.7995, lng: 127.0753 },
   zoom = 16,
   buses = [],
   clientId = import.meta.env.VITE_NAVER_CLIENT_ID || "YOUR_NAVER_CLIENT_ID"
@@ -27,166 +40,82 @@ export default function NaverMapComponent({
   const mapInstance = useRef<any>(null);
   const markersRef = useRef<any[]>([]);
   const scriptLoadedRef = useRef<boolean>(false);
+  // ref로 최신 buses 유지 (idle 콜백의 stale closure 방지)
+  const busesRef = useRef(buses);
+  busesRef.current = buses;
 
-  useEffect(() => {
-    const loadNaverMapScript = () => {
-      // 이미 스크립트가 로드되었으면 초기화만 진행
-      if (window.naver && window.naver.maps) {
-        initializeMap();
-        return;
+  const updateMarkers = () => {
+    if (!mapInstance.current || !window.naver) return;
+
+    markersRef.current.forEach(marker => marker.setMap(null));
+    markersRef.current = [];
+
+    busesRef.current.forEach(bus => {
+      try {
+        const marker = new window.naver.maps.Marker({
+          position: new window.naver.maps.LatLng(bus.position.lat, bus.position.lng),
+          map: mapInstance.current,
+          icon: {
+            content: BUS_MARKER_CONTENT(bus.label),
+            size: new window.naver.maps.Size(40, 60),
+            anchor: new window.naver.maps.Point(20, 60)
+          }
+        });
+        markersRef.current.push(marker);
+      } catch (error) {
+        console.error("마커 생성 오류:", error);
       }
+    });
+  };
 
-      // 이미 스크립트 로딩 중이면 대기
-      if (scriptLoadedRef.current) return;
-      scriptLoadedRef.current = true;
-
-      const script = document.createElement("script");
-      script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
-      script.async = true;
-      script.onload = () => {
-        if (window.naver && window.naver.maps) {
-          initializeMap();
-        }
-      };
-      script.onerror = () => {
-        console.error("네이버 지도 API를 로드할 수 없습니다. Client ID를 확인해주세요.");
-      };
-      document.head.appendChild(script);
-    };
-
+  // 지도 초기화 (clientId, center, zoom 변경 시)
+  useEffect(() => {
     const initializeMap = () => {
       if (!mapRef.current || mapInstance.current) return;
-
       try {
-        const mapOptions = {
+        mapInstance.current = new window.naver.maps.Map(mapRef.current, {
           center: new window.naver.maps.LatLng(center.lat, center.lng),
-          zoom: zoom,
+          zoom,
           zoomControl: false,
           mapTypeControl: false,
           scaleControl: false,
           logoControl: false,
           mapDataControl: false,
-          zoomControlOptions: {
-            style: window.naver.maps.ZoomControlStyle.SMALL,
-            position: window.naver.maps.Position.TOP_RIGHT
-          }
-        };
-
-        mapInstance.current = new window.naver.maps.Map(mapRef.current, mapOptions);
-
-        // 지도 로드 후 마커 추가
-        window.naver.maps.Event.addListener(mapInstance.current, 'idle', () => {
-          updateMarkers();
         });
+        // 지도 준비 완료 후 마커 표시
+        window.naver.maps.Event.addListener(mapInstance.current, 'idle', updateMarkers);
       } catch (error) {
         console.error("네이버 지도 초기화 오류:", error);
       }
     };
 
-    const updateMarkers = () => {
-      if (!mapInstance.current || !window.naver) return;
+    if (window.naver?.maps) {
+      initializeMap();
+      return;
+    }
 
-      // 기존 마커 제거
-      markersRef.current.forEach(marker => marker.setMap(null));
-      markersRef.current = [];
+    if (scriptLoadedRef.current) return;
+    scriptLoadedRef.current = true;
 
-      // 새 마커 추가
-      buses.forEach(bus => {
-        try {
-          const marker = new window.naver.maps.Marker({
-            position: new window.naver.maps.LatLng(bus.position.lat, bus.position.lng),
-            map: mapInstance.current,
-            icon: {
-              content: `
-                <div style="position: relative; display: flex; flex-direction: column; align-items: center; animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;">
-                  <div style="background: #1e3b8a; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 4px white, 0 10px 15px -3px rgba(0,0,0,0.1);">
-                    <svg width="13" height="16" viewBox="0 0 13 16" fill="none">
-                      <path d="M11.667 6.667H10V5h1.667v1.667zM10 10h1.667V8.333H10V10zm-8.333 0H3.333V8.333H1.667V10zm0-3.333H3.333V5H1.667v1.667zM5 15h3.333v-1.667H5V15zM12.5 3.333h-1.667V2.5c0-.917-.75-1.667-1.666-1.667h-6.5C1.75.833 1 1.583 1 2.5v10c0 .917.75 1.667 1.667 1.667H3.333v.833c0 .917.75 1.667 1.667 1.667h6.667c.916 0 1.666-.75 1.666-1.667v-10c0-.917-.75-1.667-1.666-1.667zm-10 10V2.5h6.667v1.667H5c-.917 0-1.667.75-1.667 1.666v7.5H2.5z" fill="white"/>
-                    </svg>
-                  </div>
-                  <div style="margin-top: 4px; background: white; padding: 3px 9px; border-radius: 4px; border: 1px solid rgba(30,58,138,0.1); box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); white-space: nowrap;">
-                    <span style="font-family: 'Public Sans', sans-serif; font-weight: 900; font-size: 10px; color: #1e3b8a; line-height: 15px;">${bus.label}</span>
-                  </div>
-                </div>
-              `,
-              size: new window.naver.maps.Size(40, 60),
-              anchor: new window.naver.maps.Point(20, 60)
-            }
-          });
-
-          markersRef.current.push(marker);
-        } catch (error) {
-          console.error("마커 생성 오류:", error);
-        }
-      });
-    };
-
-    loadNaverMapScript();
+    const script = document.createElement("script");
+    script.src = `https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${clientId}`;
+    script.async = true;
+    script.onload = () => { if (window.naver?.maps) initializeMap(); };
+    script.onerror = () => console.error("네이버 지도 API를 로드할 수 없습니다. Client ID를 확인해주세요.");
+    document.head.appendChild(script);
 
     return () => {
-      // 마커 제거
-      markersRef.current.forEach(marker => {
-        try {
-          marker.setMap(null);
-        } catch (e) {
-          // 무시
-        }
-      });
+      markersRef.current.forEach(marker => { try { marker.setMap(null); } catch (_) {} });
     };
   }, [center.lat, center.lng, zoom, clientId]);
 
-  // 마커 업데이트 (버스 위치 변경 시)
+  // 버스 위치 변경 시 마커 업데이트
   useEffect(() => {
-    if (mapInstance.current && window.naver) {
-      // 기존 마커 제거
-      markersRef.current.forEach(marker => marker.setMap(null));
-      markersRef.current = [];
-
-      // 새 마커 추가
-      buses.forEach(bus => {
-        try {
-          const marker = new window.naver.maps.Marker({
-            position: new window.naver.maps.LatLng(bus.position.lat, bus.position.lng),
-            map: mapInstance.current,
-            icon: {
-              content: `
-                <div style="position: relative; display: flex; flex-direction: column; align-items: center; animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;">
-                  <div style="background: #1e3b8a; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 4px white, 0 10px 15px -3px rgba(0,0,0,0.1);">
-                    <svg width="13" height="16" viewBox="0 0 13 16" fill="none">
-                      <path d="M11.667 6.667H10V5h1.667v1.667zM10 10h1.667V8.333H10V10zm-8.333 0H3.333V8.333H1.667V10zm0-3.333H3.333V5H1.667v1.667zM5 15h3.333v-1.667H5V15zM12.5 3.333h-1.667V2.5c0-.917-.75-1.667-1.666-1.667h-6.5C1.75.833 1 1.583 1 2.5v10c0 .917.75 1.667 1.667 1.667H3.333v.833c0 .917.75 1.667 1.667 1.667h6.667c.916 0 1.666-.75 1.666-1.667v-10c0-.917-.75-1.667-1.666-1.667zm-10 10V2.5h6.667v1.667H5c-.917 0-1.667.75-1.667 1.666v7.5H2.5z" fill="white"/>
-                    </svg>
-                  </div>
-                  <div style="margin-top: 4px; background: white; padding: 3px 9px; border-radius: 4px; border: 1px solid rgba(30,58,138,0.1); box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); white-space: nowrap;">
-                    <span style="font-family: 'Public Sans', sans-serif; font-weight: 900; font-size: 10px; color: #1e3b8a; line-height: 15px;">${bus.label}</span>
-                  </div>
-                </div>
-              `,
-              size: new window.naver.maps.Size(40, 60),
-              anchor: new window.naver.maps.Point(20, 60)
-            }
-          });
-
-          markersRef.current.push(marker);
-        } catch (error) {
-          console.error("마커 업데이트 오류:", error);
-        }
-      });
-    }
+    updateMarkers();
   }, [buses]);
 
-  // 지도 컨트롤 함수들
-  const handleZoomIn = () => {
-    if (mapInstance.current) {
-      mapInstance.current.setZoom(mapInstance.current.getZoom() + 1);
-    }
-  };
-
-  const handleZoomOut = () => {
-    if (mapInstance.current) {
-      mapInstance.current.setZoom(mapInstance.current.getZoom() - 1);
-    }
-  };
-
+  const handleZoomIn = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() + 1); };
+  const handleZoomOut = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() - 1); };
   const handleLocate = () => {
     if (mapInstance.current && window.naver) {
       mapInstance.current.setCenter(new window.naver.maps.LatLng(center.lat, center.lng));
@@ -196,15 +125,15 @@ export default function NaverMapComponent({
 
   return (
     <>
-      <div 
-        ref={mapRef} 
+      <div
+        ref={mapRef}
         className="absolute inset-0 w-full h-full z-0"
         style={{ background: '#e2e8f0' }}
       />
-      
+
       {/* Custom Map Controls */}
       <div className="absolute content-stretch flex flex-col gap-[8px] items-start right-[16px] top-[128px] z-20">
-        <button 
+        <button
           onClick={handleZoomIn}
           className="bg-white content-stretch flex items-center justify-center p-px relative rounded-[12px] shrink-0 size-[40px] border border-[#f1f5f9] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] hover:bg-gray-50 active:scale-95 transition-all"
         >
@@ -215,7 +144,7 @@ export default function NaverMapComponent({
           </div>
         </button>
 
-        <button 
+        <button
           onClick={handleZoomOut}
           className="bg-white content-stretch flex items-center justify-center p-px relative rounded-[12px] shrink-0 size-[40px] border border-[#f1f5f9] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] hover:bg-gray-50 active:scale-95 transition-all"
         >
@@ -227,7 +156,7 @@ export default function NaverMapComponent({
         </button>
 
         <div className="pt-[8px]">
-          <button 
+          <button
             onClick={handleLocate}
             className="bg-white content-stretch flex items-center justify-center p-px relative rounded-[12px] shrink-0 size-[40px] border border-[rgba(30,58,138,0.05)] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] hover:bg-blue-50 active:scale-95 transition-all"
           >
@@ -239,17 +168,6 @@ export default function NaverMapComponent({
           </button>
         </div>
       </div>
-
-      <style>{`
-        @keyframes pulse {
-          0%, 100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.7;
-          }
-        }
-      `}</style>
     </>
   );
 }
