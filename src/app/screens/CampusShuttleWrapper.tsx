@@ -108,7 +108,7 @@ export default function CampusShuttleWrapper() {
 
         {/* Bottom Sheet — bottom-0, BottomNav(z-50)이 위에 덮여 틈 없음 */}
         <div
-          className="fixed bg-white bottom-[88px] content-stretch flex flex-col items-start left-0 right-0 rounded-tl-[40px] rounded-tr-[40px] shadow-[0px_-12px_40px_0px_rgba(0,0,0,0.12)] max-h-[60vh] overflow-hidden z-20"
+          className="fixed bg-white bottom-0 content-stretch flex flex-col items-start left-0 right-0 rounded-tl-[40px] rounded-tr-[40px] shadow-[0px_-12px_40px_0px_rgba(0,0,0,0.12)] max-h-[60vh] overflow-hidden z-20"
           style={{
             transform: sheetVisible ? `translateY(${dragY}px)` : "translateY(120%)",
             transition: isDragging.current ? "none" : "transform 0.35s cubic-bezier(0.32,0.72,0,1)",
