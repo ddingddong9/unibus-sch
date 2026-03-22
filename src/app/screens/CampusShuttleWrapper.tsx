@@ -218,7 +218,8 @@ export default function CampusShuttleWrapper() {
         )}
 
         {/* Top Header */}
-        <div className="fixed backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] content-stretch flex items-center justify-between left-0 pb-[12px] pt-[48px] px-[16px] right-0 top-0 z-30">
+        <div className="fixed left-0 right-0 top-0 z-30 pt-safe">
+          <div className="backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] content-stretch flex items-center justify-between pb-[12px] pt-[16px] px-[16px] w-full">
           <button
             onClick={() => navigate("/home")}
             className="content-stretch flex items-center relative shrink-0 size-[40px] hover:bg-white/50 rounded-full active:scale-95 transition-all"
@@ -246,6 +247,7 @@ export default function CampusShuttleWrapper() {
               </svg>
             </div>
           </div>
+        </div>
         </div>
 
         {/* Bottom Navigation */}
