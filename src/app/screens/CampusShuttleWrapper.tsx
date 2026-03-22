@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
 import svgPaths from "../../imports/svg-usddjxhhke";
 import BottomNav from "../components/BottomNav";
@@ -35,6 +35,11 @@ export default function CampusShuttleWrapper() {
   const [busStops] = useState<BusStop[]>(FALLBACK_STOPS);
   const [buses, setBuses] = useState<BusMarker[]>([]);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [sheetVisible, setSheetVisible] = useState(true);
+  const [dragY, setDragY] = useState(0);
+  const isDragging = useRef(false);
+  const dragStartY = useRef(0);
+  const currentDragY = useRef(0);
 
   const fetchBusLocations = useCallback(async () => {
     try {
@@ -65,9 +70,33 @@ export default function CampusShuttleWrapper() {
     return () => clearInterval(interval);
   }, [fetchBusLocations]);
 
+  const handleDragStart = (e: React.PointerEvent) => {
+    isDragging.current = true;
+    dragStartY.current = e.clientY;
+    currentDragY.current = 0;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  };
+
+  const handleDragMove = (e: React.PointerEvent) => {
+    if (!isDragging.current) return;
+    const delta = Math.max(0, e.clientY - dragStartY.current);
+    currentDragY.current = delta;
+    setDragY(delta);
+  };
+
+  const handleDragEnd = () => {
+    if (!isDragging.current) return;
+    isDragging.current = false;
+    if (currentDragY.current > 80) {
+      setSheetVisible(false);
+    }
+    currentDragY.current = 0;
+    setDragY(0);
+  };
+
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
-      <div className="bg-[#f6f6f8] overflow-hidden relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full" style={{ height: '100dvh' }}>
+      <div className="bg-[#f6f6f8] h-screen overflow-hidden relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full max-w-[430px]">
         {/* Map Container */}
         <div className="absolute inset-0 w-full h-full">
           <NaverMapComponent
@@ -77,9 +106,21 @@ export default function CampusShuttleWrapper() {
           />
         </div>
 
-        {/* Bottom Sheet */}
-        <div className="absolute bg-white bottom-[88px] content-stretch flex flex-col items-start left-0 right-0 rounded-tl-[40px] rounded-tr-[40px] shadow-[0px_-12px_40px_0px_rgba(0,0,0,0.12)] max-h-[60vh] overflow-hidden">
-          <div className="content-stretch flex h-[40px] items-center justify-center py-[20px] relative shrink-0 w-full">
+        {/* Bottom Sheet — bottom-0, BottomNav(z-50)이 위에 덮여 틈 없음 */}
+        <div
+          className="fixed bg-white bottom-[88px] content-stretch flex flex-col items-start left-0 right-0 rounded-tl-[40px] rounded-tr-[40px] shadow-[0px_-12px_40px_0px_rgba(0,0,0,0.12)] max-h-[60vh] overflow-hidden z-20"
+          style={{
+            transform: sheetVisible ? `translateY(${dragY}px)` : "translateY(120%)",
+            transition: isDragging.current ? "none" : "transform 0.35s cubic-bezier(0.32,0.72,0,1)",
+          }}
+        >
+          <div
+            className="content-stretch flex h-[40px] items-center justify-center py-[20px] relative shrink-0 w-full cursor-grab active:cursor-grabbing touch-none"
+            onPointerDown={handleDragStart}
+            onPointerMove={handleDragMove}
+            onPointerUp={handleDragEnd}
+            onPointerCancel={handleDragEnd}
+          >
             <div className="bg-[#e2e8f0] h-[6px] rounded-[9999px] shrink-0 w-[48px]" />
           </div>
 
@@ -94,7 +135,7 @@ export default function CampusShuttleWrapper() {
                 </button>
               </div>
 
-              <div className="content-stretch flex flex-col gap-[12px] items-start max-h-[280px] overflow-y-auto scrollbar-hide pb-[10px] relative shrink-0 w-full">
+              <div className="content-stretch flex flex-col gap-[12px] items-start max-h-[280px] overflow-y-auto scrollbar-hide pb-[88px] relative shrink-0 w-full">
                 {busStops.map((stop) => (
                   <div
                     key={stop.id}
@@ -153,6 +194,19 @@ export default function CampusShuttleWrapper() {
           </div>
         </div>
 
+        {/* Show sheet button (visible when sheet is hidden) */}
+        {!sheetVisible && (
+          <button
+            onClick={() => setSheetVisible(true)}
+            className="absolute bottom-[104px] left-1/2 -translate-x-1/2 z-40 bg-white rounded-full px-[20px] py-[10px] shadow-[0px_4px_16px_rgba(0,0,0,0.18)] flex items-center gap-[8px] active:scale-95 transition-transform"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+              <path d="M18 15l-6-6-6 6" stroke="#1e3a8a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="font-['Public_Sans'] font-bold text-[#1e3a8a] text-[13px]">{t("근처 정류장", "Nearby Stops")}</span>
+          </button>
+        )}
+
         {/* Location error banner */}
         {locationError && (
           <div className="absolute top-[100px] left-4 right-4 z-40 bg-[rgba(254,226,226,0.95)] backdrop-blur-sm border border-[#fca5a5] rounded-[12px] px-4 py-2 flex items-center gap-2">
@@ -164,7 +218,7 @@ export default function CampusShuttleWrapper() {
         )}
 
         {/* Top Header */}
-        <div className="absolute backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] content-stretch flex items-center justify-between left-0 pb-[12px] px-[16px] right-0 top-0 z-30 pt-safe" style={{ paddingTop: 'max(16px, env(safe-area-inset-top, 16px))' }}>
+        <div className="absolute backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] content-stretch flex items-center justify-between left-0 pb-[12px] pt-[48px] px-[16px] right-0 top-0 z-30">
           <button
             onClick={() => navigate("/home")}
             className="content-stretch flex items-center relative shrink-0 size-[40px] hover:bg-white/50 rounded-full active:scale-95 transition-all"
