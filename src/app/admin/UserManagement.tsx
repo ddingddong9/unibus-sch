@@ -25,6 +25,7 @@ export default function UserManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState<"all" | ManagedUser["role"]>("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
@@ -32,11 +33,14 @@ export default function UserManagement() {
   }, []);
 
   const loadUsers = async () => {
+    setLoadError(null);
     try {
       const data = await api.getUsers();
       setUsers(data);
-    } catch {
-      showToast("사용자 목록을 불러올 수 없습니다", "error");
+    } catch (err: any) {
+      const msg = err?.message || "사용자 목록을 불러올 수 없습니다";
+      setLoadError(msg);
+      console.error("[UserManagement] loadUsers error:", err);
     } finally {
       setLoading(false);
     }
@@ -140,6 +144,24 @@ export default function UserManagement() {
               <div className="text-center">
                 <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1e3b8a] mx-auto mb-3" />
                 <p className="font-['Public_Sans'] text-[#64748b] text-[14px]">불러오는 중...</p>
+              </div>
+            </div>
+          ) : loadError ? (
+            <div className="flex flex-col items-center justify-center py-20 gap-4">
+              <div className="w-14 h-14 rounded-full bg-red-50 flex items-center justify-center">
+                <svg className="w-7 h-7 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
+                </svg>
+              </div>
+              <div className="text-center">
+                <p className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[15px] mb-1">불러오기 실패</p>
+                <p className="font-['Public_Sans'] text-[#64748b] text-[13px] mb-4">{loadError}</p>
+                <button
+                  onClick={() => { setLoading(true); loadUsers(); }}
+                  className="px-5 py-2 bg-[#1e3b8a] text-white rounded-lg font-['Public_Sans'] font-semibold text-[14px] hover:bg-[#1e3b8a]/90 transition-colors"
+                >
+                  다시 시도
+                </button>
               </div>
             </div>
           ) : (
