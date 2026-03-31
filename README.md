@@ -1,150 +1,75 @@
-<div align="center">
+# 🚌 UNIBUS 프로젝트 가이드 (로컬 개발 및 협업)
 
-# 🚌 UNIBUS SCH
-
-**순천향대학교 공식 버스 정보 앱**
-
-[![React](https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black)](https://react.dev)
-[![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![Vite](https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white)](https://vite.dev)
-[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)](https://tailwindcss.com)
-[![Supabase](https://img.shields.io/badge/Supabase-3FCF8E?style=flat-square&logo=supabase&logoColor=white)](https://supabase.com)
-[![Vercel](https://img.shields.io/badge/Vercel-000000?style=flat-square&logo=vercel&logoColor=white)](https://vercel.com)
-
-[**라이브 데모 →**](https://unibus-sch-two.vercel.app)
-
-</div>
+이 프로젝트는 **React(Vite)** 기반의 프론트엔드와 **Supabase Edge Functions(Deno)** 기반의 백엔드로 구성된 통합 저장소입니다.
 
 ---
 
-## 📱 소개
+## 🛠 1. 개발 환경 준비 (Prerequisites)
 
-UNIBUS SCH는 순천향대학교 학생과 교직원을 위한 버스 정보 앱입니다. 캠퍼스 셔틀과 통근버스 시간표를 실시간으로 확인하고, 근처 정류장을 지도에서 바로 볼 수 있습니다.
-
-### 주요 기능
-
-| 기능 | 설명 |
-|------|------|
-| 🗺️ **캠퍼스 셔틀** | Naver Maps 기반 실시간 지도 + 근처 정류장 바텀시트 |
-| 🚌 **통근버스** | 인천·서울·경기 지역별 노선 및 시간표 |
-| 📢 **공지사항** | 운행 변경·시스템 업데이트 실시간 알림 |
-| ⚙️ **설정** | 한국어/영어 전환, 알림·위치 서비스 관리 |
-| 🔐 **인증** | 이메일 기반 회원가입 및 로그인 |
+개발을 시작하기 전에 다음 도구들이 설치되어 있어야 합니다.
+*   **Docker Desktop**: 데이터베이스와 로컬 인프라 실행을 위해 필수입니다. ([다운로드](https://www.docker.com/products/docker-desktop/))
+*   **Supabase CLI**: 백엔드 관리를 위한 도구입니다. (`brew install supabase/tap/supabase`)
+*   **Node.js**: 프론트엔드 실행을 위해 필요합니다.
 
 ---
 
-## 🛠 기술 스택
+## 🚀 2. 로컬 서버 실행 순서 (3개의 터미널 필요)
 
-**프론트엔드**
-- React 18 + TypeScript + Vite
-- Tailwind CSS (반응형, 최대 430px 모바일 레이아웃)
-- Framer Motion (페이지 전환·스켈레톤 애니메이션)
-- Naver Maps API (캠퍼스 지도)
+모든 명령어는 **프로젝트 루트 디렉토리**(`unibus-local/`)에서 실행하세요.
 
-**백엔드**
-- Supabase (PostgreSQL DB, Auth, Storage)
-- Supabase Edge Functions (Deno 런타임)
-
-**배포**
-- Vercel (프론트엔드 자동 배포)
-- PWA 지원 (홈 화면 설치 가능)
-
----
-
-## 🚀 로컬 개발 환경 실행
-
-### 사전 준비
-
-```bash
-# 필수 도구 설치
-brew install supabase/tap/supabase  # Supabase CLI
-# Docker Desktop 설치 필수: https://www.docker.com/products/docker-desktop/
-```
-
-### 3단계로 실행하기
-
-터미널 3개를 열고 순서대로 실행하세요.
-
-**① Supabase 인프라 (DB, Auth)**
+### 1단계: Supabase 인프라 실행 (DB, Auth 등)
+데이터베이스와 인증 서버를 로컬 Docker 컨테이너로 띄웁니다.
 ```bash
 supabase start
 ```
+*   **역할**: 로컬 DB, 사용자 인증(Auth), 스토리지 등의 인프라를 구축합니다.
 
-**② 백엔드 API 서버**
+### 2단계: 백엔드 API 서버 실행 (Edge Functions)
+우리가 작성한 서버 로직(`index.ts`)을 로컬 API 주소로 서빙합니다.
 ```bash
 supabase functions serve make-server --no-verify-jwt
-# → http://localhost:54321/functions/v1/make-server
 ```
+*   **역할**: `http://localhost:54321/functions/v1/make-server` 주소로 백엔드 API를 활성화합니다.
+*   **파일 위치 이동**: `cd supabase/functions/make-server` (백엔드 코드 확인 시)
 
-**③ 프론트엔드**
+### 3단계: 프론트엔드 실행 (React/Vite)
+실제 웹 화면을 브라우저에 띄웁니다.
 ```bash
-npm install
 npm run dev
-# → http://localhost:5173
 ```
+*   **역할**: 웹 화면 UI를 실행하며, 기본 주소는 `http://localhost:5173`입니다.
+*   **파일 위치 이동**: `cd src` (프론트엔드 코드 확인 시)
 
 ---
 
-## 📂 프로젝트 구조
+## 📂 3. 프로젝트 구조 및 협업 역할
 
-```
-unibus-sch/
-├── src/
-│   ├── app/
-│   │   ├── screens/          # 페이지 컴포넌트
-│   │   │   ├── HomeWrapper.tsx
-│   │   │   ├── CampusShuttleWrapper.tsx
-│   │   │   ├── CommuterBusWrapper.tsx
-│   │   │   ├── NoticeWrapper.tsx
-│   │   │   ├── SettingsWrapper.tsx
-│   │   │   ├── LoginWrapper.tsx
-│   │   │   └── SignUpWrapper.tsx
-│   │   ├── components/       # 공통 컴포넌트
-│   │   │   ├── BottomNav.tsx
-│   │   │   ├── NaverMapComponent.tsx
-│   │   │   └── SkeletonLoaders.tsx
-│   │   ├── contexts/         # React Context (Auth, Language)
-│   │   └── services/
-│   │       └── api.ts        # 백엔드 API 통신
-│   └── styles/
-│       └── globals.css
-└── supabase/
-    ├── functions/
-    │   └── make-server/
-    │       └── index.ts      # Edge Function API 로직
-    └── migrations/           # DB 스키마 마이그레이션
-```
+이 프로젝트는 하나의 저장소에서 프론트엔드와 백엔드를 모두 관리하는 **모노레포(Monorepo)** 구조입니다.
+
+### 🎨 프론트엔드 개발자 (Frontend)
+*   **주요 작업 폴더**: `src/`
+    *   `src/app/screens/`: 사용자 페이지 UI 작업
+    *   `src/app/admin/`: 관리자 페이지 UI 작업
+    *   `src/app/services/api.ts`: 백엔드 API와 통신하는 코드 작성
+*   **이동 명령어**: `cd src`
+
+### ⚙️ 백엔드 개발자 (Backend)
+*   **주요 작업 폴더**: `supabase/`
+    *   `supabase/functions/make-server/index.ts`: API 비즈니스 로직 작성 (회원가입, 데이터 처리 등)
+    *   `supabase/migrations/`: 데이터베이스 테이블 설계 및 관리
+*   **이동 명령어**: `cd supabase/functions/make-server`
 
 ---
 
-## 🤝 협업 가이드
+## 🤝 4. 깃허브 협업 방식
 
-### 브랜치 전략
-
-```
-main              ← 항상 배포 가능한 상태 유지
-feat/기능명        ← 새 기능 개발
-fix/버그명         ← 버그 수정
-```
-
-### 작업 흐름
-
-1. `main`에서 새 브랜치 생성
-2. 개발 후 Pull Request 생성
-3. 팀원 코드 리뷰 → 승인 후 병합
-
-### 담당 영역
-
-| 역할 | 작업 폴더 |
-|------|----------|
-| 프론트엔드 | `src/app/screens/`, `src/app/components/` |
-| 백엔드 | `supabase/functions/make-server/index.ts` |
-| DB 설계 | `supabase/migrations/` |
+1.  **메인 브랜치 관리**: `main` 브랜치는 항상 실행 가능한 상태를 유지합니다.
+2.  **브랜치 전략**: 각자 맡은 역할에 따라 브랜치를 만들어 작업하세요.
+    *   예: `feat/frontend-login`, `feat/backend-api`
+3.  **병합(Merge)**: 작업이 완료되면 **Pull Request (PR)**를 생성하여 팀원과 코드 리뷰를 거친 후 병합합니다.
 
 ---
 
-## 💡 개발 팁
-
-- **VS Code Deno 오류**: `Cmd+Shift+P` → `Deno: Initialize Workspace Configuration` 실행
-- **백엔드 재시작 시 데이터 초기화**: 현재 일부 데이터는 메모리 기반이므로 서버 재시작 시 리셋됨
-- **환경변수**: 프로덕션 DB 변수는 `.env` 파일 참고 (팀 내부 공유)
+## 💡 팁
+*   **데이터 유지**: 현재 백엔드는 메모리 저장 방식을 사용하므로, `supabase functions serve`를 껐다가 켜면 데이터가 초기화됩니다.
+*   **에디터 오류**: VS Code에서 `Deno` 관련 빨간 줄이 뜨면 `Command + Shift + P`를 눌러 `Deno: Initialize Workspace Configuration`을 실행하세요.

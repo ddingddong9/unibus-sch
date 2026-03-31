@@ -1,0 +1,180 @@
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "../../contexts/AuthContext";
+import { api } from "../../services/api";
+
+interface Bus {
+  id: string;
+  name: string;
+  type: string;
+  capacity: number;
+  is_running: boolean;
+  current_driver_id: string | null;
+}
+
+export default function DriverHomeWrapper() {
+  const navigate = useNavigate();
+  const { user, logout } = useAuth();
+  const [buses, setBuses] = useState<Bus[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState<string | null>(null);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    fetchBuses();
+  }, []);
+
+  const fetchBuses = async () => {
+    try {
+      const data = await api.getDriverBuses();
+      setBuses(data);
+    } catch {
+      setError("버스 목록을 불러올 수 없습니다");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // 앱 재진입 시 이미 운행 중이면 운행 화면으로 복원
+  useEffect(() => {
+    api.getDriverStatus().then(({ activeBus }) => {
+      if (activeBus) {
+        navigate("/driver/active", { state: { bus: activeBus }, replace: true });
+      }
+    });
+  }, []);
+
+  const handleStart = async (bus: Bus) => {
+    if (bus.is_running && bus.current_driver_id !== user?.id) return;
+    setStarting(bus.id);
+    setError("");
+    try {
+      await api.driverStart(bus.id);
+      navigate("/driver/active", { state: { bus } });
+    } catch (err: any) {
+      setError(err.message || "운행 시작에 실패했습니다");
+    } finally {
+      setStarting(null);
+    }
+  };
+
+  const handleLogout = async () => {
+    await logout();
+    navigate("/login");
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f6f6f8] flex flex-col items-center">
+      <div className="w-full max-w-[430px] min-h-screen flex flex-col bg-white">
+
+        {/* Header */}
+        <div className="bg-[#1e3b8a] px-6 pt-14 pb-8">
+          <div className="flex items-center justify-between mb-1">
+            <div>
+              <p className="text-white/70 text-xs font-medium tracking-wider uppercase">기사 전용</p>
+              <h1 className="text-white text-2xl font-black tracking-tight mt-0.5">운행할 버스를 선택해 주세요</h1>
+            </div>
+            <div className="bg-white/10 rounded-full w-12 h-12 flex items-center justify-center">
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
+            </div>
+          </div>
+          <p className="text-white/60 text-sm mt-3">{user?.name} 기사님 · {user?.email}</p>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 px-5 py-6 flex flex-col gap-4">
+
+          {error && (
+            <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3">
+              <p className="text-red-600 text-sm font-medium">{error}</p>
+            </div>
+          )}
+
+          {loading ? (
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[#1e3b8a] mx-auto" />
+                <p className="mt-3 text-gray-400 text-sm">버스 목록 불러오는 중...</p>
+              </div>
+            </div>
+          ) : buses.length === 0 ? (
+            <div className="flex-1 flex items-center justify-center">
+              <p className="text-gray-400 text-sm">배정된 버스가 없습니다</p>
+            </div>
+          ) : (
+            buses.map((bus) => {
+              const isMine = bus.current_driver_id === user?.id;
+              const isOtherDriver = bus.is_running && !isMine;
+
+              return (
+                <button
+                  key={bus.id}
+                  onClick={() => handleStart(bus)}
+                  disabled={isOtherDriver || starting === bus.id}
+                  className={`w-full rounded-2xl p-5 flex items-center gap-4 transition-all active:scale-[0.98] text-left
+                    ${isOtherDriver
+                      ? "bg-gray-50 border border-gray-100 opacity-50 cursor-not-allowed"
+                      : "bg-white border border-[#e2e8f0] shadow-sm hover:border-[#1e3b8a]/30 hover:shadow-md"
+                    }`}
+                >
+                  {/* 버스 아이콘 */}
+                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center shrink-0
+                    ${isOtherDriver ? "bg-gray-100" : "bg-[#1e3b8a]/10"}`}
+                  >
+                    <svg className={`w-7 h-7 ${isOtherDriver ? "text-gray-400" : "text-[#1e3b8a]"}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M8 17H5a2 2 0 01-2-2V8a2 2 0 012-2h14a2 2 0 012 2v7a2 2 0 01-2 2h-3m-9 0h10M8 17v2m8-2v2M3 12h18" />
+                    </svg>
+                  </div>
+
+                  {/* 버스 정보 */}
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="font-black text-[#0f172a] text-lg leading-tight">{bus.name}</span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                        ${bus.type === 'shuttle' ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}
+                      >
+                        {bus.type === 'shuttle' ? '셔틀' : '통학'}
+                      </span>
+                    </div>
+                    <p className="text-gray-400 text-xs">{bus.id} · 정원 {bus.capacity}명</p>
+                    {isOtherDriver && (
+                      <p className="text-orange-500 text-xs font-semibold mt-1">다른 기사 운행 중</p>
+                    )}
+                  </div>
+
+                  {/* 운행 시작 버튼 */}
+                  {!isOtherDriver && (
+                    <div className={`shrink-0 w-10 h-10 rounded-full flex items-center justify-center
+                      ${starting === bus.id ? "bg-gray-100" : "bg-[#1e3b8a]"}`}
+                    >
+                      {starting === bus.id ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-400" />
+                      ) : (
+                        <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 5l7 7-7 7" />
+                        </svg>
+                      )}
+                    </div>
+                  )}
+                </button>
+              );
+            })
+          )}
+        </div>
+
+        {/* Logout */}
+        <div className="px-5 pb-10">
+          <button
+            onClick={handleLogout}
+            className="w-full py-3.5 rounded-2xl border border-gray-200 text-gray-400 text-sm font-semibold hover:bg-gray-50 transition-colors"
+          >
+            로그아웃
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}

@@ -8,6 +8,8 @@ import auth from "./routes/auth.tsx";
 import buses from "./routes/buses.tsx";
 import notices from "./routes/notices.tsx";
 import routes from "./routes/routes.tsx";
+import driver from "./routes/driver.tsx";
+import users from "./routes/users.tsx";
 
 const app = new Hono();
 
@@ -22,6 +24,8 @@ app.route('/auth', auth);
 app.route('/buses', buses);
 app.route('/notices', notices);
 app.route('/routes', routes);
+app.route('/driver', driver);
+app.route('/users', users);
 
 // Local dev: Kong strips /functions/v1 but keeps /make-server, so Hono
 // receives paths like /make-server/auth/signup instead of just /auth/signup
@@ -30,6 +34,8 @@ app.route(`${DEV_PREFIX}/auth`, auth);
 app.route(`${DEV_PREFIX}/buses`, buses);
 app.route(`${DEV_PREFIX}/notices`, notices);
 app.route(`${DEV_PREFIX}/routes`, routes);
+app.route(`${DEV_PREFIX}/driver`, driver);
+app.route(`${DEV_PREFIX}/users`, users);
 
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));
 

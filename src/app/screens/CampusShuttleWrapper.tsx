@@ -43,25 +43,27 @@ export default function CampusShuttleWrapper() {
 
   const fetchBusLocations = useCallback(async () => {
     try {
+      // 운행 중인 버스 목록 먼저 조회
+      const allBuses = await api.getBuses();
+      const runningBusIds = new Set(
+        allBuses.filter((b: any) => b.is_running).map((b: any) => b.id)
+      );
+
+      // 위치 조회 후 운행 중인 버스만 필터링
       const locations = await api.getBusLocations();
-      const markers = locations.map((loc) => ({
-        id: loc.busId,
-        position: { lat: loc.lat, lng: loc.lng },
-        label: loc.busId,
-      }));
+      const markers = locations
+        .filter((loc) => runningBusIds.has(loc.busId))
+        .map((loc) => ({
+          id: loc.busId,
+          position: { lat: loc.lat, lng: loc.lng },
+          label: loc.busId,
+        }));
       setBuses(markers);
       setLocationError(null);
     } catch {
-      // 폴백: API 실패 시 기본 위치 사용
-      if (buses.length === 0) {
-        setBuses([
-          { id: "SCH-01", position: { lat: 36.8005, lng: 127.0763 }, label: "SCH-01" },
-          { id: "SCH-03", position: { lat: 36.7985, lng: 127.0743 }, label: "SCH-03" },
-        ]);
-        setLocationError("실시간 위치를 불러올 수 없습니다");
-      }
+      setLocationError("실시간 위치를 불러올 수 없습니다");
     }
-  }, [buses.length]);
+  }, []);
 
   // 최초 로드 + 30초 폴링
   useEffect(() => {

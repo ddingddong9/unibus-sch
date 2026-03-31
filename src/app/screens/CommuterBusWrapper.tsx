@@ -104,8 +104,8 @@ export default function CommuterBusWrapper() {
   const regions = ["all", "Incheon", "Seoul", "Gyeonggi"];
 
   return (
-    <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
-      <div className="bg-white content-stretch flex flex-col items-start max-w-[430px] overflow-auto pb-[94px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full" style={{ minHeight: '100dvh' }}>
+    <div className="bg-[#f6f6f8] content-stretch flex flex-col items-start relative size-full">
+      <div className="bg-white content-stretch flex flex-col items-start overflow-auto pb-[94px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full" style={{ minHeight: '100dvh' }}>
         {/* Header */}
         <div className="sticky top-0 z-30 w-full pt-safe">
           <div className="backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] flex items-center justify-between pb-[12px] pt-[16px] px-[16px] w-full">

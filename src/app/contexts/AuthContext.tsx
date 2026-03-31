@@ -9,6 +9,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   isAdmin: boolean;
+  isDriver: boolean;
   login: (token: string, userData: User) => void;
   logout: () => Promise<void>;
   checkAuth: () => void;
@@ -65,6 +66,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const isAdmin = user?.role === 'admin';
+  const isDriver = user?.role === 'driver';
 
   return (
     <AuthContext.Provider
@@ -73,6 +75,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated,
         isLoading,
         isAdmin,
+        isDriver,
         login,
         logout,
         checkAuth

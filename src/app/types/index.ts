@@ -5,7 +5,7 @@ export interface User {
   email: string;
   name: string;
   studentId?: string | null;
-  role: 'user' | 'admin';
+  role: 'user' | 'admin' | 'driver';
   provider?: 'local' | 'kakao';
   profileImage?: string | null;
 }
