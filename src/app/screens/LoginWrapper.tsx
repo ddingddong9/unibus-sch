@@ -53,7 +53,11 @@ export default function LoginWrapper() {
     try {
       const result = await api.login(email, password);
       login(result.token, result.user);
-      navigate("/home");
+      if (result.user.role === 'driver') {
+        navigate("/driver");
+      } else {
+        navigate("/home");
+      }
     } catch (err: any) {
       setError(t("로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.", "Login failed. Please check your email and password."));
     } finally {

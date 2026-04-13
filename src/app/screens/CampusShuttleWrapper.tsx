@@ -72,6 +72,13 @@ export default function CampusShuttleWrapper() {
   // 버스 실시간 위치 폴링 (30초)
   const fetchBusLocations = useCallback(async () => {
     try {
+      // 운행 중인 버스 목록 먼저 조회
+      const allBuses = await api.getBuses();
+      const runningBusIds = new Set(
+        allBuses.filter((b: any) => b.is_running).map((b: any) => b.id)
+      );
+
+      // 위치 조회 후 운행 중인 버스만 필터링
       const locations = await api.getBusLocations();
       setBuses(
         locations.map(loc => ({
@@ -86,7 +93,7 @@ export default function CampusShuttleWrapper() {
         setLocationError("실시간 위치를 불러올 수 없습니다");
       }
     }
-  }, [buses.length]);
+  }, []);
 
   useEffect(() => {
     fetchBusLocations();

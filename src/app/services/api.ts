@@ -301,6 +301,59 @@ class ApiClient {
     }
   }
 
+  // ============ USER MANAGEMENT ENDPOINTS (Admin) ============
+
+  async getUsers(): Promise<any[]> {
+    const response = await this.request<ApiResponse<any[]>>('/users');
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to fetch users');
+  }
+
+  async updateUserRole(userId: string, role: 'user' | 'admin' | 'driver'): Promise<void> {
+    const response = await this.request<ApiResponse>(`/users/${userId}/role`, {
+      method: 'PUT',
+      body: JSON.stringify({ role }),
+    });
+    if (!response.success) throw new Error(response.error || 'Failed to update role');
+  }
+
+  // ============ DRIVER ENDPOINTS ============
+
+  async getDriverBuses(): Promise<any[]> {
+    const response = await this.request<ApiResponse<any[]>>('/driver/buses');
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to fetch buses');
+  }
+
+  async driverStart(busId: string): Promise<void> {
+    const response = await this.request<ApiResponse>('/driver/start', {
+      method: 'POST',
+      body: JSON.stringify({ busId }),
+    });
+    if (!response.success) throw new Error(response.error || 'Failed to start driving');
+  }
+
+  async driverSendLocation(lat: number, lng: number, speed: number, heading: number): Promise<void> {
+    const response = await this.request<ApiResponse>('/driver/location', {
+      method: 'POST',
+      body: JSON.stringify({ lat, lng, speed, heading }),
+    });
+    if (!response.success) throw new Error(response.error || 'Failed to send location');
+  }
+
+  async driverStop(): Promise<void> {
+    const response = await this.request<ApiResponse>('/driver/stop', {
+      method: 'POST',
+    });
+    if (!response.success) throw new Error(response.error || 'Failed to stop driving');
+  }
+
+  async getDriverStatus(): Promise<{ activeBus: any | null }> {
+    const response = await this.request<ApiResponse<{ activeBus: any | null }>>('/driver/status');
+    if (response.success && response.data) return response.data;
+    return { activeBus: null };
+  }
+
   // ============ UTILITY ============
 
   isAuthenticated(): boolean {

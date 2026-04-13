@@ -10,7 +10,7 @@ export default function BottomNav() {
   const isActive = (path: string) => location.pathname === path;
 
   return (
-    <div className="fixed backdrop-blur-[12px] bg-[rgba(255,255,255,0.95)] bottom-0 content-stretch flex items-center justify-center left-0 right-0 pt-[13px] px-[24px] w-full border-t border-[#e2e8f0] z-50 pb-safe-nav">
+    <div className="fixed backdrop-blur-[12px] bg-[rgba(255,255,255,0.95)] bottom-0 content-stretch flex items-center justify-center left-1/2 -translate-x-1/2 pt-[13px] px-[24px] w-full max-w-[430px] border-t border-[#e2e8f0] z-50 pb-safe-nav">
       <div className="flex items-center justify-between w-full">
         {/* Home */}
         <button

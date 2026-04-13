@@ -1,0 +1,222 @@
+import { useState, useEffect, useRef } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { api } from "../../services/api";
+
+export default function DriverActiveWrapper() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const bus = location.state?.bus;
+
+  const [gpsStatus, setGpsStatus] = useState<"acquiring" | "active" | "error">("acquiring");
+  const [coords, setCoords] = useState<{ lat: number; lng: number; speed: number } | null>(null);
+  const [elapsed, setElapsed] = useState(0);
+  const [stopping, setStopping] = useState(false);
+  const [sendCount, setSendCount] = useState(0);
+
+  const watchIdRef = useRef<number | null>(null);
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const latestCoordsRef = useRef<{ lat: number; lng: number; speed: number } | null>(null);
+
+  // 버스 없이 접근 시 홈으로
+  useEffect(() => {
+    if (!bus) navigate("/driver", { replace: true });
+  }, [bus]);
+
+  // GPS watchPosition 시작
+  useEffect(() => {
+    if (!bus) return;
+
+    if (!navigator.geolocation) {
+      setGpsStatus("error");
+      return;
+    }
+
+    watchIdRef.current = navigator.geolocation.watchPosition(
+      (pos) => {
+        const { latitude, longitude, speed } = pos.coords;
+        const curr = { lat: latitude, lng: longitude, speed: speed || 0 };
+        latestCoordsRef.current = curr;
+        setCoords(curr);
+        setGpsStatus("active");
+      },
+      () => setGpsStatus("error"),
+      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+    );
+
+    // 5초마다 서버에 위치 전송
+    intervalRef.current = setInterval(async () => {
+      if (!latestCoordsRef.current) return;
+      try {
+        const { lat, lng, speed } = latestCoordsRef.current;
+        await api.driverSendLocation(lat, lng, speed, 0);
+        setSendCount((n) => n + 1);
+      } catch {
+        // 전송 실패해도 계속 시도
+      }
+    }, 5000);
+
+    // 경과 시간 타이머
+    timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
+
+    return () => {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [bus]);
+
+  const handleStop = async () => {
+    setStopping(true);
+    try {
+      await api.driverStop();
+    } catch {
+      // 실패해도 화면은 이동
+    } finally {
+      if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      if (timerRef.current) clearInterval(timerRef.current);
+      navigate("/driver", { replace: true });
+    }
+  };
+
+  const formatTime = (secs: number) => {
+    const h = Math.floor(secs / 3600);
+    const m = Math.floor((secs % 3600) / 60);
+    const s = secs % 60;
+    if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+    return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  };
+
+  if (!bus) return null;
+
+  return (
+    <div className="min-h-screen bg-[#f6f6f8] flex flex-col items-center">
+      <div className="w-full max-w-[430px] min-h-screen flex flex-col bg-white">
+
+        {/* Header */}
+        <div className="bg-[#1e3b8a] px-6 pt-14 pb-8">
+          <div className="flex items-center gap-2 mb-2">
+            <span className="flex items-center gap-1.5 bg-[#22c55e] text-white text-xs font-bold px-3 py-1 rounded-full">
+              <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+              운행 중
+            </span>
+          </div>
+          <h1 className="text-white text-2xl font-black tracking-tight">{bus.name}</h1>
+          <p className="text-white/60 text-sm mt-1">{bus.id}</p>
+        </div>
+
+        {/* 경과 시간 */}
+        <div className="mx-5 mt-5 bg-[#f8fafc] rounded-2xl p-5 flex items-center justify-between border border-[#e2e8f0]">
+          <div>
+            <p className="text-gray-400 text-xs font-medium mb-1">운행 경과 시간</p>
+            <p className="text-[#0f172a] text-3xl font-black tracking-tight">{formatTime(elapsed)}</p>
+          </div>
+          <div className="bg-[#1e3b8a]/10 rounded-2xl w-14 h-14 flex items-center justify-center">
+            <svg className="w-7 h-7 text-[#1e3b8a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+          </div>
+        </div>
+
+        {/* GPS 상태 */}
+        <div className="mx-5 mt-4 flex flex-col gap-3">
+
+          <div className={`rounded-2xl p-5 border flex items-center gap-4
+            ${gpsStatus === "active" ? "bg-green-50 border-green-100"
+              : gpsStatus === "error" ? "bg-red-50 border-red-100"
+              : "bg-amber-50 border-amber-100"}`}
+          >
+            <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0
+              ${gpsStatus === "active" ? "bg-green-100"
+                : gpsStatus === "error" ? "bg-red-100"
+                : "bg-amber-100"}`}
+            >
+              <svg className={`w-6 h-6
+                ${gpsStatus === "active" ? "text-green-600"
+                  : gpsStatus === "error" ? "text-red-500"
+                  : "text-amber-500"}`}
+                fill="none" viewBox="0 0 24 24" stroke="currentColor"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </div>
+            <div className="flex-1">
+              <p className={`font-bold text-sm
+                ${gpsStatus === "active" ? "text-green-700"
+                  : gpsStatus === "error" ? "text-red-600"
+                  : "text-amber-600"}`}
+              >
+                {gpsStatus === "active" ? "GPS 수신 중"
+                  : gpsStatus === "error" ? "GPS 오류"
+                  : "GPS 신호 잡는 중..."}
+              </p>
+              {coords && (
+                <p className="text-gray-500 text-xs mt-0.5">
+                  {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
+                </p>
+              )}
+              {gpsStatus === "error" && (
+                <p className="text-red-400 text-xs mt-0.5">위치 권한을 허용해 주세요</p>
+              )}
+            </div>
+          </div>
+
+          {/* 전송 횟수 */}
+          <div className="bg-[#f8fafc] rounded-2xl p-4 border border-[#e2e8f0] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <svg className="w-4 h-4 text-[#1e3b8a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4" />
+              </svg>
+              <span className="text-gray-500 text-sm">위치 전송 횟수</span>
+            </div>
+            <span className="font-black text-[#1e3b8a] text-lg">{sendCount}회</span>
+          </div>
+
+          {/* 속도 */}
+          {coords && (
+            <div className="bg-[#f8fafc] rounded-2xl p-4 border border-[#e2e8f0] flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg className="w-4 h-4 text-[#1e3b8a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span className="text-gray-500 text-sm">현재 속도</span>
+              </div>
+              <span className="font-black text-[#1e3b8a] text-lg">
+                {(coords.speed * 3.6).toFixed(0)} km/h
+              </span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex-1" />
+
+        {/* 운행 종료 버튼 */}
+        <div className="px-5 pb-12">
+          <button
+            onClick={handleStop}
+            disabled={stopping}
+            className="w-full py-5 rounded-2xl bg-red-500 text-white font-black text-lg shadow-lg shadow-red-200 active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-3"
+          >
+            {stopping ? (
+              <>
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white" />
+                <span>운행 종료 중...</span>
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M9 10a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z" />
+                </svg>
+                <span>운행 종료</span>
+              </>
+            )}
+          </button>
+        </div>
+
+      </div>
+    </div>
+  );
+}
