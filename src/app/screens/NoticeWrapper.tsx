@@ -52,6 +52,7 @@ export default function NoticeWrapper() {
       case "route": return "bg-[#3b82f6] text-white";
       case "system": return "bg-[#f59e0b] text-white";
       case "general": return "bg-[#10b981] text-white";
+      case "lost": return "bg-[#f97316] text-white";
       default: return "bg-[#64748b] text-white";
     }
   };
@@ -61,6 +62,7 @@ export default function NoticeWrapper() {
       route: { ko: "운행정보", en: "Route" },
       system: { ko: "시스템", en: "System" },
       general: { ko: "일반", en: "General" },
+      lost: { ko: "분실물", en: "Lost & Found" },
     };
     return language === "ko" ? (labels[category]?.ko || category) : (labels[category]?.en || category);
   };
@@ -147,6 +149,16 @@ export default function NoticeWrapper() {
               }`}
             >
               {t("시스템", "System")}
+            </button>
+            <button
+              onClick={() => setSelectedCategory("lost")}
+              className={`px-4 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[12px] whitespace-nowrap transition-all ${
+                selectedCategory === "lost"
+                  ? "bg-[#f97316] text-white"
+                  : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
+              }`}
+            >
+              {t("분실물", "Lost & Found")}
             </button>
           </div>
         </div>

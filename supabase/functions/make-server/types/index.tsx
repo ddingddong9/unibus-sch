@@ -41,7 +41,7 @@ export interface Notice {
   id: string;
   title: string;
   content: string;
-  category: 'general' | 'route' | 'system';
+  category: 'general' | 'route' | 'system' | 'lost';
   priority: 'low' | 'medium' | 'high';
   authorId: string;
   authorName: string;
@@ -52,7 +52,7 @@ export interface Notice {
 export interface CreateNoticeRequest {
   title: string;
   content: string;
-  category: 'general' | 'route' | 'system';
+  category: 'general' | 'route' | 'system' | 'lost';
   priority: 'low' | 'medium' | 'high';
 }
 

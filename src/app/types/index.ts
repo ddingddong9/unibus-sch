@@ -14,7 +14,7 @@ export interface Notice {
   id: string;
   title: string;
   content: string;
-  category: 'general' | 'route' | 'system';
+  category: 'general' | 'route' | 'system' | 'lost';
   priority: 'low' | 'medium' | 'high';
   isPinned: boolean;
   viewCount: number;
