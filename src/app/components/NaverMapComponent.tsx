@@ -3,53 +3,89 @@ import { useEffect, useRef } from "react";
 interface NaverMapProps {
   center?: { lat: number; lng: number };
   zoom?: number;
-  buses?: Array<{
-    id: string;
-    position: { lat: number; lng: number };
-    label: string;
-  }>;
+  buses?: Array<{ id: string; position: { lat: number; lng: number }; label: string }>;
+  stops?: Array<{ id: string; name: string; position: { lat: number; lng: number } }>;
+  userLocation?: { lat: number; lng: number } | null;
+  focusLocation?: { lat: number; lng: number; zoom?: number; key?: number } | null;
+  fitBoundsKey?: number;
+  onBusClick?: (busId: string) => void;
   clientId?: string;
 }
 
 declare global {
-  interface Window {
-    naver: any;
-  }
+  interface Window { naver: any; }
 }
 
 const BUS_MARKER_CONTENT = (label: string) => `
-  <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
-    <div style="background: #1e3b8a; width: 40px; height: 40px; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 0 0 4px white, 0 10px 15px -3px rgba(0,0,0,0.1);">
+  <div style="position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer;">
+    <div style="background:#1e3a8a;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 4px white,0 10px 15px -3px rgba(0,0,0,0.15);">
       <svg width="13" height="16" viewBox="0 0 13 16" fill="none">
         <path d="M11.667 6.667H10V5h1.667v1.667zM10 10h1.667V8.333H10V10zm-8.333 0H3.333V8.333H1.667V10zm0-3.333H3.333V5H1.667v1.667zM5 15h3.333v-1.667H5V15zM12.5 3.333h-1.667V2.5c0-.917-.75-1.667-1.666-1.667h-6.5C1.75.833 1 1.583 1 2.5v10c0 .917.75 1.667 1.667 1.667H3.333v.833c0 .917.75 1.667 1.667 1.667h6.667c.916 0 1.666-.75 1.666-1.667v-10c0-.917-.75-1.667-1.666-1.667zm-10 10V2.5h6.667v1.667H5c-.917 0-1.667.75-1.667 1.666v7.5H2.5z" fill="white"/>
       </svg>
     </div>
-    <div style="margin-top: 4px; background: white; padding: 3px 9px; border-radius: 4px; border: 1px solid rgba(30,58,138,0.1); box-shadow: 0 1px 2px 0 rgba(0,0,0,0.05); white-space: nowrap;">
-      <span style="font-family: 'Public Sans', sans-serif; font-weight: 900; font-size: 10px; color: #1e3b8a; line-height: 15px;">${label}</span>
+    <div style="margin-top:4px;background:white;padding:3px 9px;border-radius:4px;border:1px solid rgba(30,58,138,0.15);box-shadow:0 1px 4px rgba(0,0,0,0.08);white-space:nowrap;">
+      <span style="font-family:'Public Sans',sans-serif;font-weight:900;font-size:10px;color:#1e3a8a;line-height:15px;">${label}</span>
     </div>
   </div>
 `;
 
+const STOP_MARKER_CONTENT = (name: string) => `
+  <div style="display:flex;flex-direction:column;align-items:center;">
+    <div style="background:white;width:30px;height:30px;border-radius:50%;border:2.5px solid #1e3a8a;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+        <rect x="3" y="5" width="18" height="12" rx="2" fill="#1e3a8a"/>
+        <rect x="3" y="9" width="18" height="1.5" fill="white" opacity="0.6"/>
+        <rect x="7" y="5" width="1.5" height="12" fill="white" opacity="0.3"/>
+        <rect x="15.5" y="5" width="1.5" height="12" fill="white" opacity="0.3"/>
+        <circle cx="7.5" cy="19" r="2" fill="#1e3a8a"/>
+        <circle cx="16.5" cy="19" r="2" fill="#1e3a8a"/>
+      </svg>
+    </div>
+    <div style="margin-top:3px;background:white;padding:2px 6px;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,0.12);white-space:nowrap;border:1px solid rgba(30,58,138,0.08);">
+      <span style="font-family:'Public Sans',sans-serif;font-size:9px;font-weight:700;color:#0f172a;">${name}</span>
+    </div>
+  </div>
+`;
+
+const USER_MARKER_CONTENT = () => `
+  <div style="position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
+    <div style="position:absolute;width:28px;height:28px;border-radius:50%;background:rgba(30,58,138,0.18);"></div>
+    <div style="position:relative;width:14px;height:14px;border-radius:50%;background:#1e3a8a;border:3px solid white;box-shadow:0 2px 8px rgba(30,58,138,0.4);"></div>
+  </div>
+`;
+
 export default function NaverMapComponent({
-  center = { lat: 36.7995, lng: 127.0753 },
+  center = { lat: 36.7694, lng: 126.9322 },
   zoom = 16,
   buses = [],
-  clientId = import.meta.env.VITE_NAVER_CLIENT_ID || "YOUR_NAVER_CLIENT_ID"
+  stops = [],
+  userLocation = null,
+  focusLocation = null,
+  fitBoundsKey = 0,
+  onBusClick,
+  clientId = import.meta.env.VITE_NAVER_CLIENT_ID || "YOUR_NAVER_CLIENT_ID",
 }: NaverMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstance = useRef<any>(null);
-  const markersRef = useRef<any[]>([]);
+  const busMarkersRef = useRef<any[]>([]);
+  const stopMarkersRef = useRef<any[]>([]);
+  const userMarkerRef = useRef<any>(null);
   const scriptLoadedRef = useRef<boolean>(false);
-  // ref로 최신 buses 유지 (idle 콜백의 stale closure 방지)
+
+  // 항상 최신 값 참조 (stale closure 방지)
   const busesRef = useRef(buses);
   busesRef.current = buses;
+  const stopsRef = useRef(stops);
+  stopsRef.current = stops;
+  const onBusClickRef = useRef(onBusClick);
+  onBusClickRef.current = onBusClick;
+  const userLocationRef = useRef(userLocation);
+  userLocationRef.current = userLocation;
 
-  const updateMarkers = () => {
+  const updateBusMarkers = () => {
     if (!mapInstance.current || !window.naver) return;
-
-    markersRef.current.forEach(marker => marker.setMap(null));
-    markersRef.current = [];
-
+    busMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
+    busMarkersRef.current = [];
     busesRef.current.forEach(bus => {
       try {
         const marker = new window.naver.maps.Marker({
@@ -58,17 +94,61 @@ export default function NaverMapComponent({
           icon: {
             content: BUS_MARKER_CONTENT(bus.label),
             size: new window.naver.maps.Size(40, 60),
-            anchor: new window.naver.maps.Point(20, 60)
-          }
+            anchor: new window.naver.maps.Point(20, 60),
+          },
+          zIndex: 20,
         });
-        markersRef.current.push(marker);
-      } catch (error) {
-        console.error("마커 생성 오류:", error);
-      }
+        window.naver.maps.Event.addListener(marker, 'click', () => {
+          onBusClickRef.current?.(bus.id);
+        });
+        busMarkersRef.current.push(marker);
+      } catch (e) { console.error("버스 마커 오류:", e); }
     });
   };
 
-  // 지도 초기화 (clientId, center, zoom 변경 시)
+  const updateStopMarkers = () => {
+    if (!mapInstance.current || !window.naver) return;
+    stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
+    stopMarkersRef.current = [];
+    stopsRef.current.forEach(stop => {
+      try {
+        const marker = new window.naver.maps.Marker({
+          position: new window.naver.maps.LatLng(stop.position.lat, stop.position.lng),
+          map: mapInstance.current,
+          icon: {
+            content: STOP_MARKER_CONTENT(stop.name),
+            size: new window.naver.maps.Size(30, 50),
+            anchor: new window.naver.maps.Point(15, 30),
+          },
+          zIndex: 10,
+        });
+        stopMarkersRef.current.push(marker);
+      } catch (e) { console.error("정류장 마커 오류:", e); }
+    });
+  };
+
+  const updateUserMarker = (loc: { lat: number; lng: number } | null) => {
+    if (!mapInstance.current || !window.naver) return;
+    if (userMarkerRef.current) {
+      try { userMarkerRef.current.setMap(null); } catch (_) {}
+      userMarkerRef.current = null;
+    }
+    if (!loc) return;
+    try {
+      userMarkerRef.current = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(loc.lat, loc.lng),
+        map: mapInstance.current,
+        icon: {
+          content: USER_MARKER_CONTENT(),
+          size: new window.naver.maps.Size(28, 28),
+          anchor: new window.naver.maps.Point(14, 14),
+        },
+        zIndex: 30,
+      });
+    } catch (e) { console.error("사용자 마커 오류:", e); }
+  };
+
+  // 지도 초기화
   useEffect(() => {
     const initializeMap = () => {
       if (!mapRef.current || mapInstance.current) return;
@@ -82,18 +162,14 @@ export default function NaverMapComponent({
           logoControl: false,
           mapDataControl: false,
         });
-        // 지도 준비 완료 후 마커 표시
-        window.naver.maps.Event.addListener(mapInstance.current, 'idle', updateMarkers);
-      } catch (error) {
-        console.error("네이버 지도 초기화 오류:", error);
-      }
+        window.naver.maps.Event.addListener(mapInstance.current, 'idle', () => {
+          updateBusMarkers();
+          updateStopMarkers();
+        });
+      } catch (e) { console.error("네이버 지도 초기화 오류:", e); }
     };
 
-    if (window.naver?.maps) {
-      initializeMap();
-      return;
-    }
-
+    if (window.naver?.maps) { initializeMap(); return; }
     if (scriptLoadedRef.current) return;
     scriptLoadedRef.current = true;
 
@@ -101,37 +177,57 @@ export default function NaverMapComponent({
     script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}`;
     script.async = true;
     script.onload = () => { if (window.naver?.maps) initializeMap(); };
-    script.onerror = () => console.error("네이버 지도 API를 로드할 수 없습니다. Client ID를 확인해주세요.");
+    script.onerror = () => console.error("네이버 지도 API 로드 실패. Client ID를 확인하세요.");
     document.head.appendChild(script);
 
     return () => {
-      markersRef.current.forEach(marker => { try { marker.setMap(null); } catch (_) {} });
+      busMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
+      stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
     };
-  }, [center.lat, center.lng, zoom, clientId]);
+  }, []);
 
-  // 버스 위치 변경 시 마커 업데이트
+  // 버스 마커 갱신
+  useEffect(() => { updateBusMarkers(); }, [buses]);
+
+  // 정류장 마커 갱신
+  useEffect(() => { updateStopMarkers(); }, [stops]);
+
+  // 사용자 위치 마커 갱신
+  useEffect(() => { updateUserMarker(userLocation ?? null); }, [userLocation]);
+
+  // 특정 위치로 포커스 (버스 클릭 / 사용자 위치 버튼)
   useEffect(() => {
-    updateMarkers();
-  }, [buses]);
+    if (!focusLocation || !mapInstance.current || !window.naver) return;
+    mapInstance.current.setCenter(new window.naver.maps.LatLng(focusLocation.lat, focusLocation.lng));
+    mapInstance.current.setZoom(focusLocation.zoom ?? 18);
+  }, [focusLocation]);
+
+  // 전체보기 (모든 정류장이 보이도록 fitBounds)
+  useEffect(() => {
+    if (!fitBoundsKey || !mapInstance.current || !window.naver) return;
+    const currentStops = stopsRef.current;
+    if (currentStops.length === 0) return;
+    const bounds = new window.naver.maps.LatLngBounds();
+    currentStops.forEach(s => bounds.extend(new window.naver.maps.LatLng(s.position.lat, s.position.lng)));
+    mapInstance.current.fitBounds(bounds, { padding: 80 });
+  }, [fitBoundsKey]);
 
   const handleZoomIn = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() + 1); };
   const handleZoomOut = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() - 1); };
+
+  // 내 위치 버튼: 사용자 위치가 있으면 그쪽으로, 없으면 캠퍼스 중심으로
   const handleLocate = () => {
-    if (mapInstance.current && window.naver) {
-      mapInstance.current.setCenter(new window.naver.maps.LatLng(center.lat, center.lng));
-      mapInstance.current.setZoom(zoom);
-    }
+    if (!mapInstance.current || !window.naver) return;
+    const loc = userLocationRef.current ?? center;
+    mapInstance.current.setCenter(new window.naver.maps.LatLng(loc.lat, loc.lng));
+    mapInstance.current.setZoom(18);
   };
 
   return (
     <>
-      <div
-        ref={mapRef}
-        className="absolute inset-0 w-full h-full z-0"
-        style={{ background: '#e2e8f0' }}
-      />
+      <div ref={mapRef} className="absolute inset-0 w-full h-full z-0" style={{ background: '#e2e8f0' }} />
 
-      {/* Custom Map Controls */}
+      {/* 지도 컨트롤 버튼 */}
       <div className="absolute content-stretch flex flex-col gap-[8px] items-start right-[16px] top-[128px] z-20">
         <button
           onClick={handleZoomIn}

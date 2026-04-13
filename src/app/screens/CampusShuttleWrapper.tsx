@@ -6,16 +6,17 @@ import { useLanguage } from "../contexts/LanguageContext";
 import NaverMapComponent from "../components/NaverMapComponent";
 import { api } from "../services/api";
 
-interface BusStop {
-  id: string;
-  name: string;
-  nameKo: string;
-  routes: string;
-  routesKo: string;
-  distance: string;
-  nextBus: number;
-  status: "arriving" | "scheduled" | "waiting";
-}
+// 학내 순환 정류장 (후문 출발 → 향3 → 향1 → 도서관 → 정문)
+const CAMPUS_STOPS = [
+  { id: "rear-gate",  nameKo: "후문",   nameEn: "Rear Gate", lat: 36.772760, lng: 126.933816, order: 1 },
+  { id: "hyang3",     nameKo: "향3",    nameEn: "Hyang Hall 3", lat: 36.768228, lng: 126.935383, order: 2 },
+  { id: "hyang1",     nameKo: "향1",    nameEn: "Hyang Hall 1", lat: 36.767905, lng: 126.932505, order: 3 },
+  { id: "library",    nameKo: "도서관", nameEn: "Library",    lat: 36.768856, lng: 126.931303, order: 4 },
+  { id: "main-gate",  nameKo: "정문",   nameEn: "Main Gate",  lat: 36.769014, lng: 126.927978, order: 5 },
+];
+
+// 캠퍼스 지도 중심 (정류장 중심점)
+const CAMPUS_CENTER = { lat: 36.7694, lng: 126.9322 };
 
 interface BusMarker {
   id: string;
@@ -23,17 +24,44 @@ interface BusMarker {
   label: string;
 }
 
-const FALLBACK_STOPS: BusStop[] = [
-  { id: "1", name: "Main Gate", nameKo: "정문", routes: "Route A • 150m away", routesKo: "A노선 • 150m 거리", distance: "150m", nextBus: 3, status: "arriving" },
-  { id: "2", name: "Engineering Hall", nameKo: "공과대학", routes: "Route A, B • 400m away", routesKo: "A, B노선 • 400m 거리", distance: "400m", nextBus: 8, status: "scheduled" },
-  { id: "3", name: "Central Library", nameKo: "중앙도서관", routes: "Route B • 650m away", routesKo: "B노선 • 650m 거리", distance: "650m", nextBus: 14, status: "waiting" },
-];
+interface FocusLocation {
+  lat: number;
+  lng: number;
+  zoom?: number;
+  key: number;
+}
+
+// Haversine 거리 계산 (km)
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// 가장 가까운 버스까지 거리 기반 도착 예정 시간 (분)
+// 캠퍼스 평균 속도 15 km/h = 0.25 km/min
+function getArrivalMinutes(stopLat: number, stopLng: number, buses: BusMarker[]): number | null {
+  if (buses.length === 0) return null;
+  const minDist = Math.min(
+    ...buses.map(b => haversineKm(b.position.lat, b.position.lng, stopLat, stopLng))
+  );
+  return Math.max(1, Math.round(minDist / 0.25));
+}
 
 export default function CampusShuttleWrapper() {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const [busStops] = useState<BusStop[]>(FALLBACK_STOPS);
+
   const [buses, setBuses] = useState<BusMarker[]>([]);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [focusLocation, setFocusLocation] = useState<FocusLocation | null>(null);
+  const [fitBoundsKey, setFitBoundsKey] = useState(0);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [sheetVisible, setSheetVisible] = useState(true);
   const [dragY, setDragY] = useState(0);
@@ -41,35 +69,50 @@ export default function CampusShuttleWrapper() {
   const dragStartY = useRef(0);
   const currentDragY = useRef(0);
 
+  // 버스 실시간 위치 폴링 (30초)
   const fetchBusLocations = useCallback(async () => {
     try {
       const locations = await api.getBusLocations();
-      const markers = locations.map((loc) => ({
-        id: loc.busId,
-        position: { lat: loc.lat, lng: loc.lng },
-        label: loc.busId,
-      }));
-      setBuses(markers);
+      setBuses(
+        locations.map(loc => ({
+          id: loc.busId,
+          position: { lat: loc.lat, lng: loc.lng },
+          label: loc.busId,
+        }))
+      );
       setLocationError(null);
     } catch {
-      // 폴백: API 실패 시 기본 위치 사용
       if (buses.length === 0) {
-        setBuses([
-          { id: "SCH-01", position: { lat: 36.8005, lng: 127.0763 }, label: "SCH-01" },
-          { id: "SCH-03", position: { lat: 36.7985, lng: 127.0743 }, label: "SCH-03" },
-        ]);
         setLocationError("실시간 위치를 불러올 수 없습니다");
       }
     }
   }, [buses.length]);
 
-  // 최초 로드 + 30초 폴링
   useEffect(() => {
     fetchBusLocations();
     const interval = setInterval(fetchBusLocations, 30000);
     return () => clearInterval(interval);
   }, [fetchBusLocations]);
 
+  // 사용자 실시간 위치 추적
+  useEffect(() => {
+    if (!navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      pos => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      err => console.warn("위치 권한 없음:", err.message),
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 8000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
+
+  // 버스 클릭 → 해당 버스 위치로 포커스
+  const handleBusClick = useCallback((busId: string) => {
+    const bus = buses.find(b => b.id === busId);
+    if (!bus) return;
+    setFocusLocation({ lat: bus.position.lat, lng: bus.position.lng, zoom: 18, key: Date.now() });
+  }, [buses]);
+
+  // 드래그 핸들러
   const handleDragStart = (e: React.PointerEvent) => {
     isDragging.current = true;
     dragStartY.current = e.clientY;
@@ -87,26 +130,44 @@ export default function CampusShuttleWrapper() {
   const handleDragEnd = () => {
     if (!isDragging.current) return;
     isDragging.current = false;
-    if (currentDragY.current > 80) {
-      setSheetVisible(false);
-    }
+    if (currentDragY.current > 80) setSheetVisible(false);
     currentDragY.current = 0;
     setDragY(0);
   };
 
+  // 정류장 목록 (도착 예정 시간 포함)
+  const stopsWithArrival = CAMPUS_STOPS.map(stop => {
+    const arrival = getArrivalMinutes(stop.lat, stop.lng, buses);
+    const status = arrival === null ? "waiting" : arrival <= 2 ? "arriving" : "scheduled";
+    return { ...stop, arrival, status };
+  });
+
+  // NaverMapComponent 에 넘길 stops 형식
+  const mapStops = CAMPUS_STOPS.map(s => ({
+    id: s.id,
+    name: s.nameKo,
+    position: { lat: s.lat, lng: s.lng },
+  }));
+
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
       <div className="bg-[#f6f6f8] overflow-hidden relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full max-w-[430px]" style={{ height: '100dvh' }}>
-        {/* Map Container */}
+
+        {/* 지도 */}
         <div className="absolute inset-0 w-full h-full">
           <NaverMapComponent
-            center={{ lat: 36.7995, lng: 127.0753 }}
+            center={CAMPUS_CENTER}
             zoom={16}
             buses={buses}
+            stops={mapStops}
+            userLocation={userLocation}
+            focusLocation={focusLocation}
+            fitBoundsKey={fitBoundsKey}
+            onBusClick={handleBusClick}
           />
         </div>
 
-        {/* Bottom Sheet — bottom-0, BottomNav(z-50)이 위에 덮여 틈 없음 */}
+        {/* 바텀 시트 */}
         <div
           className="absolute bg-white bottom-0 content-stretch flex flex-col items-start left-0 right-0 rounded-tl-[40px] rounded-tr-[40px] shadow-[0px_-12px_40px_0px_rgba(0,0,0,0.12)] max-h-[60vh] overflow-hidden z-20"
           style={{
@@ -114,6 +175,7 @@ export default function CampusShuttleWrapper() {
             transition: isDragging.current ? "none" : "transform 0.35s cubic-bezier(0.32,0.72,0,1)",
           }}
         >
+          {/* 드래그 핸들 */}
           <div
             className="content-stretch flex h-[40px] items-center justify-center py-[20px] relative shrink-0 w-full cursor-grab active:cursor-grabbing touch-none"
             onPointerDown={handleDragStart}
@@ -128,15 +190,18 @@ export default function CampusShuttleWrapper() {
             <div className="content-stretch flex flex-col gap-[16px] items-start pb-[16px] px-[24px] relative w-full">
               <div className="content-stretch flex items-center justify-between relative shrink-0 w-full">
                 <div className="flex flex-col font-['Public_Sans'] font-extrabold justify-center leading-[0] text-[#0f172a] text-[20px] tracking-[-0.5px]">
-                  <p className="leading-[28px]">{t("근처 정류장", "Nearby Stops")}</p>
+                  <p className="leading-[28px]">{t("학내순환 정류장", "Campus Shuttle Stops")}</p>
                 </div>
-                <button className="bg-[rgba(30,58,138,0.05)] px-[12px] py-[6px] rounded-[9999px] hover:bg-[rgba(30,58,138,0.1)] active:scale-95 transition-all">
+                <button
+                  onClick={() => setFitBoundsKey(k => k + 1)}
+                  className="bg-[rgba(30,58,138,0.05)] px-[12px] py-[6px] rounded-[9999px] hover:bg-[rgba(30,58,138,0.1)] active:scale-95 transition-all"
+                >
                   <p className="font-['Public_Sans'] font-bold text-[#1e3a8a] text-[12px] leading-[16px]">{t("전체보기", "View All")}</p>
                 </button>
               </div>
 
               <div className="content-stretch flex flex-col gap-[12px] items-start max-h-[280px] overflow-y-auto scrollbar-hide pb-[88px] relative shrink-0 w-full">
-                {busStops.map((stop) => (
+                {stopsWithArrival.map(stop => (
                   <div
                     key={stop.id}
                     className={`bg-[rgba(248,250,252,0.5)] relative rounded-[16px] shrink-0 w-full border border-[#f1f5f9] ${
@@ -148,25 +213,23 @@ export default function CampusShuttleWrapper() {
                         className={`${
                           stop.status === "arriving" ? "bg-[#1e3a8a]" : "bg-[#e2e8f0]"
                         } relative rounded-[12px] shrink-0 size-[48px] flex items-center justify-center ${
-                          stop.status === "arriving" ? "shadow-[0px_4px_6px_-1px_rgba(30,58,138,0.2),0px_2px_4px_-2px_rgba(30,58,138,0.2)]" : ""
+                          stop.status === "arriving" ? "shadow-[0px_4px_6px_-1px_rgba(30,58,138,0.2)]" : ""
                         }`}
                       >
-                        <div className="h-[20px] relative shrink-0 w-[16px]">
-                          <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 20">
-                            <path
-                              d={svgPaths.p303da380 || svgPaths.p1869180}
-                              fill={stop.status === "arriving" ? "white" : "#64748B"}
-                            />
-                          </svg>
-                        </div>
+                        <svg width="16" height="20" viewBox="0 0 16 20" fill="none">
+                          <path
+                            d={svgPaths.p303da380 || svgPaths.p1869180}
+                            fill={stop.status === "arriving" ? "white" : "#64748B"}
+                          />
+                        </svg>
                       </div>
 
                       <div className="flex-1 flex flex-col items-start">
                         <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[#0f172a] text-[16px] w-full">
-                          <p className="leading-[24px]">{t(stop.nameKo, stop.name)}</p>
+                          <p className="leading-[24px]">{t(stop.nameKo, stop.nameEn)}</p>
                         </div>
                         <div className="flex flex-col font-['Public_Sans'] font-medium justify-center leading-[0] text-[#64748b] text-[11px] w-full">
-                          <p className="leading-[16.5px]">{t(stop.routesKo, stop.routes)}</p>
+                          <p className="leading-[16.5px]">{t("학내순환", "Campus Shuttle")} · {t(`${stop.order}번째 정류장`, `Stop ${stop.order}`)}</p>
                         </div>
                       </div>
 
@@ -176,14 +239,22 @@ export default function CampusShuttleWrapper() {
                             stop.status === "arriving" ? "text-[#059669]" : "text-[#94a3b8]"
                           }`}
                         >
-                          <p className="leading-[15px]">{stop.status === "waiting" ? t("다음 버스", "Next Bus") : t("도착 예정", "Arriving in")}</p>
+                          <p className="leading-[15px]">
+                            {stop.status === "arriving" ? t("도착 예정", "Arriving") : t("예상 시간", "Est.")}
+                          </p>
                         </div>
                         <div
                           className={`flex flex-col font-['Public_Sans'] font-black justify-center leading-[0] text-[20px] ${
-                            stop.status === "arriving" ? "text-[#059669]" : stop.status === "scheduled" ? "text-[#0f172a]" : "text-[#94a3b8]"
+                            stop.status === "arriving"
+                              ? "text-[#059669]"
+                              : stop.status === "scheduled"
+                              ? "text-[#0f172a]"
+                              : "text-[#94a3b8]"
                           }`}
                         >
-                          <p className="leading-[28px]">{stop.nextBus} {t("분", "min")}</p>
+                          <p className="leading-[28px]">
+                            {stop.arrival !== null ? `${stop.arrival}${t("분", "m")}` : "--"}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -194,7 +265,7 @@ export default function CampusShuttleWrapper() {
           </div>
         </div>
 
-        {/* Show sheet button (visible when sheet is hidden) */}
+        {/* 바텀 시트 숨김 시 다시 열기 버튼 */}
         {!sheetVisible && (
           <button
             onClick={() => setSheetVisible(true)}
@@ -203,11 +274,11 @@ export default function CampusShuttleWrapper() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M18 15l-6-6-6 6" stroke="#1e3a8a" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            <span className="font-['Public_Sans'] font-bold text-[#1e3a8a] text-[13px]">{t("근처 정류장", "Nearby Stops")}</span>
+            <span className="font-['Public_Sans'] font-bold text-[#1e3a8a] text-[13px]">{t("학내순환 정류장", "Campus Stops")}</span>
           </button>
         )}
 
-        {/* Location error banner */}
+        {/* 위치 오류 배너 */}
         {locationError && (
           <div className="absolute top-[100px] left-4 right-4 z-40 bg-[rgba(254,226,226,0.95)] backdrop-blur-sm border border-[#fca5a5] rounded-[12px] px-4 py-2 flex items-center gap-2">
             <svg className="w-4 h-4 text-[#ef4444] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -217,40 +288,39 @@ export default function CampusShuttleWrapper() {
           </div>
         )}
 
-        {/* Top Header */}
+        {/* 헤더 */}
         <div className="fixed left-1/2 -translate-x-1/2 top-0 z-30 pt-safe w-full max-w-[430px]">
           <div className="backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] content-stretch flex items-center justify-between pb-[12px] pt-[16px] px-[16px] w-full">
-          <button
-            onClick={() => navigate("/home")}
-            className="content-stretch flex items-center relative shrink-0 size-[40px] hover:bg-white/50 rounded-full active:scale-95 transition-all"
-          >
-            <div className="h-[20px] relative shrink-0 w-[11.775px]">
-              <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 11.775 20">
-                <path d={svgPaths.p225a8cc0} fill="#0F172A" />
-              </svg>
-            </div>
-          </button>
+            <button
+              onClick={() => navigate("/home")}
+              className="content-stretch flex items-center relative shrink-0 size-[40px] hover:bg-white/50 rounded-full active:scale-95 transition-all"
+            >
+              <div className="h-[20px] relative shrink-0 w-[11.775px]">
+                <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 11.775 20">
+                  <path d={svgPaths.p225a8cc0} fill="#0F172A" />
+                </svg>
+              </div>
+            </button>
 
-          <div className="content-stretch flex flex-col items-center relative shrink-0">
-            <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[#0f172a] text-[18px]">
-              <p className="leading-[22.5px]">{t("캠퍼스 셔틀", "Campus Shuttle")}</p>
+            <div className="content-stretch flex flex-col items-center relative shrink-0">
+              <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[#0f172a] text-[18px]">
+                <p className="leading-[22.5px]">{t("캠퍼스 셔틀", "Campus Shuttle")}</p>
+              </div>
+              <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[#1e3a8a] text-[10px] tracking-[1px] uppercase">
+                <p className="leading-[15px]">{t("순천향대학교", "Soonchunhyang Univ.")}</p>
+              </div>
             </div>
-            <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[#1e3a8a] text-[10px] tracking-[1px] uppercase">
-              <p className="leading-[15px]">{t("순천향대학교", "Soonchunhyang University")}</p>
-            </div>
-          </div>
 
-          <div className="content-stretch flex items-center justify-end relative shrink-0 size-[40px]">
-            <div className="relative shrink-0 size-[20px]">
-              <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 20 20">
-                <path d={svgPaths.p6c8ea80} fill="#0F172A" />
-              </svg>
+            <div className="content-stretch flex items-center justify-end relative shrink-0 size-[40px]">
+              <div className="relative shrink-0 size-[20px]">
+                <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 20 20">
+                  <path d={svgPaths.p6c8ea80} fill="#0F172A" />
+                </svg>
+              </div>
             </div>
           </div>
         </div>
-        </div>
 
-        {/* Bottom Navigation */}
         <BottomNav />
       </div>
     </div>
