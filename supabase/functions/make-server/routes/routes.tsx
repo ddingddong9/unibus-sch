@@ -36,6 +36,10 @@ routes.get("/", async (c) => {
           type: route.type,
           description: route.description,
           color: route.color,
+          region: route.region,
+          schedule: route.schedule,
+          duration: route.duration,
+          fare: route.fare,
           isActive: route.is_active,
           stops: stops?.map(stop => ({
             id: stop.id,
@@ -89,6 +93,10 @@ routes.get("/:id", async (c) => {
       type: route.type,
       description: route.description,
       color: route.color,
+      region: route.region,
+      schedule: route.schedule,
+      duration: route.duration,
+      fare: route.fare,
       isActive: route.is_active,
       stops: stops?.map(stop => ({
         id: stop.id,
@@ -114,7 +122,7 @@ routes.get("/:id", async (c) => {
 // Create route (admin only)
 routes.post("/", requireAdmin, async (c) => {
   try {
-    const { name, type, description, color, stops } = await c.req.json();
+    const { name, type, description, color, region, schedule, duration, fare, stops } = await c.req.json();
 
     if (!name || !type) {
       return c.json({ success: false, error: "Missing required fields" }, 400);
@@ -128,6 +136,10 @@ routes.post("/", requireAdmin, async (c) => {
         type,
         description: description || null,
         color: color || '#1E3B8A',
+        region: region || null,
+        schedule: schedule || null,
+        duration: duration || null,
+        fare: fare || null,
         is_active: true,
       })
       .select()
@@ -161,14 +173,18 @@ routes.post("/", requireAdmin, async (c) => {
 
     console.log(`✅ Route created: ${route.id}`);
 
-    return c.json({ 
-      success: true, 
+    return c.json({
+      success: true,
       data: {
         id: route.id,
         name: route.name,
         type: route.type,
         description: route.description,
         color: route.color,
+        region: route.region,
+        schedule: route.schedule,
+        duration: route.duration,
+        fare: route.fare,
         isActive: route.is_active,
         createdAt: route.created_at,
       }
@@ -183,7 +199,7 @@ routes.post("/", requireAdmin, async (c) => {
 routes.put("/:id", requireAdmin, async (c) => {
   try {
     const id = c.req.param("id");
-    const { name, description, color, isActive, stops } = await c.req.json();
+    const { name, description, color, isActive, region, schedule, duration, fare, stops } = await c.req.json();
 
     // 노선 존재 여부 확인
     const { data: existingRoute } = await db
@@ -202,6 +218,10 @@ routes.put("/:id", requireAdmin, async (c) => {
     if (description !== undefined) dbUpdates.description = description;
     if (color) dbUpdates.color = color;
     if (isActive !== undefined) dbUpdates.is_active = isActive;
+    if (region !== undefined) dbUpdates.region = region;
+    if (schedule !== undefined) dbUpdates.schedule = schedule;
+    if (duration !== undefined) dbUpdates.duration = duration;
+    if (fare !== undefined) dbUpdates.fare = fare;
 
     const { data: updatedRoute, error: updateError } = await db
       .from('routes')
@@ -240,14 +260,18 @@ routes.put("/:id", requireAdmin, async (c) => {
 
     console.log(`✅ Route updated: ${id}`);
 
-    return c.json({ 
-      success: true, 
+    return c.json({
+      success: true,
       data: {
         id: updatedRoute.id,
         name: updatedRoute.name,
         type: updatedRoute.type,
         description: updatedRoute.description,
         color: updatedRoute.color,
+        region: updatedRoute.region,
+        schedule: updatedRoute.schedule,
+        duration: updatedRoute.duration,
+        fare: updatedRoute.fare,
         isActive: updatedRoute.is_active,
         updatedAt: updatedRoute.updated_at,
       }
