@@ -2,7 +2,7 @@
 
 import { Hono } from "npm:hono";
 import { db } from "../db.tsx";
-import { requireAdmin } from "../middleware/auth.tsx";
+import { requireAdmin, requireDriver } from "../middleware/auth.tsx";
 
 const buses = new Hono();
 
@@ -136,8 +136,56 @@ buses.get("/locations/latest", async (c) => {
   }
 });
 
-// Update bus location (실시간 위치 업데이트)
-buses.post("/:id/location", async (c) => {
+// Create bus (admin only)
+buses.post("/", requireAdmin, async (c) => {
+  try {
+    const { name, type, capacity, licensePlate, routeId } = await c.req.json();
+
+    if (!name || !type) {
+      return c.json({ success: false, error: "Missing required fields: name, type" }, 400);
+    }
+
+    const { data: bus, error: insertError } = await db
+      .from('buses')
+      .insert({
+        name,
+        type,
+        capacity: capacity || 45,
+        license_plate: licensePlate || null,
+        current_route_id: routeId || null,
+        status: 'inactive',
+      })
+      .select()
+      .single();
+
+    if (insertError || !bus) {
+      console.error("❌ Bus creation error:", insertError);
+      return c.json({ success: false, error: "Failed to create bus" }, 500);
+    }
+
+    console.log(`✅ Bus created: ${bus.id}`);
+
+    return c.json({
+      success: true,
+      data: {
+        id: bus.id,
+        name: bus.name,
+        type: bus.type,
+        capacity: bus.capacity,
+        licensePlate: bus.license_plate,
+        status: bus.status,
+        currentRouteId: bus.current_route_id,
+        createdAt: bus.created_at,
+      }
+    });
+  } catch (error: any) {
+    console.error("❌ Create bus error:", error);
+    return c.json({ success: false, error: "Failed to create bus" }, 500);
+  }
+});
+
+// Update bus location (드라이버/관리자 전용 - 위치 위조 방지)
+buses.post("/:id/location", requireDriver, async (c) => {
   try {
     const busId = c.req.param("id");
     const { lat, lng, speed, heading } = await c.req.json();

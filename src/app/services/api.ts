@@ -1,11 +1,12 @@
 import { projectId, publicAnonKey } from '../../../utils/supabase/info';
-import type { 
-  ApiResponse, 
-  User, 
-  Notice, 
-  LoginRequest, 
-  SignupRequest, 
-  KakaoUser 
+import type {
+  ApiResponse,
+  User,
+  Notice,
+  BusRoute,
+  LoginRequest,
+  SignupRequest,
+  KakaoUser
 } from '../types';
 
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'http://localhost:54321';
@@ -193,7 +194,94 @@ class ApiClient {
     }
   }
 
+  // ============ ROUTE ENDPOINTS ============
+
+  async getRoutes(): Promise<BusRoute[]> {
+    const response = await this.request<ApiResponse<BusRoute[]>>('/routes');
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to fetch routes');
+  }
+
+  async getRoute(id: string): Promise<BusRoute> {
+    const response = await this.request<ApiResponse<BusRoute>>(`/routes/${id}`);
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to fetch route');
+  }
+
+  async createRoute(route: Partial<BusRoute>): Promise<BusRoute> {
+    const response = await this.request<ApiResponse<BusRoute>>('/routes', {
+      method: 'POST',
+      body: JSON.stringify(route),
+    });
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to create route');
+  }
+
+  async updateRoute(id: string, updates: Partial<BusRoute>): Promise<BusRoute> {
+    const response = await this.request<ApiResponse<BusRoute>>(`/routes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to update route');
+  }
+
+  async deleteRoute(id: string): Promise<void> {
+    const response = await this.request<ApiResponse>(`/routes/${id}`, {
+      method: 'DELETE',
+    });
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to delete route');
+    }
+  }
+
   // ============ BUS ENDPOINTS ============
+
+  async getBuses(): Promise<any[]> {
+    const response = await this.request<ApiResponse<any[]>>('/buses');
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to fetch buses');
+  }
+
+  async getBus(id: string): Promise<any> {
+    const response = await this.request<ApiResponse<any>>(`/buses/${id}`);
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to fetch bus');
+  }
+
+  async createBus(bus: { name: string; type: string; capacity?: number; licensePlate?: string; routeId?: string }): Promise<any> {
+    const response = await this.request<ApiResponse<any>>('/buses', {
+      method: 'POST',
+      body: JSON.stringify(bus),
+    });
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to create bus');
+  }
+
+  async updateBus(id: string, updates: Partial<{ name: string; capacity: number; licensePlate: string; status: string; currentRouteId: string }>): Promise<any> {
+    const response = await this.request<ApiResponse<any>>(`/buses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to update bus');
+  }
 
   async getBusLocations(): Promise<Array<{ busId: string; lat: number; lng: number; speed: number; heading: number; timestamp: string }>> {
     const response = await this.request<ApiResponse<any[]>>('/buses/locations/latest');
@@ -203,12 +291,14 @@ class ApiClient {
     throw new Error(response.error || 'Failed to fetch bus locations');
   }
 
-  async getBuses(): Promise<any[]> {
-    const response = await this.request<ApiResponse<any[]>>('/buses');
-    if (response.success && response.data) {
-      return response.data;
+  async updateBusLocation(busId: string, location: { lat: number; lng: number; speed?: number; heading?: number }): Promise<void> {
+    const response = await this.request<ApiResponse>(`/buses/${busId}/location`, {
+      method: 'POST',
+      body: JSON.stringify(location),
+    });
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to update bus location');
     }
-    throw new Error(response.error || 'Failed to fetch buses');
   }
 
   // ============ UTILITY ============
