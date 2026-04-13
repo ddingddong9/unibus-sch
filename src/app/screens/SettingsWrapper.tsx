@@ -18,7 +18,7 @@ const rowVariant = {
 export default function SettingsWrapper() {
   const navigate = useNavigate();
   const { language, setLanguage, t } = useLanguage();
-  const { logout, user, isLoading } = useAuth();
+  const { logout, user, isAdmin, isLoading } = useAuth();
   const [notifications, setNotifications] = useState(true);
   const [location, setLocation] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
@@ -311,6 +311,41 @@ export default function SettingsWrapper() {
             </motion.div>
           </div>
         </motion.div>
+
+        {/* Admin Button (관리자 전용) */}
+        {isAdmin && (
+          <motion.div
+            className="w-full px-[24px] pb-[8px]"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.4 }}
+          >
+            <motion.button
+              onClick={() => navigate("/admin")}
+              whileTap={{ scale: 0.97 }}
+              className="w-full flex items-center justify-between p-4 bg-[#1e3a8a]/5 border border-[#1e3a8a]/20 rounded-[12px] hover:bg-[#1e3a8a]/10 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="bg-[#1e3a8a] rounded-[8px] size-[40px] flex items-center justify-center">
+                  <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                  </svg>
+                </div>
+                <div className="text-left">
+                  <p className="font-['Public_Sans'] font-semibold text-[#1e3a8a] text-[14px] leading-[20px]">
+                    {t("관리자 페이지", "Admin Dashboard")}
+                  </p>
+                  <p className="font-['Public_Sans'] font-normal text-[#64748b] text-[12px] leading-[16px]">
+                    {t("노선·공지·사용자 관리", "Manage routes, notices & users")}
+                  </p>
+                </div>
+              </div>
+              <svg className="w-5 h-5 text-[#1e3a8a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </motion.button>
+          </motion.div>
+        )}
 
         {/* Logout Button */}
         <motion.div
