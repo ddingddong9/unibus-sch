@@ -86,25 +86,23 @@ export default function NaverMapComponent({
   routePathRef.current = routePath;
 
   // routePath에서 가장 가까운 인덱스 찾기
-  const findNearestIdx = (path: [number, number][], lat: number, lng: number): number => {
-    let minDist = Infinity, minIdx = 0;
-    for (let i = 0; i < path.length; i++) {
-      const d = (path[i][1] - lat) ** 2 + (path[i][0] - lng) ** 2;
-      if (d < minDist) { minDist = d; minIdx = i; }
-    }
-    return minIdx;
-  };
-
-  // 버스 마커 애니메이션: routePath가 있으면 도로 경로를 따라 이동
+  // 버스 마커 애니메이션: 마커의 현재 경로 인덱스에서 앞쪽으로만 검색해 경로 이탈 방지
   const animateMarker = (marker: any, fromLat: number, fromLng: number, toLat: number, toLng: number) => {
     const route = routePathRef.current;
     let waypoints: { lat: number; lng: number }[] = [];
 
     if (route.length > 0) {
-      const fromIdx = findNearestIdx(route, fromLat, fromLng);
-      const toIdx   = findNearestIdx(route, toLat, toLng);
-      if (fromIdx < toIdx) {
-        waypoints = route.slice(fromIdx, toIdx + 1).map(([lng, lat]) => ({ lat, lng }));
+      const searchFrom: number = marker.__routeIdx ?? 0;
+      // 현재 인덱스에서 앞쪽 절반만 검색해 역방향 점프 방지
+      const searchEnd = Math.min(searchFrom + Math.ceil(route.length * 0.6), route.length);
+      let toIdx = searchFrom, minDist = Infinity;
+      for (let i = searchFrom; i < searchEnd; i++) {
+        const d = (route[i][1] - toLat) ** 2 + (route[i][0] - toLng) ** 2;
+        if (d < minDist) { minDist = d; toIdx = i; }
+      }
+      if (toIdx > searchFrom) {
+        waypoints = route.slice(searchFrom, toIdx + 1).map(([lng, lat]) => ({ lat, lng }));
+        marker.__routeIdx = toIdx;
       }
     }
 
@@ -162,6 +160,7 @@ export default function NaverMapComponent({
             zIndex: 20,
           });
           marker.__busId = bus.id;
+          marker.__routeIdx = 0;
           window.naver.maps.Event.addListener(marker, 'click', () => {
             onBusClickRef.current?.(bus.id);
           });
