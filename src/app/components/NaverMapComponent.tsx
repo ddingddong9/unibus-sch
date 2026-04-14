@@ -8,6 +8,7 @@ interface NaverMapProps {
   userLocation?: { lat: number; lng: number } | null;
   focusLocation?: { lat: number; lng: number; zoom?: number; key?: number } | null;
   fitBoundsKey?: number;
+  routePath?: [number, number][]; // [[lng, lat], ...] from Naver Directions API
   onBusClick?: (busId: string) => void;
   clientId?: string;
 }
@@ -62,6 +63,7 @@ export default function NaverMapComponent({
   userLocation = null,
   focusLocation = null,
   fitBoundsKey = 0,
+  routePath = [],
   onBusClick,
   clientId = import.meta.env.VITE_NAVER_CLIENT_ID || "YOUR_NAVER_CLIENT_ID",
 }: NaverMapProps) {
@@ -70,9 +72,9 @@ export default function NaverMapComponent({
   const busMarkersRef = useRef<any[]>([]);
   const stopMarkersRef = useRef<any[]>([]);
   const userMarkerRef = useRef<any>(null);
+  const polylineRef = useRef<any>(null);
   const scriptLoadedRef = useRef<boolean>(false);
 
-  // 항상 최신 값 참조 (stale closure 방지)
   const busesRef = useRef(buses);
   busesRef.current = buses;
   const stopsRef = useRef(stops);
@@ -81,6 +83,8 @@ export default function NaverMapComponent({
   onBusClickRef.current = onBusClick;
   const userLocationRef = useRef(userLocation);
   userLocationRef.current = userLocation;
+  const routePathRef = useRef(routePath);
+  routePathRef.current = routePath;
 
   const updateBusMarkers = () => {
     if (!mapInstance.current || !window.naver) return;
@@ -148,6 +152,28 @@ export default function NaverMapComponent({
     } catch (e) { console.error("사용자 마커 오류:", e); }
   };
 
+  const updatePolyline = (path: [number, number][]) => {
+    if (!mapInstance.current || !window.naver) return;
+    // 기존 폴리라인 제거
+    if (polylineRef.current) {
+      try { polylineRef.current.setMap(null); } catch (_) {}
+      polylineRef.current = null;
+    }
+    if (!path || path.length === 0) return;
+    try {
+      const latLngPath = path.map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng));
+      polylineRef.current = new window.naver.maps.Polyline({
+        path: latLngPath,
+        strokeColor: '#1e3a8a',
+        strokeWeight: 5,
+        strokeOpacity: 0.75,
+        strokeStyle: 'solid',
+        map: mapInstance.current,
+        zIndex: 5,
+      });
+    } catch (e) { console.error("폴리라인 오류:", e); }
+  };
+
   // 지도 초기화
   useEffect(() => {
     const initializeMap = () => {
@@ -165,6 +191,7 @@ export default function NaverMapComponent({
         window.naver.maps.Event.addListener(mapInstance.current, 'idle', () => {
           updateBusMarkers();
           updateStopMarkers();
+          if (routePathRef.current?.length) updatePolyline(routePathRef.current);
         });
       } catch (e) { console.error("네이버 지도 초기화 오류:", e); }
     };
@@ -183,6 +210,7 @@ export default function NaverMapComponent({
     return () => {
       busMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
       stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
+      if (polylineRef.current) { try { polylineRef.current.setMap(null); } catch (_) {} }
     };
   }, []);
 
@@ -195,14 +223,17 @@ export default function NaverMapComponent({
   // 사용자 위치 마커 갱신
   useEffect(() => { updateUserMarker(userLocation ?? null); }, [userLocation]);
 
-  // 특정 위치로 포커스 (버스 클릭 / 사용자 위치 버튼)
+  // 경로 폴리라인 갱신
+  useEffect(() => { updatePolyline(routePath); }, [routePath]);
+
+  // 특정 위치로 포커스
   useEffect(() => {
     if (!focusLocation || !mapInstance.current || !window.naver) return;
     mapInstance.current.setCenter(new window.naver.maps.LatLng(focusLocation.lat, focusLocation.lng));
     mapInstance.current.setZoom(focusLocation.zoom ?? 18);
   }, [focusLocation]);
 
-  // 전체보기 (모든 정류장이 보이도록 fitBounds)
+  // 전체보기 fitBounds
   useEffect(() => {
     if (!fitBoundsKey || !mapInstance.current || !window.naver) return;
     const currentStops = stopsRef.current;
@@ -212,10 +243,9 @@ export default function NaverMapComponent({
     mapInstance.current.fitBounds(bounds, { padding: 80 });
   }, [fitBoundsKey]);
 
-  const handleZoomIn = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() + 1); };
+  const handleZoomIn  = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() + 1); };
   const handleZoomOut = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() - 1); };
 
-  // 내 위치 버튼: 사용자 위치가 있으면 그쪽으로, 없으면 캠퍼스 중심으로
   const handleLocate = () => {
     if (!mapInstance.current || !window.naver) return;
     const loc = userLocationRef.current ?? center;

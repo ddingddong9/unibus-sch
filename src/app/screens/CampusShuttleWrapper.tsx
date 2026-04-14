@@ -63,11 +63,36 @@ export default function CampusShuttleWrapper() {
   const [focusLocation, setFocusLocation] = useState<FocusLocation | null>(null);
   const [fitBoundsKey, setFitBoundsKey] = useState(0);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [sheetVisible, setSheetVisible] = useState(true);
   const [dragY, setDragY] = useState(0);
   const isDragging = useRef(false);
   const dragStartY = useRef(0);
   const currentDragY = useRef(0);
+
+  // 학내 순환 도로 경로 (최초 1회 fetch, 캐시)
+  useEffect(() => {
+    const CACHE_KEY = 'campus_route_path';
+    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
+
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      try {
+        const { path, ts } = JSON.parse(cached);
+        if (Date.now() - ts < CACHE_TTL && path?.length) {
+          setRoutePath(path);
+          return;
+        }
+      } catch (_) {}
+    }
+
+    api.getCampusRoutePath()
+      .then(({ path }) => {
+        setRoutePath(path);
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ path, ts: Date.now() }));
+      })
+      .catch(e => console.warn("경로 불러오기 실패:", e));
+  }, []);
 
   // 버스 실시간 위치 폴링 (30초)
   const fetchBusLocations = useCallback(async () => {
@@ -170,6 +195,7 @@ export default function CampusShuttleWrapper() {
             userLocation={userLocation}
             focusLocation={focusLocation}
             fitBoundsKey={fitBoundsKey}
+            routePath={routePath}
             onBusClick={handleBusClick}
           />
         </div>

@@ -354,6 +354,16 @@ class ApiClient {
     return { activeBus: null };
   }
 
+  // ============ CAMPUS ENDPOINTS ============
+
+  async getCampusRoutePath(): Promise<{ path: [number, number][]; stops: any[] }> {
+    const response = await this.request<ApiResponse<{ path: [number, number][]; stops: any[] }>>('/campus/path');
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to fetch campus route path');
+  }
+
   // ============ UTILITY ============
 
   isAuthenticated(): boolean {
