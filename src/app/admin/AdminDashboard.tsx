@@ -164,13 +164,30 @@ export default function AdminDashboard() {
 
   const startTestBus = async () => {
     if (testRunning) return;
-    setTestStatus("테스트 버스 생성 중...");
+    setTestStatus("버스 준비 중...");
     try {
-      // 기존 테스트 버스 재사용 or 새로 생성
-      const bus = await api.createBus({ name: "테스트버스", type: "campus" });
-      await api.updateBus(bus.id, { status: 'active' });
-      setTestBusId(bus.id);
-      testBusIdRef.current = bus.id;
+      // 기존 버스 목록에서 재사용 (campus 타입 또는 첫 번째)
+      let busId: string;
+      const allBuses = await api.getBuses();
+      const existingBus = allBuses.find((b: any) => b.name === "테스트버스") ?? allBuses[0];
+
+      if (existingBus) {
+        busId = existingBus.id;
+        await api.updateBus(busId, { status: 'active' });
+      } else {
+        // 버스가 아예 없을 때만 생성 시도
+        try {
+          const bus = await api.createBus({ name: "테스트버스", type: "campus" });
+          busId = bus.id;
+          await api.updateBus(busId, { status: 'active' });
+        } catch (createErr: any) {
+          setTestStatus(`버스 생성 실패: ${createErr.message} — 관리자 페이지 [버스 노선 관리]에서 버스를 먼저 추가해주세요.`);
+          return;
+        }
+      }
+
+      setTestBusId(busId);
+      testBusIdRef.current = busId;
       setTestRunning(true);
       setTestStep(0);
       setTestStatus(`출발: ${CAMPUS_STOPS[0].name}`);
