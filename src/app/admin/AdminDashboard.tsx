@@ -90,28 +90,28 @@ export default function AdminDashboard() {
       value: stats.totalNotices.toLocaleString(),
       sub: "등록된 전체 공지",
       icon: FileText,
-      color: "bg-blue-500",
+      color: "bg-[#1e3b8a]",
     },
     {
       label: "활성 노선",
       value: stats.activeRoutes.toLocaleString(),
       sub: `전체 ${stats.totalRoutes}개 중`,
       icon: Bus,
-      color: "bg-green-500",
+      color: "bg-[#1e3b8a]",
     },
     {
       label: "등록된 버스",
       value: stats.totalBuses.toLocaleString(),
       sub: `운행중 ${stats.activeBuses}대`,
       icon: Bus,
-      color: "bg-purple-500",
+      color: "bg-[#1e3b8a]",
     },
     {
       label: "등록된 사용자",
       value: stats.totalUsers.toLocaleString(),
       sub: "전체 가입자 수",
       icon: Users,
-      color: "bg-orange-500",
+      color: "bg-[#1e3b8a]",
     },
   ] : [];
 
