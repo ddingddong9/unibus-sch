@@ -47,10 +47,12 @@ export default function AdminDashboard() {
   // 테스트 버스 시뮬레이션
   const [testRunning, setTestRunning] = useState(false);
   const [testStep, setTestStep] = useState(0);
+  const [testTotal, setTestTotal] = useState(0);
   const [testBusId, setTestBusId] = useState<string | null>(null);
   const [testStatus, setTestStatus] = useState<string>("");
   const testIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const testBusIdRef = useRef<string | null>(null);
+  const testRouteRef = useRef<[number, number][]>([]); // [lng, lat] 실제 경로 좌표
 
   const fetchData = async () => {
     setLoading(true);
@@ -164,9 +166,22 @@ export default function AdminDashboard() {
 
   const startTestBus = async () => {
     if (testRunning) return;
-    setTestStatus("버스 준비 중...");
+    setTestStatus("경로 및 버스 준비 중...");
     try {
-      // 기존 버스 목록에서 재사용 (campus 타입 또는 첫 번째)
+      // 1. 실제 도로 경로 fetch
+      let routePath: [number, number][] = [];
+      try {
+        const { path } = await api.getCampusRoutePath();
+        routePath = path;
+      } catch (_) {}
+      // fallback: 직선 보간
+      if (!routePath || routePath.length === 0) {
+        routePath = FULL_ROUTE.map(p => [p.lng, p.lat]);
+      }
+      testRouteRef.current = routePath;
+      setTestTotal(routePath.length);
+
+      // 2. 버스 준비 (기존 재사용 or 생성)
       let busId: string;
       const allBuses = await api.getBuses();
       const existingBus = allBuses.find((b: any) => b.name === "테스트버스") ?? allBuses[0];
@@ -175,13 +190,12 @@ export default function AdminDashboard() {
         busId = existingBus.id;
         await api.updateBus(busId, { status: 'active' });
       } else {
-        // 버스가 아예 없을 때만 생성 시도
         try {
           const bus = await api.createBus({ name: "테스트버스", type: "campus" });
           busId = bus.id;
           await api.updateBus(busId, { status: 'active' });
         } catch (createErr: any) {
-          setTestStatus(`버스 생성 실패: ${createErr.message} — 관리자 페이지 [버스 노선 관리]에서 버스를 먼저 추가해주세요.`);
+          setTestStatus(`버스 준비 실패: ${createErr.message} — Supabase에서 버스를 먼저 추가해주세요.`);
           return;
         }
       }
@@ -190,24 +204,25 @@ export default function AdminDashboard() {
       testBusIdRef.current = busId;
       setTestRunning(true);
       setTestStep(0);
-      setTestStatus(`출발: ${CAMPUS_STOPS[0].name}`);
+      setTestStatus(`출발: ${CAMPUS_STOPS[0].name} (경로 ${routePath.length}개 좌표)`);
 
       let step = 0;
       testIntervalRef.current = setInterval(async () => {
-        const pos = FULL_ROUTE[step];
+        const route = testRouteRef.current;
+        const [lng, lat] = route[step];
         try {
-          await api.updateBusLocation(testBusIdRef.current!, { lat: pos.lat, lng: pos.lng, speed: 15 });
+          await api.updateBusLocation(testBusIdRef.current!, { lat, lng, speed: 15 });
         } catch (_) {}
 
-        // 현재 구간 표시
-        const segIdx = Math.floor(step / STEPS_PER_SEGMENT);
-        const nextStop = CAMPUS_STOPS[Math.min(segIdx + 1, CAMPUS_STOPS.length - 1)];
-        setTestStatus(`→ ${nextStop.name} 이동 중... (${step + 1}/${FULL_ROUTE.length})`);
+        // 현재 어느 정류장 구간인지 표시
+        const progress = step / route.length;
+        const stopIdx = Math.min(Math.floor(progress * (CAMPUS_STOPS.length - 1)), CAMPUS_STOPS.length - 2);
+        const nextStop = CAMPUS_STOPS[stopIdx + 1];
+        setTestStatus(`→ ${nextStop.name} 이동 중...`);
         setTestStep(step + 1);
 
         step++;
-        if (step >= FULL_ROUTE.length) {
-          // 한 바퀴 완료
+        if (step >= route.length) {
           await stopTestBus(testBusIdRef.current);
           setTestStatus("순환 완료 — 버스가 지도에서 사라졌습니다.");
         }
@@ -465,12 +480,12 @@ export default function AdminDashboard() {
           <div className="mb-4">
             <div className="flex justify-between text-[12px] font-['Public_Sans'] text-[#64748b] mb-1">
               <span>진행률</span>
-              <span>{testRunning ? `${Math.round((testStep / FULL_ROUTE.length) * 100)}%` : "—"}</span>
+              <span>{testRunning && testTotal > 0 ? `${Math.round((testStep / testTotal) * 100)}%` : "—"}</span>
             </div>
             <div className="w-full h-2 bg-[#f1f5f9] rounded-full overflow-hidden">
               <div
                 className="h-full bg-[#1e3b8a] rounded-full transition-all duration-500"
-                style={{ width: `${(testStep / FULL_ROUTE.length) * 100}%` }}
+                style={{ width: testTotal > 0 ? `${(testStep / testTotal) * 100}%` : '0%' }}
               />
             </div>
           </div>

@@ -72,14 +72,17 @@ export default function CampusShuttleWrapper() {
 
   // 학내 순환 도로 경로 (최초 1회 fetch, 캐시)
   useEffect(() => {
-    const CACHE_KEY = 'campus_route_path';
+    const CACHE_KEY = 'campus_route_path_v2'; // v2: 빈 path 캐시 무효화
     const CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
+
+    // 구버전 캐시 삭제
+    localStorage.removeItem('campus_route_path');
 
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
       try {
         const { path, ts } = JSON.parse(cached);
-        if (Date.now() - ts < CACHE_TTL && path?.length) {
+        if (Date.now() - ts < CACHE_TTL && path?.length > 0) {
           setRoutePath(path);
           return;
         }
@@ -88,8 +91,13 @@ export default function CampusShuttleWrapper() {
 
     api.getCampusRoutePath()
       .then(({ path }) => {
-        setRoutePath(path);
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ path, ts: Date.now() }));
+        if (path?.length > 0) {
+          setRoutePath(path);
+          localStorage.setItem(CACHE_KEY, JSON.stringify({ path, ts: Date.now() }));
+          console.log(`캠퍼스 경로 로드: ${path.length}개 좌표`);
+        } else {
+          console.warn("경로 좌표가 비어있음");
+        }
       })
       .catch(e => console.warn("경로 불러오기 실패:", e));
   }, []);
