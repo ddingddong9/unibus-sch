@@ -321,7 +321,7 @@ export default function SettingsWrapper() {
             transition={{ delay: 0.4 }}
           >
             <motion.button
-              onClick={() => navigate("/admin")}
+              onClick={() => navigate("/admin/dashboard")}
               whileTap={{ scale: 0.97 }}
               className="w-full flex items-center justify-between p-4 bg-[#1e3a8a]/5 border border-[#1e3a8a]/20 rounded-[12px] hover:bg-[#1e3a8a]/10 transition-colors"
             >
