@@ -433,6 +433,8 @@ export default function AdminDashboard() {
               </div>
             )}
           </div>
+        </div>
+
         {/* 테스트 버스 시뮬레이션 */}
         <div className="mt-6 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
           <h3 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[16px] mb-1">
@@ -504,7 +506,6 @@ export default function AdminDashboard() {
               </button>
             )}
           </div>
-        </div>
         </div>
       </div>
     </AdminLayout>
