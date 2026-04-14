@@ -36,44 +36,46 @@ campus.get("/path", async (c) => {
   const clientId  = Deno.env.get("NAVER_CLIENT_ID");
   const secretKey = Deno.env.get("NAVER_SECRET_KEY");
 
-  // Naver Directions API 시도
-  if (clientId && secretKey) {
-    try {
-      const start     = `${STOPS[0].lng},${STOPS[0].lat}`;
-      const goal      = `${STOPS[4].lng},${STOPS[4].lat}`;
-      const waypoints = STOPS.slice(1, 4).map(s => `${s.lng},${s.lat}`).join("|");
+  console.log("NAVER_CLIENT_ID set:", !!clientId, "/ NAVER_SECRET_KEY set:", !!secretKey);
 
-      // trafast 옵션으로 시도 (tracomfort보다 더 넓게 지원)
-      const url = `https://naveropenapi.apigw.naver.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=trafast`;
-
-      const res = await fetch(url, {
-        headers: {
-          "X-NCP-APIGW-API-KEY-ID": clientId,
-          "X-NCP-APIGW-API-KEY":    secretKey,
-        },
-      });
-
-      const data = await res.json();
-      console.log("Naver Directions response code:", data.code, "message:", data.message);
-
-      if (data.code === 0) {
-        const path: [number, number][] = data.route?.trafast?.[0]?.path ?? [];
-        if (path.length > 0) {
-          console.log(`✅ Directions API path: ${path.length} points`);
-          return c.json({ success: true, data: { path, stops: STOPS, source: "directions" } });
-        }
-      }
-
-      console.warn("⚠️ Directions API returned no path, using fallback. code:", data.code, data.message);
-    } catch (e) {
-      console.error("❌ Directions API error:", e);
-    }
+  if (!clientId || !secretKey) {
+    console.warn("⚠️ Naver API keys missing — using fallback");
+    return c.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_no_key" } });
   }
 
-  // Fallback: 직선 보간 경로
-  const path = getFallbackPath();
-  console.log(`✅ Fallback path: ${path.length} points`);
-  return c.json({ success: true, data: { path, stops: STOPS, source: "fallback" } });
+  try {
+    const start     = `${STOPS[0].lng},${STOPS[0].lat}`;
+    const goal      = `${STOPS[4].lng},${STOPS[4].lat}`;
+    const waypoints = STOPS.slice(1, 4).map(s => `${s.lng},${s.lat}`).join("|");
+    const url = `https://naveropenapi.apigw.naver.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=trafast`;
+
+    console.log("Calling Directions API:", url);
+
+    const res = await fetch(url, {
+      headers: {
+        "X-NCP-APIGW-API-KEY-ID": clientId,
+        "X-NCP-APIGW-API-KEY":    secretKey,
+      },
+    });
+
+    const data = await res.json();
+    console.log("Directions API response:", JSON.stringify({ code: data.code, message: data.message }));
+
+    if (data.code === 0) {
+      const path: [number, number][] = data.route?.trafast?.[0]?.path ?? [];
+      if (path.length > 0) {
+        console.log(`✅ Directions path: ${path.length} points`);
+        return c.json({ success: true, data: { path, stops: STOPS, source: "directions" } });
+      }
+      console.warn("⚠️ Directions API: empty path");
+    }
+
+    console.warn("⚠️ Directions API failed, code:", data.code, data.message);
+    return c.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_api_error", apiCode: data.code, apiMessage: data.message } });
+  } catch (e: any) {
+    console.error("❌ Directions fetch error:", e.message);
+    return c.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_exception", error: e.message } });
+  }
 });
 
 export default campus;
