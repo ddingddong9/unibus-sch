@@ -30,9 +30,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const clientId  = process.env.NAVER_CLIENT_ID;
   const secretKey = process.env.NAVER_SECRET_KEY;
 
+  // 디버그: 환경변수 존재 여부 로그
+  console.log("ENV CHECK - NAVER_CLIENT_ID:", clientId ? `set(${clientId.length}chars)` : "MISSING");
+  console.log("ENV CHECK - NAVER_SECRET_KEY:", secretKey ? `set(${secretKey.length}chars)` : "MISSING");
+  console.log("All env keys:", Object.keys(process.env).filter(k => k.startsWith("NAVER")));
+
   if (!clientId || !secretKey) {
     console.warn("Naver keys missing, using fallback");
-    return res.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_no_key" } });
+    return res.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_no_key", debug: { clientIdSet: !!clientId, secretKeySet: !!secretKey } } });
   }
 
   try {
