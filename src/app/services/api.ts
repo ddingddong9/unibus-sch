@@ -357,12 +357,12 @@ class ApiClient {
   // ============ CAMPUS ENDPOINTS ============
 
   async getCampusRoutePath(): Promise<{ path: [number, number][]; stops: any[] }> {
-    const response = await this.request<ApiResponse<any>>('/campus/path');
-    if (response.success && response.data) {
-      console.log('[Campus] route source:', response.data.source, '/ points:', response.data.path?.length);
-      return response.data;
-    }
-    throw new Error(response.error || 'Failed to fetch campus route path');
+    // Vercel 서버리스 함수 호출 (Supabase Edge Function은 naveropenapi DNS 불가)
+    const res = await fetch('/api/campus-route');
+    const data = await res.json();
+    console.log('[Campus] route source:', data.data?.source, '/ points:', data.data?.path?.length);
+    if (data.success && data.data) return data.data;
+    throw new Error(data.error || 'Failed to fetch campus route path');
   }
 
   // ============ UTILITY ============
