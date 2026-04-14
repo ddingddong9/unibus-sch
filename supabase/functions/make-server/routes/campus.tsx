@@ -1,5 +1,3 @@
-// Campus shuttle route path via Naver Directions API (with straight-line fallback)
-
 import { Hono } from "npm:hono";
 
 const campus = new Hono();
@@ -12,70 +10,37 @@ const STOPS = [
   { id: "main-gate", name: "정문",   lat: 36.769014, lng: 126.927978 },
 ];
 
-// 두 점 사이 보간 (steps개의 [lng, lat] 좌표)
-function interpolate(
-  from: { lat: number; lng: number },
-  to: { lat: number; lng: number },
-  steps: number
-): [number, number][] {
-  return Array.from({ length: steps }, (_, i) => {
-    const t = (i + 1) / steps;
-    return [from.lng + (to.lng - from.lng) * t, from.lat + (to.lat - from.lat) * t];
-  });
-}
-
-// 전체 fallback 경로 (정류장 간 직선 보간 30점씩)
-function getFallbackPath(): [number, number][] {
-  return STOPS.flatMap((stop, i) => {
-    if (i === STOPS.length - 1) return [];
-    return interpolate(stop, STOPS[i + 1], 30);
-  });
-}
-
 campus.get("/path", async (c) => {
   const clientId  = Deno.env.get("NAVER_CLIENT_ID");
   const secretKey = Deno.env.get("NAVER_SECRET_KEY");
 
-  console.log("NAVER_CLIENT_ID set:", !!clientId, "/ NAVER_SECRET_KEY set:", !!secretKey);
-
   if (!clientId || !secretKey) {
-    console.warn("⚠️ Naver API keys missing — using fallback");
-    return c.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_no_key" } });
+    return c.json({ success: false, error: "Naver API keys not configured" }, 500);
   }
 
-  try {
-    const start     = `${STOPS[0].lng},${STOPS[0].lat}`;
-    const goal      = `${STOPS[4].lng},${STOPS[4].lat}`;
-    const waypoints = STOPS.slice(1, 4).map(s => `${s.lng},${s.lat}`).join("|");
-    const url = `https://naveropenapi.apigw.naver.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=trafast`;
+  const start     = `${STOPS[0].lng},${STOPS[0].lat}`;
+  const goal      = `${STOPS[4].lng},${STOPS[4].lat}`;
+  const waypoints = STOPS.slice(1, 4).map(s => `${s.lng},${s.lat}`).join("|");
+  const url = `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
 
-    console.log("Calling Directions API:", url);
+  const res = await fetch(url, {
+    headers: {
+      "X-NCP-APIGW-API-KEY-ID": clientId,
+      "X-NCP-APIGW-API-KEY":    secretKey,
+    },
+  });
 
-    const res = await fetch(url, {
-      headers: {
-        "X-NCP-APIGW-API-KEY-ID": clientId,
-        "X-NCP-APIGW-API-KEY":    secretKey,
-      },
-    });
+  const data = await res.json();
+  console.log("Directions API response code:", data.code, data.message ?? data.error?.message);
 
-    const data = await res.json();
-    console.log("Directions API response:", JSON.stringify({ code: data.code, message: data.message }));
-
-    if (data.code === 0) {
-      const path: [number, number][] = data.route?.trafast?.[0]?.path ?? [];
-      if (path.length > 0) {
-        console.log(`✅ Directions path: ${path.length} points`);
-        return c.json({ success: true, data: { path, stops: STOPS, source: "directions" } });
-      }
-      console.warn("⚠️ Directions API: empty path");
+  if (data.code === 0) {
+    const path: [number, number][] = data.route?.traoptimal?.[0]?.path ?? [];
+    if (path.length > 0) {
+      return c.json({ success: true, data: { path, stops: STOPS } });
     }
-
-    console.warn("⚠️ Directions API failed, code:", data.code, data.message);
-    return c.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_api_error", apiCode: data.code, apiMessage: data.message } });
-  } catch (e: any) {
-    console.error("❌ Directions fetch error:", e.message);
-    return c.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_exception", error: e.message } });
   }
+
+  return c.json({ success: false, error: `Directions API error: ${data.code} ${data.message ?? JSON.stringify(data.error)}` }, 502);
 });
 
 export default campus;

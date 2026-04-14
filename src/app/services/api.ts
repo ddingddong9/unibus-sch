@@ -357,49 +357,9 @@ class ApiClient {
   // ============ CAMPUS ENDPOINTS ============
 
   async getCampusRoutePath(): Promise<{ path: [number, number][]; stops: any[] }> {
-    const CAMPUS_STOPS = [
-      { id: 'rear-gate', name: '후문',   lat: 36.772760, lng: 126.933816 },
-      { id: 'hyang3',    name: '향3',    lat: 36.768228, lng: 126.935383 },
-      { id: 'hyang1',    name: '향1',    lat: 36.767905, lng: 126.932505 },
-      { id: 'library',   name: '도서관', lat: 36.768856, lng: 126.931303 },
-      { id: 'main-gate', name: '정문',   lat: 36.769014, lng: 126.927978 },
-    ];
-
-    const clientId = import.meta.env.VITE_NAVER_CLIENT_ID;
-    const start = '126.933816,36.772760';
-    const goal  = '126.927978,36.769014';
-    const waypoints = '126.935383,36.768228|126.932505,36.767905|126.931303,36.768856';
-    const url = `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal&ncpKeyId=${clientId}`;
-
-    try {
-      const res = await fetch(url);
-      const data = await res.json();
-      console.log('[Campus] Naver Directions code:', data.code);
-      if (data.code === 0) {
-        const path: [number, number][] = data.route?.traoptimal?.[0]?.path ?? [];
-        if (path.length > 0) return { path, stops: CAMPUS_STOPS };
-      }
-    } catch (e) {
-      console.warn('[Campus] Directions API failed:', e);
-    }
-
-    // fallback: OSRM 사전 계산 경로
-    return {
-      stops: CAMPUS_STOPS,
-      path: [
-        [126.933885,36.772808],[126.9341,36.772611],[126.934403,36.772124],[126.934623,36.771748],
-        [126.93473,36.771505],[126.934782,36.7711],[126.934835,36.770855],[126.934849,36.770798],
-        [126.934866,36.770733],[126.934925,36.770428],[126.93515,36.769767],[126.935767,36.768791],
-        [126.935788,36.768697],[126.935722,36.76856],[126.935398,36.768219],[126.93459,36.76737],
-        [126.934087,36.766843],[126.933883,36.766777],[126.933686,36.766747],[126.933497,36.76678],
-        [126.933384,36.766878],[126.932893,36.767569],[126.932672,36.767775],[126.932472,36.767833],
-        [126.932065,36.767952],[126.931835,36.768102],[126.931473,36.768521],[126.931346,36.768667],
-        [126.931235,36.768825],[126.931195,36.768882],[126.931052,36.769086],[126.931026,36.769112],
-        [126.930926,36.769208],[126.930712,36.769197],[126.93045,36.76913],[126.929205,36.768786],
-        [126.929075,36.768715],[126.928584,36.768445],[126.928451,36.768372],[126.928156,36.768734],
-        [126.927943,36.768996],
-      ],
-    };
+    const res = await this.request<ApiResponse<{ path: [number, number][]; stops: any[] }>>('/campus/path');
+    if (res.success && res.data) return res.data;
+    throw new Error(res.error || 'Failed to fetch campus route path');
   }
 
   // ============ UTILITY ============
