@@ -18,33 +18,32 @@ declare global {
 }
 
 const BUS_MARKER_CONTENT = (label: string) => `
-  <div style="position:relative;display:flex;flex-direction:column;align-items:center;cursor:pointer;">
-    <div style="background:#1e3a8a;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 4px white,0 10px 15px -3px rgba(0,0,0,0.15);">
-      <svg width="13" height="16" viewBox="0 0 13 16" fill="none">
-        <path d="M11.667 6.667H10V5h1.667v1.667zM10 10h1.667V8.333H10V10zm-8.333 0H3.333V8.333H1.667V10zm0-3.333H3.333V5H1.667v1.667zM5 15h3.333v-1.667H5V15zM12.5 3.333h-1.667V2.5c0-.917-.75-1.667-1.666-1.667h-6.5C1.75.833 1 1.583 1 2.5v10c0 .917.75 1.667 1.667 1.667H3.333v.833c0 .917.75 1.667 1.667 1.667h6.667c.916 0 1.666-.75 1.666-1.667v-10c0-.917-.75-1.667-1.666-1.667zm-10 10V2.5h6.667v1.667H5c-.917 0-1.667.75-1.667 1.666v7.5H2.5z" fill="white"/>
+  <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.25));">
+    <div style="background:#1e3b8a;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="2" y="5" width="20" height="13" rx="2" fill="white"/>
+        <rect x="2" y="9" width="20" height="2" fill="#1e3b8a" opacity="0.3"/>
+        <rect x="6" y="5" width="1.5" height="13" fill="#1e3b8a" opacity="0.2"/>
+        <rect x="16.5" y="5" width="1.5" height="13" fill="#1e3b8a" opacity="0.2"/>
+        <circle cx="7" cy="20" r="2" fill="white" stroke="#1e3b8a" stroke-width="1.5"/>
+        <circle cx="17" cy="20" r="2" fill="white" stroke="#1e3b8a" stroke-width="1.5"/>
+        <rect x="4" y="6.5" width="7" height="4" rx="0.5" fill="#1e3b8a" opacity="0.5"/>
+        <rect x="13" y="6.5" width="7" height="4" rx="0.5" fill="#1e3b8a" opacity="0.5"/>
       </svg>
     </div>
-    <div style="margin-top:4px;background:white;padding:3px 9px;border-radius:4px;border:1px solid rgba(30,58,138,0.15);box-shadow:0 1px 4px rgba(0,0,0,0.08);white-space:nowrap;">
-      <span style="font-family:'Public Sans',sans-serif;font-weight:900;font-size:10px;color:#1e3a8a;line-height:15px;">${label}</span>
+    <div style="margin-top:3px;background:#1e3b8a;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800;letter-spacing:0.3px;white-space:nowrap;font-family:sans-serif;">
+      ${label}
     </div>
   </div>
 `;
 
 const STOP_MARKER_CONTENT = (name: string) => `
-  <div style="display:flex;flex-direction:column;align-items:center;">
-    <div style="background:white;width:30px;height:30px;border-radius:50%;border:2.5px solid #1e3a8a;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 8px rgba(0,0,0,0.15);">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-        <rect x="3" y="5" width="18" height="12" rx="2" fill="#1e3a8a"/>
-        <rect x="3" y="9" width="18" height="1.5" fill="white" opacity="0.6"/>
-        <rect x="7" y="5" width="1.5" height="12" fill="white" opacity="0.3"/>
-        <rect x="15.5" y="5" width="1.5" height="12" fill="white" opacity="0.3"/>
-        <circle cx="7.5" cy="19" r="2" fill="#1e3a8a"/>
-        <circle cx="16.5" cy="19" r="2" fill="#1e3a8a"/>
-      </svg>
+  <div style="display:flex;flex-direction:column;align-items:center;cursor:default;">
+    <div style="background:#1e3b8a;color:white;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;font-family:sans-serif;box-shadow:0 2px 6px rgba(0,0,0,0.2);letter-spacing:0.2px;">
+      ${name}
     </div>
-    <div style="margin-top:3px;background:white;padding:2px 6px;border-radius:4px;box-shadow:0 1px 4px rgba(0,0,0,0.12);white-space:nowrap;border:1px solid rgba(30,58,138,0.08);">
-      <span style="font-family:'Public Sans',sans-serif;font-size:9px;font-weight:700;color:#0f172a;">${name}</span>
-    </div>
+    <div style="width:2.5px;height:10px;background:#1e3b8a;"></div>
+    <div style="width:9px;height:9px;border-radius:50%;background:#1e3b8a;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.2);"></div>
   </div>
 `;
 
@@ -114,7 +113,8 @@ export default function NaverMapComponent({
     }
 
     const INTERVAL = 50;
-    const totalSteps = Math.max(waypoints.length - 1, 1) * 10;
+    const DURATION = 1900; // 폴링 2000ms보다 약간 짧게
+    const totalSteps = Math.round(DURATION / INTERVAL);
     let step = 0;
     const timer = setInterval(() => {
       step++;

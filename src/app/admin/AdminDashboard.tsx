@@ -206,27 +206,35 @@ export default function AdminDashboard() {
       setTestStep(0);
       setTestStatus(`출발: ${CAMPUS_STOPS[0].name} (경로 ${routePath.length}개 좌표)`);
 
-      let step = 0;
-      testIntervalRef.current = setInterval(async () => {
+      const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+      const STOP_RADIUS = 0.0004; // 약 40m
+
+      const runLoop = async () => {
         const route = testRouteRef.current;
-        const [lng, lat] = route[step];
-        try {
-          await api.updateBusLocation(testBusIdRef.current!, { lat, lng, speed: 15 });
-        } catch (_) {}
+        for (let step = 0; step < route.length; step++) {
+          if (!testBusIdRef.current) break;
+          const [lng, lat] = route[step];
+          try { await api.updateBusLocation(testBusIdRef.current!, { lat, lng, speed: 15 }); } catch (_) {}
+          setTestStep(step + 1);
 
-        // 현재 어느 정류장 구간인지 표시
-        const progress = step / route.length;
-        const stopIdx = Math.min(Math.floor(progress * (CAMPUS_STOPS.length - 1)), CAMPUS_STOPS.length - 2);
-        const nextStop = CAMPUS_STOPS[stopIdx + 1];
-        setTestStatus(`→ ${nextStop.name} 이동 중...`);
-        setTestStep(step + 1);
-
-        step++;
-        if (step >= route.length) {
-          await stopTestBus(testBusIdRef.current);
-          setTestStatus("순환 완료 — 버스가 지도에서 사라졌습니다.");
+          // 정류장 근처 도착 감지 → 5초 정차
+          const atStop = CAMPUS_STOPS.find(s =>
+            Math.abs(s.lat - lat) < STOP_RADIUS && Math.abs(s.lng - lng) < STOP_RADIUS
+          );
+          if (atStop) {
+            setTestStatus(`${atStop.name} 정류장 정차 중...`);
+            await sleep(5000);
+          } else {
+            const progress = step / route.length;
+            const stopIdx = Math.min(Math.floor(progress * (CAMPUS_STOPS.length - 1)), CAMPUS_STOPS.length - 2);
+            setTestStatus(`→ ${CAMPUS_STOPS[stopIdx + 1].name} 이동 중...`);
+            await sleep(2000);
+          }
         }
-      }, 2000);
+        await stopTestBus(testBusIdRef.current);
+        setTestStatus("순환 완료 — 버스가 지도에서 사라졌습니다.");
+      };
+      runLoop();
     } catch (e: any) {
       setTestStatus(`오류: ${e.message}`);
       setTestRunning(false);
