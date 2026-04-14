@@ -94,23 +94,27 @@ export default function CampusShuttleWrapper() {
       .catch(e => console.warn("경로 불러오기 실패:", e));
   }, []);
 
-  // 버스 실시간 위치 폴링 (30초)
+  // 버스 실시간 위치 폴링 (5초)
   const fetchBusLocations = useCallback(async () => {
     try {
-      // 운행 중인 버스 목록 먼저 조회
-      const allBuses = await api.getBuses();
-      const runningBusIds = new Set(
-        allBuses.filter((b: any) => b.is_running).map((b: any) => b.id)
+      const [allBuses, locations] = await Promise.all([
+        api.getBuses(),
+        api.getBusLocations(),
+      ]);
+
+      // status === 'active' 인 버스만 지도에 표시
+      const activeBusIds = new Set(
+        allBuses.filter((b: any) => b.status === 'active').map((b: any) => b.id)
       );
 
-      // 위치 조회 후 운행 중인 버스만 필터링
-      const locations = await api.getBusLocations();
       setBuses(
-        locations.map(loc => ({
-          id: loc.busId,
-          position: { lat: loc.lat, lng: loc.lng },
-          label: loc.busId,
-        }))
+        locations
+          .filter(loc => activeBusIds.has(loc.busId))
+          .map(loc => ({
+            id: loc.busId,
+            position: { lat: loc.lat, lng: loc.lng },
+            label: allBuses.find((b: any) => b.id === loc.busId)?.name ?? loc.busId,
+          }))
       );
       setLocationError(null);
     } catch {
@@ -122,7 +126,7 @@ export default function CampusShuttleWrapper() {
 
   useEffect(() => {
     fetchBusLocations();
-    const interval = setInterval(fetchBusLocations, 30000);
+    const interval = setInterval(fetchBusLocations, 5000);
     return () => clearInterval(interval);
   }, [fetchBusLocations]);
 

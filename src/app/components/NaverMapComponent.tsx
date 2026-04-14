@@ -86,28 +86,65 @@ export default function NaverMapComponent({
   const routePathRef = useRef(routePath);
   routePathRef.current = routePath;
 
+  // 버스 마커 애니메이션: 기존 마커는 위치만 부드럽게 이동, 없으면 새로 생성
+  const animateMarker = (marker: any, fromLat: number, fromLng: number, toLat: number, toLng: number) => {
+    const STEPS = 30;
+    const INTERVAL = 50; // ms → 총 1.5초
+    let step = 0;
+    const timer = setInterval(() => {
+      step++;
+      const t = step / STEPS;
+      const lat = fromLat + (toLat - fromLat) * t;
+      const lng = fromLng + (toLng - fromLng) * t;
+      try {
+        marker.setPosition(new window.naver.maps.LatLng(lat, lng));
+      } catch (_) {}
+      if (step >= STEPS) clearInterval(timer);
+    }, INTERVAL);
+  };
+
   const updateBusMarkers = () => {
     if (!mapInstance.current || !window.naver) return;
-    busMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
-    busMarkersRef.current = [];
-    busesRef.current.forEach(bus => {
-      try {
-        const marker = new window.naver.maps.Marker({
-          position: new window.naver.maps.LatLng(bus.position.lat, bus.position.lng),
-          map: mapInstance.current,
-          icon: {
-            content: BUS_MARKER_CONTENT(bus.label),
-            size: new window.naver.maps.Size(40, 60),
-            anchor: new window.naver.maps.Point(20, 60),
-          },
-          zIndex: 20,
-        });
-        window.naver.maps.Event.addListener(marker, 'click', () => {
-          onBusClickRef.current?.(bus.id);
-        });
-        busMarkersRef.current.push(marker);
-      } catch (e) { console.error("버스 마커 오류:", e); }
+
+    const currentBuses = busesRef.current;
+    const existingMap = new Map<string, any>(
+      busMarkersRef.current.map(m => [m.__busId, m])
+    );
+    const newMarkers: any[] = [];
+
+    currentBuses.forEach(bus => {
+      const existing = existingMap.get(bus.id);
+      if (existing) {
+        // 기존 마커: 위치 애니메이션
+        const pos = existing.getPosition();
+        animateMarker(existing, pos.lat(), pos.lng(), bus.position.lat, bus.position.lng);
+        existingMap.delete(bus.id);
+        newMarkers.push(existing);
+      } else {
+        // 새 마커 생성
+        try {
+          const marker = new window.naver.maps.Marker({
+            position: new window.naver.maps.LatLng(bus.position.lat, bus.position.lng),
+            map: mapInstance.current,
+            icon: {
+              content: BUS_MARKER_CONTENT(bus.label),
+              size: new window.naver.maps.Size(40, 60),
+              anchor: new window.naver.maps.Point(20, 60),
+            },
+            zIndex: 20,
+          });
+          marker.__busId = bus.id;
+          window.naver.maps.Event.addListener(marker, 'click', () => {
+            onBusClickRef.current?.(bus.id);
+          });
+          newMarkers.push(marker);
+        } catch (e) { console.error("버스 마커 오류:", e); }
+      }
     });
+
+    // 없어진 버스 마커 제거
+    existingMap.forEach(m => { try { m.setMap(null); } catch (_) {} });
+    busMarkersRef.current = newMarkers;
   };
 
   const updateStopMarkers = () => {
