@@ -28,13 +28,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === "OPTIONS") return res.status(200).end();
 
   const clientId  = process.env.VITE_NAVER_CLIENT_ID || process.env.NAVER_CLIENT_ID;
-  const secretKey = process.env.NAVER_SECRET_KEY;
-
-  // 디버그: 환경변수 존재 여부 로그
-  console.log("ENV CHECK - VITE_NAVER_CLIENT_ID:", process.env.VITE_NAVER_CLIENT_ID ? `set(${process.env.VITE_NAVER_CLIENT_ID.length}chars)` : "MISSING");
-  console.log("ENV CHECK - NAVER_CLIENT_ID:", process.env.NAVER_CLIENT_ID ? `set(${process.env.NAVER_CLIENT_ID.length}chars)` : "MISSING");
-  console.log("ENV CHECK - NAVER_SECRET_KEY:", secretKey ? `set(${secretKey.length}chars)` : "MISSING");
-  console.log("All env keys:", Object.keys(process.env).filter(k => k.startsWith("NAVER") || k.startsWith("VITE_NAVER")));
+  const secretKey = process.env.VITE_NAVER_SECRET_KEY || process.env.NAVER_SECRET_KEY;
 
   if (!clientId || !secretKey) {
     console.warn("Naver keys missing, using fallback");
