@@ -86,20 +86,48 @@ export default function NaverMapComponent({
   const routePathRef = useRef(routePath);
   routePathRef.current = routePath;
 
-  // 버스 마커 애니메이션: 기존 마커는 위치만 부드럽게 이동, 없으면 새로 생성
+  // routePath에서 가장 가까운 인덱스 찾기
+  const findNearestIdx = (path: [number, number][], lat: number, lng: number): number => {
+    let minDist = Infinity, minIdx = 0;
+    for (let i = 0; i < path.length; i++) {
+      const d = (path[i][1] - lat) ** 2 + (path[i][0] - lng) ** 2;
+      if (d < minDist) { minDist = d; minIdx = i; }
+    }
+    return minIdx;
+  };
+
+  // 버스 마커 애니메이션: routePath가 있으면 도로 경로를 따라 이동
   const animateMarker = (marker: any, fromLat: number, fromLng: number, toLat: number, toLng: number) => {
-    const STEPS = 30;
-    const INTERVAL = 50; // ms → 총 1.5초
+    const route = routePathRef.current;
+    let waypoints: { lat: number; lng: number }[] = [];
+
+    if (route.length > 0) {
+      const fromIdx = findNearestIdx(route, fromLat, fromLng);
+      const toIdx   = findNearestIdx(route, toLat, toLng);
+      if (fromIdx < toIdx) {
+        waypoints = route.slice(fromIdx, toIdx + 1).map(([lng, lat]) => ({ lat, lng }));
+      }
+    }
+
+    if (waypoints.length < 2) {
+      waypoints = [{ lat: fromLat, lng: fromLng }, { lat: toLat, lng: toLng }];
+    }
+
+    const INTERVAL = 50;
+    const totalSteps = Math.max(waypoints.length - 1, 1) * 10;
     let step = 0;
     const timer = setInterval(() => {
       step++;
-      const t = step / STEPS;
-      const lat = fromLat + (toLat - fromLat) * t;
-      const lng = fromLng + (toLng - fromLng) * t;
-      try {
-        marker.setPosition(new window.naver.maps.LatLng(lat, lng));
-      } catch (_) {}
-      if (step >= STEPS) clearInterval(timer);
+      const t = step / totalSteps;
+      const segCount = waypoints.length - 1;
+      const segIdx = Math.min(Math.floor(t * segCount), segCount - 1);
+      const segT = (t * segCount) - segIdx;
+      const from = waypoints[segIdx];
+      const to   = waypoints[segIdx + 1] ?? waypoints[segIdx];
+      const lat  = from.lat + (to.lat - from.lat) * segT;
+      const lng  = from.lng + (to.lng - from.lng) * segT;
+      try { marker.setPosition(new window.naver.maps.LatLng(lat, lng)); } catch (_) {}
+      if (step >= totalSteps) clearInterval(timer);
     }, INTERVAL);
   };
 
