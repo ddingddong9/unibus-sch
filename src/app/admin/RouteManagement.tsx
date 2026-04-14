@@ -194,7 +194,6 @@ export default function RouteManagement() {
         {/* Error */}
         {error && (
           <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-            <div className="text-red-500">⚠️</div>
             <p className="font-['Public_Sans'] text-red-700 text-[14px]">{error}</p>
             <button
               onClick={fetchRoutes}
@@ -584,8 +583,8 @@ function RouteCard({ route, onEdit, onDelete, onToggleActive }: RouteCardProps) 
 
         {(route.duration || route.fare) && (
           <div className="flex gap-4 text-[13px] font-['Public_Sans'] text-[#64748b]">
-            {route.duration && <span>⏱ {route.duration}</span>}
-            {route.fare && <span>💰 {route.fare}</span>}
+            {route.duration && <span>{route.duration}</span>}
+            {route.fare && <span>{route.fare}</span>}
           </div>
         )}
       </div>
