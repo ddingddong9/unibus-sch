@@ -21,16 +21,22 @@ campus.get("/path", async (c) => {
   const start     = `${STOPS[0].lng},${STOPS[0].lat}`;
   const goal      = `${STOPS[4].lng},${STOPS[4].lat}`;
   const waypoints = STOPS.slice(1, 4).map(s => `${s.lng},${s.lat}`).join("|");
-  const url = `https://naveropenapi.apigw.ntruss.com/map-direction-15/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
+  const url = `https://naveropenapi.apigw.naver.com/map-direction-15/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
 
-  const res = await fetch(url, {
-    headers: {
-      "X-NCP-APIGW-API-KEY-ID": clientId,
-      "X-NCP-APIGW-API-KEY":    secretKey,
-    },
-  });
-
-  const data = await res.json();
+  let res: Response;
+  let data: any;
+  try {
+    res = await fetch(url, {
+      headers: {
+        "X-NCP-APIGW-API-KEY-ID": clientId,
+        "X-NCP-APIGW-API-KEY":    secretKey,
+      },
+    });
+    data = await res.json();
+  } catch (e: any) {
+    console.error("fetch error:", e.message);
+    return c.json({ success: false, error: "fetch failed: " + e.message }, 502);
+  }
   console.log("Directions5 API response code:", data.code, data.message ?? data.error?.message);
 
   if (data.code === 0) {
@@ -51,7 +57,7 @@ campus.get("/path", async (c) => {
     }
   }
   console.warn("Directions5 fallback. code:", data.code, data.message ?? JSON.stringify(data.error));
-  return c.json({ success: true, data: { path: fallback, stops: STOPS, source: "fallback" } });
+  return c.json({ success: true, data: { path: fallback, stops: STOPS, source: "fallback", debug: { code: data.code, message: data.message, error: data.error } } });
 });
 
 export default campus;

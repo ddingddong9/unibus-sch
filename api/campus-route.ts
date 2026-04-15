@@ -39,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const start     = `${STOPS[0].lng},${STOPS[0].lat}`;
     const goal      = `${STOPS[4].lng},${STOPS[4].lat}`;
     const waypoints = STOPS.slice(1, 4).map(s => `${s.lng},${s.lat}`).join("|");
-    const url = `https://naveropenapi.apigw.naver.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=trafast`;
+    const url = `https://naveropenapi.apigw.ntruss.com/map-direction-15/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
 
     const apiRes = await fetch(url, {
       headers: {
@@ -52,13 +52,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     console.log("Naver Directions:", data.code, data.message);
 
     if (data.code === 0) {
-      const path: [number, number][] = data.route?.trafast?.[0]?.path ?? [];
+      const path: [number, number][] = data.route?.traoptimal?.[0]?.path ?? [];
       if (path.length > 0) {
-        return res.json({ success: true, data: { path, stops: STOPS, source: "directions" } });
+        return res.json({ success: true, data: { path, stops: STOPS, source: "directions5" } });
       }
     }
 
-    console.warn("Directions failed, fallback. code:", data.code, data.message);
+    console.warn("Directions5 failed, fallback. code:", data.code, data.message);
     return res.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_api_error", apiCode: data.code, apiMessage: data.message } });
   } catch (e: any) {
     console.error("Directions error:", e.message);
