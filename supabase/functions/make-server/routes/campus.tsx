@@ -6,7 +6,7 @@ const STOPS = [
   { id: "rear-gate", name: "후문",   lat: 36.772760, lng: 126.933816 },
   { id: "hyang3",    name: "향3",    lat: 36.768228, lng: 126.935383 },
   { id: "hyang1",    name: "향1",    lat: 36.767905, lng: 126.932505 },
-  { id: "library",   name: "도서관", lat: 36.768856, lng: 126.931303 },
+  { id: "library",   name: "도서관", lat: 36.768856, lng: 126.930700 },
   { id: "main-gate", name: "정문",   lat: 36.769014, lng: 126.927978 },
 ];
 

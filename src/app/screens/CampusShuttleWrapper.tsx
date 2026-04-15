@@ -11,7 +11,7 @@ const CAMPUS_STOPS = [
   { id: "rear-gate",  nameKo: "후문",   nameEn: "Rear Gate", lat: 36.772760, lng: 126.933816, order: 1 },
   { id: "hyang3",     nameKo: "향3",    nameEn: "Hyang Hall 3", lat: 36.768228, lng: 126.935383, order: 2 },
   { id: "hyang1",     nameKo: "향1",    nameEn: "Hyang Hall 1", lat: 36.767905, lng: 126.932505, order: 3 },
-  { id: "library",    nameKo: "도서관", nameEn: "Library",    lat: 36.768856, lng: 126.931303, order: 4 },
+  { id: "library",    nameKo: "도서관", nameEn: "Library",    lat: 36.768856, lng: 126.930700, order: 4 },
   { id: "main-gate",  nameKo: "정문",   nameEn: "Main Gate",  lat: 36.769014, lng: 126.927978, order: 5 },
 ];
 
@@ -72,13 +72,14 @@ export default function CampusShuttleWrapper() {
 
   // 학내 순환 도로 경로 (최초 1회 fetch, 캐시)
   useEffect(() => {
-    const CACHE_KEY = 'campus_route_path_v4'; // v4: 실제 도로 경로
+    const CACHE_KEY = 'campus_route_path_v5'; // v5: 도서관 좌표 조정
     const CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
 
     // 구버전 캐시 삭제
     localStorage.removeItem('campus_route_path');
     localStorage.removeItem('campus_route_path_v2');
     localStorage.removeItem('campus_route_path_v3');
+    localStorage.removeItem('campus_route_path_v4');
 
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
