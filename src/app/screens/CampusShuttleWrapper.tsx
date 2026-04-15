@@ -72,11 +72,12 @@ export default function CampusShuttleWrapper() {
 
   // 학내 순환 도로 경로 (최초 1회 fetch, 캐시)
   useEffect(() => {
-    const CACHE_KEY = 'campus_route_path_v2'; // v2: 빈 path 캐시 무효화
+    const CACHE_KEY = 'campus_route_path_v3'; // v3: Directions5 적용
     const CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
 
     // 구버전 캐시 삭제
     localStorage.removeItem('campus_route_path');
+    localStorage.removeItem('campus_route_path_v2');
 
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {

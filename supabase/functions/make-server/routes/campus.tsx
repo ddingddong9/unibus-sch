@@ -21,7 +21,7 @@ campus.get("/path", async (c) => {
   const start     = `${STOPS[0].lng},${STOPS[0].lat}`;
   const goal      = `${STOPS[4].lng},${STOPS[4].lat}`;
   const waypoints = STOPS.slice(1, 4).map(s => `${s.lng},${s.lat}`).join("|");
-  const url = `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
+  const url = `https://naveropenapi.apigw.ntruss.com/map-direction-15/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
 
   const res = await fetch(url, {
     headers: {
@@ -31,7 +31,7 @@ campus.get("/path", async (c) => {
   });
 
   const data = await res.json();
-  console.log("Directions API response code:", data.code, data.message ?? data.error?.message);
+  console.log("Directions5 API response code:", data.code, data.message ?? data.error?.message);
 
   if (data.code === 0) {
     const path: [number, number][] = data.route?.traoptimal?.[0]?.path ?? [];
@@ -40,7 +40,18 @@ campus.get("/path", async (c) => {
     }
   }
 
-  return c.json({ success: false, error: `Directions API error: ${data.code} ${data.message ?? JSON.stringify(data.error)}` }, 502);
+  // fallback: 정류장 직선 연결 (API 실패 시)
+  const fallback: [number, number][] = [];
+  const allStops = [...STOPS, STOPS[0]]; // 순환: 마지막 → 후문
+  for (let i = 0; i < allStops.length - 1; i++) {
+    const from = allStops[i], to = allStops[i + 1];
+    for (let s = 1; s <= 20; s++) {
+      const t = s / 20;
+      fallback.push([from.lng + (to.lng - from.lng) * t, from.lat + (to.lat - from.lat) * t]);
+    }
+  }
+  console.warn("Directions5 fallback. code:", data.code, data.message ?? JSON.stringify(data.error));
+  return c.json({ success: true, data: { path: fallback, stops: STOPS, source: "fallback" } });
 });
 
 export default campus;
