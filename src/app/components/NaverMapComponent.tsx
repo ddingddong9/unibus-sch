@@ -85,47 +85,94 @@ export default function NaverMapComponent({
   const routePathRef = useRef(routePath);
   routePathRef.current = routePath;
 
-  // routePath에서 가장 가까운 인덱스 찾기
-  // 버스 마커 애니메이션: 마커의 현재 경로 인덱스에서 앞쪽으로만 검색해 경로 이탈 방지
+  // ease-in-out 보간 (급출발/급정지 없이 부드럽게)
+  const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+
+  // 경로 세그먼트 위에서 GPS 좌표에 가장 가까운 점을 구함 (snap-to-segment)
+  const snapToSegment = (
+    px: number, py: number,
+    ax: number, ay: number,
+    bx: number, by: number
+  ): { x: number; y: number; t: number; dist: number } => {
+    const dx = bx - ax, dy = by - ay;
+    const lenSq = dx * dx + dy * dy;
+    if (lenSq === 0) return { x: ax, y: ay, t: 0, dist: (px - ax) ** 2 + (py - ay) ** 2 };
+    const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
+    const cx = ax + t * dx, cy = ay + t * dy;
+    return { x: cx, y: cy, t, dist: (px - cx) ** 2 + (py - cy) ** 2 };
+  };
+
+  // 버스 마커 애니메이션
   const animateMarker = (marker: any, fromLat: number, fromLng: number, toLat: number, toLng: number) => {
+    // ① 이전 애니메이션 반드시 취소 (중복 실행이 흔들림의 주원인)
+    if (marker.__animTimer) {
+      clearInterval(marker.__animTimer);
+      marker.__animTimer = null;
+    }
+
+    // ② 미세 이동 무시 (GPS 노이즈로 인한 제자리 떨림 방지, 약 3m 이하)
+    const moved = (toLat - fromLat) ** 2 + (toLng - fromLng) ** 2;
+    if (moved < 0.000000001) return;
+
     const route = routePathRef.current;
     let waypoints: { lat: number; lng: number }[] = [];
 
-    if (route.length > 0) {
+    if (route.length > 1) {
       const searchFrom: number = marker.__routeIdx ?? 0;
-      // 현재 인덱스에서 앞쪽 절반만 검색해 역방향 점프 방지
-      const searchEnd = Math.min(searchFrom + Math.ceil(route.length * 0.6), route.length);
-      let toIdx = searchFrom, minDist = Infinity;
+      const searchEnd = Math.min(searchFrom + Math.ceil(route.length * 0.5) + 10, route.length - 1);
+
+      // ③ snap-to-segment: GPS 목적지를 경로 선분 위로 스냅
+      let bestDist = Infinity;
+      let bestIdx = searchFrom;
+      let bestSnap = { x: toLng, y: toLat };
+
       for (let i = searchFrom; i < searchEnd; i++) {
-        const d = (route[i][1] - toLat) ** 2 + (route[i][0] - toLng) ** 2;
-        if (d < minDist) { minDist = d; toIdx = i; }
+        const [aLng, aLat] = route[i];
+        const [bLng, bLat] = route[i + 1] ?? route[i];
+        const snap = snapToSegment(toLng, toLat, aLng, aLat, bLng, bLat);
+        if (snap.dist < bestDist) {
+          bestDist = snap.dist;
+          bestIdx = snap.t >= 0.5 ? i + 1 : i; // 세그먼트 중반 넘으면 다음 인덱스
+          bestSnap = { x: snap.x, y: snap.y };
+        }
       }
-      if (toIdx > searchFrom) {
-        waypoints = route.slice(searchFrom, toIdx + 1).map(([lng, lat]) => ({ lat, lng }));
-        marker.__routeIdx = toIdx;
+
+      if (bestIdx > searchFrom) {
+        // 경로 waypoint 따라 이동 (스냅된 최종 위치로)
+        waypoints = [
+          ...route.slice(searchFrom, bestIdx).map(([lng, lat]) => ({ lat, lng })),
+          { lat: bestSnap.y, lng: bestSnap.x },
+        ];
+        marker.__routeIdx = bestIdx;
       }
     }
 
+    // 경로 없거나 찾기 실패 시 직선 이동
     if (waypoints.length < 2) {
       waypoints = [{ lat: fromLat, lng: fromLng }, { lat: toLat, lng: toLng }];
     }
 
-    const INTERVAL = 50;
-    const DURATION = 1900; // 폴링 2000ms보다 약간 짧게
+    const INTERVAL = 16; // ~60fps
+    const DURATION = 1800;
     const totalSteps = Math.round(DURATION / INTERVAL);
     let step = 0;
-    const timer = setInterval(() => {
+
+    marker.__animTimer = setInterval(() => {
       step++;
-      const t = step / totalSteps;
+      const raw = step / totalSteps;
+      const t = easeInOut(Math.min(raw, 1));
       const segCount = waypoints.length - 1;
       const segIdx = Math.min(Math.floor(t * segCount), segCount - 1);
-      const segT = (t * segCount) - segIdx;
+      const segT = t * segCount - segIdx;
       const from = waypoints[segIdx];
       const to   = waypoints[segIdx + 1] ?? waypoints[segIdx];
       const lat  = from.lat + (to.lat - from.lat) * segT;
       const lng  = from.lng + (to.lng - from.lng) * segT;
       try { marker.setPosition(new window.naver.maps.LatLng(lat, lng)); } catch (_) {}
-      if (step >= totalSteps) clearInterval(timer);
+      if (step >= totalSteps) {
+        clearInterval(marker.__animTimer);
+        marker.__animTimer = null;
+      }
     }, INTERVAL);
   };
 
