@@ -239,7 +239,7 @@ export default function BusManagement() {
             const progress = step / route.length;
             const stopIdx = Math.min(Math.floor(progress * (stops.length - 1)), stops.length - 2);
             setTestStatus(`→ ${stops[stopIdx + 1]?.name} 이동 중...`);
-            await sleep(1000);
+            await sleep(500);
           }
         }
         await stopTestBus(testBusIdRef.current);

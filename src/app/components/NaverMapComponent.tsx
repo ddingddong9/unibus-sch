@@ -61,7 +61,7 @@ const USER_MARKER_CONTENT = () => `
 `;
 
 // [변경] RAF 보간 상수
-const INTERP_MS = 900; // Realtime 이벤트 기준 여유 있는 보간 시간
+const INTERP_MS = 600; // 500ms 업데이트 주기에 맞춘 보간 시간
 
 // [변경] cubic ease-in-out (요청 스펙과 동일)
 const easeInOut = (t: number) =>
