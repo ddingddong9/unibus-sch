@@ -238,7 +238,7 @@ export default function NoticeWrapper() {
                           className="overflow-hidden"
                         >
                           <div className="mt-3 pt-3 border-t border-[#f1f5f9]">
-                            <p className="font-['Public_Sans'] font-normal text-[#475569] text-[14px] leading-[22px]">
+                            <p className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[16px] leading-[26px]">
                               {notice.content}
                             </p>
                             {notice.imageUrls && notice.imageUrls.length > 0 && (
