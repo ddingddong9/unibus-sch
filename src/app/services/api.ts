@@ -283,6 +283,15 @@ class ApiClient {
     throw new Error(response.error || 'Failed to update bus');
   }
 
+  async deleteBus(id: string): Promise<void> {
+    const response = await this.request<ApiResponse>(`/buses/${id}`, {
+      method: 'DELETE',
+    });
+    if (!response.success) {
+      throw new Error(response.error || 'Failed to delete bus');
+    }
+  }
+
   async getBusLocations(): Promise<Array<{ busId: string; lat: number; lng: number; speed: number; heading: number; timestamp: string }>> {
     const response = await this.request<ApiResponse<any[]>>('/buses/locations/latest');
     if (response.success && response.data) {
