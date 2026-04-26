@@ -20,6 +20,7 @@ export interface Notice {
   viewCount: number;
   authorId: string;
   authorName: string;
+  imageUrls?: string[];
   createdAt: string;
   updatedAt: string;
 }

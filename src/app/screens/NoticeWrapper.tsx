@@ -240,6 +240,18 @@ export default function NoticeWrapper() {
                             <p className="font-['Public_Sans'] font-normal text-[#475569] text-[14px] leading-[22px]">
                               {notice.content}
                             </p>
+                            {notice.imageUrls && notice.imageUrls.length > 0 && (
+                              <div className="grid grid-cols-2 gap-2 mt-3">
+                                {notice.imageUrls.map((url, i) => (
+                                  <img
+                                    key={i}
+                                    src={url}
+                                    alt={`공지 이미지 ${i + 1}`}
+                                    className="w-full rounded-lg object-cover border border-[#e2e8f0]"
+                                  />
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </motion.div>
                       )}
