@@ -42,7 +42,7 @@ enable_signup = true
 double_confirm_changes = false
 enable_confirmations = false
 
-[functions.make-server]
+[functions."make-server"]
 verify_jwt = false
 
 [analytics]

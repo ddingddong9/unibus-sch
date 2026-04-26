@@ -33,6 +33,7 @@ notices.get("/", async (c) => {
       viewCount: notice.view_count,
       authorId: notice.author_id,
       authorName: notice.author_name,
+      imageUrls: notice.image_urls ?? [],
       createdAt: notice.created_at,
       updatedAt: notice.updated_at,
     })) || [];
@@ -79,6 +80,7 @@ notices.get("/:id", async (c) => {
       viewCount: notice.view_count + 1,
       authorId: notice.author_id,
       authorName: notice.author_name,
+      imageUrls: notice.image_urls ?? [],
       createdAt: notice.created_at,
       updatedAt: notice.updated_at,
     };
@@ -95,8 +97,8 @@ notices.get("/:id", async (c) => {
 // Create notice (admin only)
 notices.post("/", requireAdmin, async (c) => {
   try {
-    const { title, content, category, priority }: CreateNoticeRequest = await c.req.json();
-    
+    const { title, content, category, priority, imageUrls }: CreateNoticeRequest = await c.req.json();
+
     if (!title || !content) {
       return c.json({ success: false, error: "Missing required fields" }, 400);
     }
@@ -112,6 +114,7 @@ notices.post("/", requireAdmin, async (c) => {
         category: category || 'general',
         priority: priority || 'medium',
         author_id: userId,
+        image_urls: imageUrls ?? [],
       })
       .select('*')
       .single();
@@ -139,10 +142,11 @@ notices.post("/", requireAdmin, async (c) => {
       viewCount: notice.view_count,
       authorId: notice.author_id,
       authorName: author?.name || 'Admin',
+      imageUrls: notice.image_urls ?? [],
       createdAt: notice.created_at,
       updatedAt: notice.updated_at,
     };
-    
+
     console.log(`✅ Notice created: ${notice.id} by ${userId}`);
 
     return c.json({ success: true, data: formattedNotice });
@@ -176,6 +180,7 @@ notices.put("/:id", requireAdmin, async (c) => {
     if (updates.category) dbUpdates.category = updates.category;
     if (updates.priority) dbUpdates.priority = updates.priority;
     if (updates.isPinned !== undefined) dbUpdates.is_pinned = updates.isPinned;
+    if (updates.imageUrls !== undefined) dbUpdates.image_urls = updates.imageUrls;
 
     // 공지사항 수정 (관계형 DB)
     const { data: updatedNotice, error: updateError } = await db
@@ -208,6 +213,7 @@ notices.put("/:id", requireAdmin, async (c) => {
       viewCount: updatedNotice.view_count,
       authorId: updatedNotice.author_id,
       authorName: author?.name || 'Admin',
+      imageUrls: updatedNotice.image_urls ?? [],
       createdAt: updatedNotice.created_at,
       updatedAt: updatedNotice.updated_at,
     };

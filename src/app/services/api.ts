@@ -194,6 +194,27 @@ class ApiClient {
     }
   }
 
+  async uploadNoticeImage(file: File): Promise<string> {
+    const ext = file.name.split('.').pop();
+    const filename = `${Date.now()}_${crypto.randomUUID()}.${ext}`;
+    const res = await fetch(
+      `${SUPABASE_URL}/storage/v1/object/notice-images/${filename}`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${publicAnonKey}`,
+          'Content-Type': file.type,
+        },
+        body: file,
+      }
+    );
+    if (!res.ok) {
+      const err = await res.text();
+      throw new Error(`이미지 업로드 실패: ${err}`);
+    }
+    return `${SUPABASE_URL}/storage/v1/object/public/notice-images/${filename}`;
+  }
+
   // ============ ROUTE ENDPOINTS ============
 
   async getRoutes(): Promise<BusRoute[]> {
