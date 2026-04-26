@@ -266,6 +266,11 @@ export default function NoticeWrapper() {
                                 ))}
                               </div>
                             )}
+                            {notice.contentBelow && (
+                              <p className="font-['Public_Sans'] font-normal text-[#475569] text-[14px] leading-[22px] mt-3">
+                                {notice.contentBelow}
+                              </p>
+                            )}
                           </div>
                         </motion.div>
                       )}
