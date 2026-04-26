@@ -3,7 +3,12 @@ import { useEffect, useRef } from "react";
 interface NaverMapProps {
   center?: { lat: number; lng: number };
   zoom?: number;
-  buses?: Array<{ id: string; position: { lat: number; lng: number }; label: string }>;
+  buses?: Array<{
+    id: string;
+    position: { lat: number; lng: number };
+    heading?: number; // [변경] heading 추가
+    label: string;
+  }>;
   stops?: Array<{ id: string; name: string; position: { lat: number; lng: number } }>;
   userLocation?: { lat: number; lng: number } | null;
   focusLocation?: { lat: number; lng: number; zoom?: number; key?: number } | null;
@@ -17,9 +22,10 @@ declare global {
   interface Window { naver: any; }
 }
 
-const BUS_MARKER_CONTENT = (label: string) => `
+// [변경] rotation 파라미터 추가 — 마커 아이콘 원형부만 회전
+const BUS_MARKER_CONTENT = (label: string, rotation = 0) => `
   <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.25));">
-    <div style="background:#1e3b8a;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;">
+    <div style="background:#1e3b8a;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;transform:rotate(${rotation}deg);transition:transform 0.3s ease;">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
         <rect x="2" y="5" width="20" height="13" rx="2" fill="white"/>
         <rect x="2" y="9" width="20" height="2" fill="#1e3b8a" opacity="0.3"/>
@@ -54,6 +60,13 @@ const USER_MARKER_CONTENT = () => `
   </div>
 `;
 
+// [변경] RAF 보간 상수
+const INTERP_MS = 900; // Realtime 이벤트 기준 여유 있는 보간 시간
+
+// [변경] cubic ease-in-out (요청 스펙과 동일)
+const easeInOut = (t: number) =>
+  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
 export default function NaverMapComponent({
   center = { lat: 36.7694, lng: 126.9322 },
   zoom = 16,
@@ -85,10 +98,7 @@ export default function NaverMapComponent({
   const routePathRef = useRef(routePath);
   routePathRef.current = routePath;
 
-  // ease-in-out 보간 (급출발/급정지 없이 부드럽게)
-  const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-
-  // 경로 세그먼트 위에서 GPS 좌표에 가장 가까운 점을 구함 (snap-to-segment)
+  // ── snap-to-segment: GPS 좌표를 경로 선분 위 최근접 점으로 스냅 ──
   const snapToSegment = (
     px: number, py: number,
     ax: number, ay: number,
@@ -96,23 +106,28 @@ export default function NaverMapComponent({
   ): { x: number; y: number; t: number; dist: number } => {
     const dx = bx - ax, dy = by - ay;
     const lenSq = dx * dx + dy * dy;
-    if (lenSq === 0) return { x: ax, y: ay, t: 0, dist: (px - ax) ** 2 + (py - ay) ** 2 };
+    if (lenSq === 0) {
+      return { x: ax, y: ay, t: 0, dist: (px - ax) ** 2 + (py - ay) ** 2 };
+    }
     const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
     const cx = ax + t * dx, cy = ay + t * dy;
     return { x: cx, y: cy, t, dist: (px - cx) ** 2 + (py - cy) ** 2 };
   };
 
-  // 버스 마커 애니메이션
-  const animateMarker = (marker: any, fromLat: number, fromLng: number, toLat: number, toLng: number) => {
-    // ① 이전 애니메이션 반드시 취소 (중복 실행이 흔들림의 주원인)
-    if (marker.__animTimer) {
-      clearInterval(marker.__animTimer);
-      marker.__animTimer = null;
-    }
+  // ── [변경] RAF 기반 마커 보간 ──
+  const animateMarker = (
+    marker: any,
+    fromLat: number, fromLng: number, fromHeading: number,
+    toLat: number, toLng: number, toHeading: number
+  ) => {
+    // [변경] 위치 변화 없으면 skip
+    if (fromLat === toLat && fromLng === toLng) return;
 
-    // ② 미세 이동 무시 (GPS 노이즈로 인한 제자리 떨림 방지, 약 3m 이하)
-    const moved = (toLat - fromLat) ** 2 + (toLng - fromLng) ** 2;
-    if (moved < 0.000000001) return;
+    // [변경] 이전 RAF 취소 (중복 실행 방지)
+    if (marker.__animRafId) {
+      cancelAnimationFrame(marker.__animRafId);
+      marker.__animRafId = null;
+    }
 
     const route = routePathRef.current;
     let waypoints: { lat: number; lng: number }[] = [];
@@ -121,7 +136,7 @@ export default function NaverMapComponent({
       const searchFrom: number = marker.__routeIdx ?? 0;
       const searchEnd = Math.min(searchFrom + Math.ceil(route.length * 0.5) + 10, route.length - 1);
 
-      // ③ snap-to-segment: GPS 목적지를 경로 선분 위로 스냅
+      // snap-to-segment: 목적지를 경로 선분 위로 스냅
       let bestDist = Infinity;
       let bestIdx = searchFrom;
       let bestSnap = { x: toLng, y: toLat };
@@ -132,13 +147,12 @@ export default function NaverMapComponent({
         const snap = snapToSegment(toLng, toLat, aLng, aLat, bLng, bLat);
         if (snap.dist < bestDist) {
           bestDist = snap.dist;
-          bestIdx = snap.t >= 0.5 ? i + 1 : i; // 세그먼트 중반 넘으면 다음 인덱스
+          bestIdx = snap.t >= 0.5 ? i + 1 : i;
           bestSnap = { x: snap.x, y: snap.y };
         }
       }
 
       if (bestIdx > searchFrom) {
-        // 경로 waypoint 따라 이동 (스냅된 최종 위치로)
         waypoints = [
           ...route.slice(searchFrom, bestIdx).map(([lng, lat]) => ({ lat, lng })),
           { lat: bestSnap.y, lng: bestSnap.x },
@@ -147,33 +161,54 @@ export default function NaverMapComponent({
       }
     }
 
-    // 경로 없거나 찾기 실패 시 직선 이동
+    // 경로 없거나 스냅 실패 → 직선
     if (waypoints.length < 2) {
       waypoints = [{ lat: fromLat, lng: fromLng }, { lat: toLat, lng: toLng }];
     }
 
-    const INTERVAL = 16; // ~60fps
-    const DURATION = 480; // 폴링 500ms보다 약간 짧게 → 겹침 없이 연속 애니메이션
-    const totalSteps = Math.round(DURATION / INTERVAL);
-    let step = 0;
+    // [변경] heading 최단경로 회전 (예: 350° → 10° 는 +20° 회전)
+    const headingDelta = ((toHeading - fromHeading) % 360 + 540) % 360 - 180;
 
-    marker.__animTimer = setInterval(() => {
-      step++;
-      const raw = step / totalSteps;
-      const t = easeInOut(Math.min(raw, 1));
-      const segCount = waypoints.length - 1;
+    // [변경] heading 변경 시 아이콘 1회 업데이트 (per-frame setIcon 회피)
+    if (Math.abs(headingDelta) > 5) {
+      try {
+        marker.setIcon({
+          content: BUS_MARKER_CONTENT(marker.__label ?? '', Math.round(toHeading)),
+          size: new window.naver.maps.Size(40, 60),
+          anchor: new window.naver.maps.Point(20, 60),
+        });
+      } catch (_) {}
+    }
+
+    const segCount = waypoints.length - 1;
+    const startTime = performance.now(); // [변경] performance.now() 기반
+
+    // [변경] requestAnimationFrame 루프
+    const tick = (now: number) => {
+      const elapsed = now - startTime;
+      const rawT = Math.min(elapsed / INTERP_MS, 1);
+      const t = easeInOut(rawT);
+
       const segIdx = Math.min(Math.floor(t * segCount), segCount - 1);
       const segT = t * segCount - segIdx;
       const from = waypoints[segIdx];
       const to   = waypoints[segIdx + 1] ?? waypoints[segIdx];
-      const lat  = from.lat + (to.lat - from.lat) * segT;
-      const lng  = from.lng + (to.lng - from.lng) * segT;
-      try { marker.setPosition(new window.naver.maps.LatLng(lat, lng)); } catch (_) {}
-      if (step >= totalSteps) {
-        clearInterval(marker.__animTimer);
-        marker.__animTimer = null;
+
+      const lat = from.lat + (to.lat - from.lat) * segT;
+      const lng = from.lng + (to.lng - from.lng) * segT;
+
+      try {
+        marker.setPosition(new window.naver.maps.LatLng(lat, lng));
+      } catch (_) {}
+
+      if (rawT < 1) {
+        marker.__animRafId = requestAnimationFrame(tick);
+      } else {
+        marker.__animRafId = null;
       }
-    }, INTERVAL);
+    };
+
+    marker.__animRafId = requestAnimationFrame(tick);
   };
 
   const updateBusMarkers = () => {
@@ -188,9 +223,18 @@ export default function NaverMapComponent({
     currentBuses.forEach(bus => {
       const existing = existingMap.get(bus.id);
       if (existing) {
-        // 기존 마커: 위치 애니메이션
+        // [변경] in-flight 이어받기: 현재 마커 위치를 새 출발점으로 사용
         const pos = existing.getPosition();
-        animateMarker(existing, pos.lat(), pos.lng(), bus.position.lat, bus.position.lng);
+        const fromLat = pos.lat();
+        const fromLng = pos.lng();
+        const fromHeading: number = existing.__heading ?? 0;
+
+        animateMarker(
+          existing,
+          fromLat, fromLng, fromHeading,
+          bus.position.lat, bus.position.lng, bus.heading ?? 0
+        );
+        existing.__heading = bus.heading ?? 0;
         existingMap.delete(bus.id);
         newMarkers.push(existing);
       } else {
@@ -200,14 +244,17 @@ export default function NaverMapComponent({
             position: new window.naver.maps.LatLng(bus.position.lat, bus.position.lng),
             map: mapInstance.current,
             icon: {
-              content: BUS_MARKER_CONTENT(bus.label),
+              content: BUS_MARKER_CONTENT(bus.label, bus.heading ?? 0),
               size: new window.naver.maps.Size(40, 60),
               anchor: new window.naver.maps.Point(20, 60),
             },
             zIndex: 20,
           });
           marker.__busId = bus.id;
+          marker.__label = bus.label;
+          marker.__heading = bus.heading ?? 0;
           marker.__routeIdx = 0;
+          marker.__animRafId = null; // [변경] RAF ID 초기화
           window.naver.maps.Event.addListener(marker, 'click', () => {
             onBusClickRef.current?.(bus.id);
           });
@@ -216,8 +263,14 @@ export default function NaverMapComponent({
       }
     });
 
-    // 없어진 버스 마커 제거
-    existingMap.forEach(m => { try { m.setMap(null); } catch (_) {} });
+    // [변경] 없어진 버스: RAF 취소 후 마커 제거
+    existingMap.forEach(m => {
+      if (m.__animRafId) {
+        cancelAnimationFrame(m.__animRafId);
+        m.__animRafId = null;
+      }
+      try { m.setMap(null); } catch (_) {}
+    });
     busMarkersRef.current = newMarkers;
   };
 
@@ -265,7 +318,6 @@ export default function NaverMapComponent({
 
   const updatePolyline = (path: [number, number][]) => {
     if (!mapInstance.current || !window.naver) return;
-    // 기존 폴리라인 제거
     if (polylineRef.current) {
       try { polylineRef.current.setMap(null); } catch (_) {}
       polylineRef.current = null;
@@ -318,33 +370,31 @@ export default function NaverMapComponent({
     script.onerror = () => console.error("네이버 지도 API 로드 실패. Client ID를 확인하세요.");
     document.head.appendChild(script);
 
+    // [변경] cleanup: 모든 RAF 취소
     return () => {
-      busMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
+      busMarkersRef.current.forEach(m => {
+        if (m.__animRafId) {
+          cancelAnimationFrame(m.__animRafId);
+          m.__animRafId = null;
+        }
+        try { m.setMap(null); } catch (_) {}
+      });
       stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
       if (polylineRef.current) { try { polylineRef.current.setMap(null); } catch (_) {} }
     };
   }, []);
 
-  // 버스 마커 갱신
   useEffect(() => { updateBusMarkers(); }, [buses]);
-
-  // 정류장 마커 갱신
   useEffect(() => { updateStopMarkers(); }, [stops]);
-
-  // 사용자 위치 마커 갱신
   useEffect(() => { updateUserMarker(userLocation ?? null); }, [userLocation]);
-
-  // 경로 폴리라인 갱신
   useEffect(() => { updatePolyline(routePath); }, [routePath]);
 
-  // 특정 위치로 포커스
   useEffect(() => {
     if (!focusLocation || !mapInstance.current || !window.naver) return;
     mapInstance.current.setCenter(new window.naver.maps.LatLng(focusLocation.lat, focusLocation.lng));
     mapInstance.current.setZoom(focusLocation.zoom ?? 18);
   }, [focusLocation]);
 
-  // 전체보기 fitBounds
   useEffect(() => {
     if (!fitBoundsKey || !mapInstance.current || !window.naver) return;
     const currentStops = stopsRef.current;
@@ -356,8 +406,7 @@ export default function NaverMapComponent({
 
   const handleZoomIn  = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() + 1); };
   const handleZoomOut = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() - 1); };
-
-  const handleLocate = () => {
+  const handleLocate  = () => {
     if (!mapInstance.current || !window.naver) return;
     const loc = userLocationRef.current ?? center;
     mapInstance.current.setCenter(new window.naver.maps.LatLng(loc.lat, loc.lng));

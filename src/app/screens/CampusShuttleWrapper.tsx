@@ -1,3 +1,11 @@
+// ── Realtime 구독 흐름 ──
+// 1. 마운트: fetchInitial() 1회 → 활성 버스 목록 + 현재 위치 로드
+// 2. supabase.channel('bus-tracking') 구독:
+//    A) bus_locations INSERT → 해당 bus_id 위치만 교체 (setBuses prev.map)
+//    B) buses UPDATE → 상태 변경 반영 (inactive 제거 / active 추가)
+// 3. 언마운트: supabase.removeChannel(channel) cleanup
+// ──────────────────────────────────────────────
+
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useNavigate } from "react-router";
 import svgPaths from "../../imports/svg-usddjxhhke";
@@ -5,22 +13,23 @@ import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import NaverMapComponent from "../components/NaverMapComponent";
 import { api } from "../services/api";
+import { supabase } from "../services/supabase"; // [변경] Realtime 클라이언트
 
 // 학내 순환 정류장 (후문 출발 → 향3 → 향1 → 도서관 → 정문)
 const CAMPUS_STOPS = [
-  { id: "rear-gate",  nameKo: "후문",   nameEn: "Rear Gate", lat: 36.772760, lng: 126.933816, order: 1 },
-  { id: "hyang3",     nameKo: "향3",    nameEn: "Hyang Hall 3", lat: 36.768228, lng: 126.935383, order: 2 },
-  { id: "hyang1",     nameKo: "향1",    nameEn: "Hyang Hall 1", lat: 36.767905, lng: 126.932505, order: 3 },
-  { id: "library",    nameKo: "도서관", nameEn: "Library",    lat: 36.768856, lng: 126.930700, order: 4 },
-  { id: "main-gate",  nameKo: "정문",   nameEn: "Main Gate",  lat: 36.769014, lng: 126.927978, order: 5 },
+  { id: "rear-gate",  nameKo: "후문",   nameEn: "Rear Gate",         lat: 36.772760, lng: 126.933816, order: 1 },
+  { id: "hyang3",     nameKo: "향3",    nameEn: "Hyang Hall 3",      lat: 36.768228, lng: 126.935383, order: 2 },
+  { id: "hyang1",     nameKo: "향1",    nameEn: "Hyang Hall 1",      lat: 36.767905, lng: 126.932505, order: 3 },
+  { id: "library",    nameKo: "도서관", nameEn: "Library",            lat: 36.768856, lng: 126.931303, order: 4 },
+  { id: "main-gate",  nameKo: "정문",   nameEn: "Main Gate",         lat: 36.769014, lng: 126.927978, order: 5 },
 ];
 
-// 캠퍼스 지도 중심 (정류장 중심점)
 const CAMPUS_CENTER = { lat: 36.7694, lng: 126.9322 };
 
 interface BusMarker {
   id: string;
   position: { lat: number; lng: number };
+  heading: number; // [변경] heading 추가
   label: string;
 }
 
@@ -31,7 +40,6 @@ interface FocusLocation {
   key: number;
 }
 
-// Haversine 거리 계산 (km)
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -44,8 +52,6 @@ function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// 가장 가까운 버스까지 거리 기반 도착 예정 시간 (분)
-// 캠퍼스 평균 속도 15 km/h = 0.25 km/min
 function getArrivalMinutes(stopLat: number, stopLng: number, buses: BusMarker[]): number | null {
   if (buses.length === 0) return null;
   const minDist = Math.min(
@@ -70,16 +76,16 @@ export default function CampusShuttleWrapper() {
   const dragStartY = useRef(0);
   const currentDragY = useRef(0);
 
-  // 학내 순환 도로 경로 (최초 1회 fetch, 캐시)
-  useEffect(() => {
-    const CACHE_KEY = 'campus_route_path_v5'; // v5: 도서관 좌표 조정
-    const CACHE_TTL = 24 * 60 * 60 * 1000; // 24시간
+  // [변경] 활성 버스 ID set — Realtime 필터링용 (ref로 관리해 리렌더 방지)
+  const activeBusIdsRef = useRef<Set<string>>(new Set());
+  // [변경] 버스 이름 map
+  const busNamesRef = useRef<Map<string, string>>(new Map());
 
-    // 구버전 캐시 삭제
+  // ── 캠퍼스 경로 fetch (24h 캐시) ──
+  useEffect(() => {
+    const CACHE_KEY = 'campus_route_path_v2';
+    const CACHE_TTL = 24 * 60 * 60 * 1000;
     localStorage.removeItem('campus_route_path');
-    localStorage.removeItem('campus_route_path_v2');
-    localStorage.removeItem('campus_route_path_v3');
-    localStorage.removeItem('campus_route_path_v4');
 
     const cached = localStorage.getItem(CACHE_KEY);
     if (cached) {
@@ -97,51 +103,129 @@ export default function CampusShuttleWrapper() {
         if (path?.length > 0) {
           setRoutePath(path);
           localStorage.setItem(CACHE_KEY, JSON.stringify({ path, ts: Date.now() }));
-          console.log(`캠퍼스 경로 로드: ${path.length}개 좌표`);
-        } else {
-          console.warn("경로 좌표가 비어있음");
         }
       })
       .catch(e => console.warn("경로 불러오기 실패:", e));
   }, []);
 
-  // 버스 실시간 위치 폴링 (5초)
-  const fetchBusLocations = useCallback(async () => {
+  // ── 초기 데이터 로드 (1회) ──
+  const fetchInitial = useCallback(async () => {
     try {
       const [allBuses, locations] = await Promise.all([
         api.getBuses(),
         api.getBusLocations(),
       ]);
 
-      // status === 'active' 인 버스만 지도에 표시
-      const activeBusIds = new Set(
+      // 활성 버스 ID + 이름 등록
+      activeBusIdsRef.current = new Set(
         allBuses.filter((b: any) => b.status === 'active').map((b: any) => b.id)
       );
-
-      setBuses(
-        locations
-          .filter(loc => activeBusIds.has(loc.busId))
-          .map(loc => ({
-            id: loc.busId,
-            position: { lat: loc.lat, lng: loc.lng },
-            label: allBuses.find((b: any) => b.id === loc.busId)?.name ?? loc.busId,
-          }))
+      busNamesRef.current = new Map(
+        allBuses.map((b: any) => [b.id, b.name])
       );
+
+      // 위치 map
+      const locationMap = new Map(
+        locations.map((l: any) => [l.busId, l])
+      );
+
+      // 활성 버스 중 위치 있는 것만 표시
+      const markers: BusMarker[] = allBuses
+        .filter((b: any) => b.status === 'active' && locationMap.has(b.id))
+        .map((b: any) => {
+          const loc = locationMap.get(b.id);
+          return {
+            id: b.id,
+            position: { lat: loc.lat, lng: loc.lng },
+            heading: loc.heading ?? 0,
+            label: b.name,
+          };
+        });
+
+      setBuses(markers);
       setLocationError(null);
     } catch {
-      if (buses.length === 0) {
-        setLocationError("실시간 위치를 불러올 수 없습니다");
-      }
+      setLocationError("실시간 위치를 불러올 수 없습니다");
     }
   }, []);
 
+  // ── Realtime 구독 ──
   useEffect(() => {
-    fetchBusLocations();
-    const interval = setInterval(fetchBusLocations, 500);
-    return () => clearInterval(interval);
-  }, [fetchBusLocations]);
+    // 초기 로드
+    fetchInitial();
 
-  // 사용자 실시간 위치 추적
+    // [변경] 폴링 제거 → Supabase Realtime WebSocket 구독
+    const channel = supabase
+      .channel('bus-tracking')
+
+      // A) bus_locations INSERT: 새 위치 수신
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'bus_locations' },
+        (payload) => {
+          const row = payload.new as any;
+          const busId: string = row.bus_id;
+
+          // 활성 버스만 처리
+          if (!activeBusIdsRef.current.has(busId)) return;
+
+          // [변경] 해당 bus_id 위치만 교체 (전체 교체 X)
+          setBuses(prev => {
+            const exists = prev.some(b => b.id === busId);
+            if (!exists) {
+              // 처음 등장하는 버스 — 목록에 추가
+              const label = busNamesRef.current.get(busId) ?? busId;
+              return [
+                ...prev,
+                {
+                  id: busId,
+                  position: { lat: row.latitude, lng: row.longitude },
+                  heading: row.heading ?? 0,
+                  label,
+                },
+              ];
+            }
+            return prev.map(b =>
+              b.id === busId
+                ? { ...b, position: { lat: row.latitude, lng: row.longitude }, heading: row.heading ?? 0 }
+                : b
+            );
+          });
+        }
+      )
+
+      // B) buses UPDATE: 상태 변경 (active ↔ inactive)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'buses' },
+        (payload) => {
+          const row = payload.new as any;
+          if (row.status === 'inactive') {
+            // 미운행 전환 → 지도에서 제거
+            activeBusIdsRef.current.delete(row.id);
+            setBuses(prev => prev.filter(b => b.id !== row.id));
+          } else if (row.status === 'active') {
+            // 운행 시작 → 활성 목록에 추가 후 초기 데이터 재로드
+            activeBusIdsRef.current.add(row.id);
+            busNamesRef.current.set(row.id, row.name);
+            fetchInitial();
+          }
+        }
+      )
+
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Realtime] bus-tracking 구독 시작');
+        }
+      });
+
+    // [변경] cleanup: WebSocket 채널 해제
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchInitial]);
+
+  // ── 사용자 실시간 위치 추적 ──
   useEffect(() => {
     if (!navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
@@ -152,7 +236,6 @@ export default function CampusShuttleWrapper() {
     return () => navigator.geolocation.clearWatch(watchId);
   }, []);
 
-  // 버스 클릭 → 해당 버스 위치로 포커스
   const handleBusClick = useCallback((busId: string) => {
     const bus = buses.find(b => b.id === busId);
     if (!bus) return;
@@ -166,14 +249,12 @@ export default function CampusShuttleWrapper() {
     currentDragY.current = 0;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
   };
-
   const handleDragMove = (e: React.PointerEvent) => {
     if (!isDragging.current) return;
     const delta = Math.max(0, e.clientY - dragStartY.current);
     currentDragY.current = delta;
     setDragY(delta);
   };
-
   const handleDragEnd = () => {
     if (!isDragging.current) return;
     isDragging.current = false;
@@ -182,14 +263,12 @@ export default function CampusShuttleWrapper() {
     setDragY(0);
   };
 
-  // 정류장 목록 (도착 예정 시간 포함)
   const stopsWithArrival = CAMPUS_STOPS.map(stop => {
     const arrival = getArrivalMinutes(stop.lat, stop.lng, buses);
     const status = arrival === null ? "waiting" : arrival <= 2 ? "arriving" : "scheduled";
     return { ...stop, arrival, status };
   });
 
-  // NaverMapComponent 에 넘길 stops 형식
   const mapStops = CAMPUS_STOPS.map(s => ({
     id: s.id,
     name: s.nameKo,
