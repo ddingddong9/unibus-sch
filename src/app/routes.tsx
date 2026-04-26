@@ -28,7 +28,7 @@ export const router = createBrowserRouter([
       {
         path: "/",
         element: (
-          <Layout autoNavigate={{ to: "/onboarding", delay: 2500 }}>
+          <Layout autoNavigate={{ to: "/onboarding", delay: 2500, ifAuthenticated: "/home" }}>
             <SplashScreen />
           </Layout>
         ),
