@@ -20,6 +20,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { path: "/admin/dashboard", icon: LayoutDashboard, label: "대시보드" },
     { path: "/admin/notices", icon: FileText, label: "공지사항 관리" },
     { path: "/admin/routes", icon: Bus, label: "버스 노선 관리" },
+    { path: "/admin/buses", icon: Bus, label: "버스 관리" },
     { path: "/admin/notifications", icon: Bell, label: "알림 전송" },
     { path: "/admin/users", icon: Users, label: "사용자 관리" },
   ];

@@ -20,6 +20,7 @@ import AdminLogin from "./admin/AdminLogin";
 import AdminDashboard from "./admin/AdminDashboard";
 import NoticeManagement from "./admin/NoticeManagement";
 import RouteManagement from "./admin/RouteManagement";
+import BusManagement from "./admin/BusManagement";
 import NotificationSender from "./admin/NotificationSender";
 import UserManagement from "./admin/UserManagement";
 
@@ -73,6 +74,7 @@ export const router = createBrowserRouter([
       { path: "/admin/dashboard",     element: <AdminDashboard /> },
       { path: "/admin/notices",       element: <NoticeManagement /> },
       { path: "/admin/routes",        element: <RouteManagement /> },
+      { path: "/admin/buses",         element: <BusManagement /> },
       { path: "/admin/notifications", element: <NotificationSender /> },
       { path: "/admin/users",         element: <UserManagement /> },
     ],
