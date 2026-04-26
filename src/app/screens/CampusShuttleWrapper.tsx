@@ -156,8 +156,9 @@ export default function CampusShuttleWrapper() {
     fetchInitial();
 
     // [변경] 폴링 제거 → Supabase Realtime WebSocket 구독
+    // 마운트마다 고유 채널명 사용 (재마운트 시 중복 subscribe 에러 방지)
     const channel = supabase
-      .channel('bus-tracking')
+      .channel(`bus-tracking-${Date.now()}`)
 
       // A) bus_locations INSERT: 새 위치 수신
       .on(
