@@ -39,7 +39,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const start     = `${STOPS[0].lng},${STOPS[0].lat}`;
     const goal      = `${STOPS[4].lng},${STOPS[4].lat}`;
     const waypoints = STOPS.slice(1, 4).map(s => `${s.lng},${s.lat}`).join("|");
-    const url = `https://naveropenapi.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
+    const url = `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
 
     const apiRes = await fetch(url, {
       headers: {
