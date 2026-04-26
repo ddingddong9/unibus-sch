@@ -21,6 +21,7 @@ export interface Notice {
   authorId: string;
   authorName: string;
   imageUrls?: string[];
+  contentBelow?: string;
   createdAt: string;
   updatedAt: string;
 }

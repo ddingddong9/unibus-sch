@@ -15,6 +15,7 @@ export default function NoticeManagement() {
     category: "general" as Notice["category"],
     priority: "medium" as Notice["priority"],
     imageUrls: [] as string[],
+    contentBelow: "",
   });
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -34,7 +35,7 @@ export default function NoticeManagement() {
 
   const handleCreate = () => {
     setEditingNotice(null);
-    setFormData({ title: "", content: "", category: "general", priority: "medium", imageUrls: [] });
+    setFormData({ title: "", content: "", category: "general", priority: "medium", imageUrls: [], contentBelow: "" });
     setShowModal(true);
   };
 
@@ -46,6 +47,7 @@ export default function NoticeManagement() {
       category: notice.category,
       priority: notice.priority,
       imageUrls: notice.imageUrls ?? [],
+      contentBelow: notice.contentBelow ?? "",
     });
     setShowModal(true);
   };
@@ -303,6 +305,17 @@ export default function NoticeManagement() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">이미지 아래 내용</label>
+                <textarea
+                  value={formData.contentBelow}
+                  onChange={(e) => setFormData({ ...formData, contentBelow: e.target.value })}
+                  rows={4}
+                  className="w-full px-4 py-3 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20 resize-none"
+                  placeholder="이미지 아래에 표시될 내용을 입력하세요 (선택)"
+                />
               </div>
             </div>
             <div className="p-6 border-t border-gray-200 flex gap-3 justify-end">
