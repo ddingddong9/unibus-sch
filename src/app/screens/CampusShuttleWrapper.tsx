@@ -137,7 +137,7 @@ export default function CampusShuttleWrapper() {
 
   useEffect(() => {
     fetchBusLocations();
-    const interval = setInterval(fetchBusLocations, 2000);
+    const interval = setInterval(fetchBusLocations, 500);
     return () => clearInterval(interval);
   }, [fetchBusLocations]);
 

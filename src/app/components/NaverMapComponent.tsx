@@ -153,7 +153,7 @@ export default function NaverMapComponent({
     }
 
     const INTERVAL = 16; // ~60fps
-    const DURATION = 1800;
+    const DURATION = 480; // 폴링 500ms보다 약간 짧게 → 겹침 없이 연속 애니메이션
     const totalSteps = Math.round(DURATION / INTERVAL);
     let step = 0;
 

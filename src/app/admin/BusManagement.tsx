@@ -234,12 +234,12 @@ export default function BusManagement() {
           );
           if (atStop) {
             setTestStatus(`${atStop.name} 정류장 정차 중...`);
-            await sleep(5000);
+            await sleep(3000);
           } else {
             const progress = step / route.length;
             const stopIdx = Math.min(Math.floor(progress * (stops.length - 1)), stops.length - 2);
             setTestStatus(`→ ${stops[stopIdx + 1]?.name} 이동 중...`);
-            await sleep(2000);
+            await sleep(1000);
           }
         }
         await stopTestBus(testBusIdRef.current);
