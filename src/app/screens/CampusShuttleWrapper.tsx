@@ -169,8 +169,11 @@ export default function CampusShuttleWrapper() {
           const row = payload.new as any;
           const busId: string = row.bus_id;
 
-          // 활성 버스만 처리
-          if (!activeBusIdsRef.current.has(busId)) return;
+          // activeBusIdsRef에 없으면 → buses 목록 재조회 후 자동 표시
+          if (!activeBusIdsRef.current.has(busId)) {
+            fetchInitial();
+            return;
+          }
 
           // [변경] 해당 bus_id 위치만 교체 (전체 교체 X)
           setBuses(prev => {
