@@ -54,6 +54,8 @@ export interface CreateNoticeRequest {
   content: string;
   category: 'general' | 'route' | 'system' | 'lost';
   priority: 'low' | 'medium' | 'high';
+  imageUrls?: string[];
+  contentBelow?: string;
 }
 
 export interface BusRoute {

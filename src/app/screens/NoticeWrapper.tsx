@@ -21,6 +21,7 @@ export default function NoticeWrapper() {
   const { t, language } = useLanguage();
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
   const [expandedNotice, setExpandedNotice] = useState<string | null>(null);
+  const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -249,9 +250,27 @@ export default function NoticeWrapper() {
                           className="overflow-hidden"
                         >
                           <div className="mt-3 pt-3 border-t border-[#f1f5f9]">
-                            <p className="font-['Public_Sans'] font-normal text-[#475569] text-[14px] leading-[22px]">
+                            <p className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[16px] leading-[26px]">
                               {notice.content}
                             </p>
+                            {notice.imageUrls && notice.imageUrls.length > 0 && (
+                              <div className="grid grid-cols-2 gap-2 mt-3">
+                                {notice.imageUrls.map((url, i) => (
+                                  <img
+                                    key={i}
+                                    src={url}
+                                    alt={`공지 이미지 ${i + 1}`}
+                                    className="w-full rounded-lg object-cover border border-[#e2e8f0] cursor-pointer active:scale-95 transition-transform"
+                                    onClick={(e) => { e.stopPropagation(); setLightboxImage(url); }}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                            {notice.contentBelow && (
+                              <p className="font-['Public_Sans'] font-normal text-[#475569] text-[14px] leading-[22px] mt-3">
+                                {notice.contentBelow}
+                              </p>
+                            )}
                           </div>
                         </motion.div>
                       )}
@@ -277,6 +296,37 @@ export default function NoticeWrapper() {
           )}
         </div>
       </div>
+
+      {/* Lightbox */}
+      <AnimatePresence>
+        {lightboxImage && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
+            onClick={() => setLightboxImage(null)}
+          >
+            <motion.img
+              initial={{ scale: 0.85 }}
+              animate={{ scale: 1 }}
+              exit={{ scale: 0.85 }}
+              src={lightboxImage}
+              alt="확대 이미지"
+              className="max-w-full max-h-full rounded-lg object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <button
+              className="absolute top-4 right-4 text-white bg-black/50 rounded-full p-2"
+              onClick={() => setLightboxImage(null)}
+            >
+              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Bottom Navigation */}
       <BottomNav />

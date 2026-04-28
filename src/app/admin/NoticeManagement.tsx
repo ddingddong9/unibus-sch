@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, Search } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { Plus, Edit, Trash2, Search, ImagePlus, X } from "lucide-react";
 import AdminLayout from "./AdminLayout";
 import { api } from "../services/api";
 import type { Notice } from "../types";
@@ -14,7 +14,11 @@ export default function NoticeManagement() {
     content: "",
     category: "general" as Notice["category"],
     priority: "medium" as Notice["priority"],
+    imageUrls: [] as string[],
+    contentBelow: "",
   });
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     loadNotices();
@@ -31,7 +35,7 @@ export default function NoticeManagement() {
 
   const handleCreate = () => {
     setEditingNotice(null);
-    setFormData({ title: "", content: "", category: "general", priority: "medium" });
+    setFormData({ title: "", content: "", category: "general", priority: "medium", imageUrls: [], contentBelow: "" });
     setShowModal(true);
   };
 
@@ -42,8 +46,32 @@ export default function NoticeManagement() {
       content: notice.content,
       category: notice.category,
       priority: notice.priority,
+      imageUrls: notice.imageUrls ?? [],
+      contentBelow: notice.contentBelow ?? "",
     });
     setShowModal(true);
+  };
+
+  const handleImageSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    setIsUploading(true);
+    try {
+      const uploaded = await Promise.all(files.map(f => api.uploadNoticeImage(f)));
+      setFormData(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...uploaded] }));
+    } catch (error) {
+      alert("이미지 업로드 실패. 다시 시도해주세요.");
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  const handleRemoveImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      imageUrls: prev.imageUrls.filter((_, i) => i !== index),
+    }));
   };
 
   const handleSave = async () => {
@@ -235,6 +263,58 @@ export default function NoticeManagement() {
                   rows={8}
                   className="w-full px-4 py-3 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20 resize-none"
                   placeholder="공지사항 내용을 입력하세요"
+                />
+              </div>
+
+              <div>
+                <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">이미지</label>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploading}
+                  className="flex items-center gap-2 px-4 py-2.5 border border-dashed border-[#cbd5e1] rounded-lg text-[#64748b] hover:border-[#1e3b8a] hover:text-[#1e3b8a] transition-colors font-['Public_Sans'] text-[14px] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ImagePlus className="w-4 h-4" />
+                  {isUploading ? "업로드 중..." : "이미지 추가"}
+                </button>
+                {formData.imageUrls.length > 0 && (
+                  <div className="grid grid-cols-3 gap-3 mt-3">
+                    {formData.imageUrls.map((url, i) => (
+                      <div key={i} className="relative group aspect-square">
+                        <img
+                          src={url}
+                          alt={`이미지 ${i + 1}`}
+                          className="w-full h-full object-cover rounded-lg border border-[#e2e8f0]"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveImage(i)}
+                          className="absolute top-1 right-1 bg-black/60 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">이미지 아래 내용</label>
+                <textarea
+                  value={formData.contentBelow}
+                  onChange={(e) => setFormData({ ...formData, contentBelow: e.target.value })}
+                  rows={4}
+                  className="w-full px-4 py-3 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20 resize-none"
+                  placeholder="이미지 아래에 표시될 내용을 입력하세요 (선택)"
                 />
               </div>
             </div>
