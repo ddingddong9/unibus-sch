@@ -384,7 +384,7 @@ routes.post("/:id/stops", requireAdmin, async (c) => {
     }
 
     console.log(`✅ Stop added to route: ${routeId}`);
-    return c.json({ success: true, data: newStop }, 201); // 201은 생성 성공(Created) 상태 코드
+    return c.json({ success: true, data: newStop }, 201);
 
   } catch (error: any) {
     console.error("❌ Add stop exception:", error);
