@@ -188,6 +188,8 @@ buses.post("/", requireAdmin, async (c) => {
 buses.post("/:id/location", requireDriver, async (c) => {
   try {
     const busId = c.req.param("id");
+    const userId = c.get('userId');
+    const userRole = c.get('userRole');
     const { lat, lng, speed, heading } = await c.req.json();
 
     if (lat === undefined || lng === undefined) {
@@ -203,6 +205,21 @@ buses.post("/:id/location", requireDriver, async (c) => {
 
     if (!bus) {
       return c.json({ success: false, error: "Bus not found" }, 404);
+    }
+
+    // 위치 위조 방지
+    if (userRole === 'driver') {
+      const { data: ownedBus, error: ownedBusError } = await db
+        .from('buses')
+        .select('id')
+        .eq('id', busId)
+        .eq('current_driver_id', userId)
+        .eq('is_running', true)
+        .single();
+
+      if (ownedBusError || !ownedBus) {
+        return c.json({ success: false, error: "Forbidden: You can only update your currently assigned bus location" }, 403);
+      }
     }
 
     // 위치 추가
