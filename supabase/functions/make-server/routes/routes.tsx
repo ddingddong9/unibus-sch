@@ -318,4 +318,78 @@ routes.delete("/:id", requireAdmin, async (c) => {
   }
 });
 
+// 정류장 조회
+routes.get("/:id/stops", async (c) => {
+  try {
+    const id = c.req.param("id");
+
+    // route_stops 테이블에서 해당 노선 정류장 가져오기
+    const { data: stops, error } = await db
+      .from('route_stops')
+      .select('*')
+      .eq('route_id', id)
+      .order('stop_order');
+
+    if (error) {
+      console.error("❌ Get stops error:", error);
+      return c.json({ success: false, error: "Failed to fetch stops" }, 500);
+    }
+
+    const formattedStops = stops.map(stop => ({
+      id: stop.id,
+      name: stop.stop_name,
+      order: stop.stop_order,
+      lat: stop.latitude,
+      lng: stop.longitude,
+      arrivalTime: stop.arrival_time,
+    }));
+
+    console.log(`✅ Fetched stops for route: ${id}`);
+    return c.json({ success: true, data: formattedStops });
+
+  } catch (error: any) {
+    console.error("❌ Get stops exception:", error);
+    return c.json({ success: false, error: "Server error" }, 500);
+  }
+});
+
+// 정류장 추가
+routes.post("/:id/stops", requireAdmin, async (c) => {
+  try {
+    const routeId = c.req.param("id");
+    const body = await c.req.json();
+
+    if (!body.name || !body.lat || !body.lng) {
+      return c.json({ success: false, error: "Missing required fields (name, lat, lng)" }, 400);
+    }
+
+    const newStopData = {
+      route_id: routeId,
+      stop_name: body.name,
+      stop_order: body.order, 
+      latitude: body.lat,
+      longitude: body.lng,
+      arrival_time: body.arrivalTime || null,
+    };
+
+    const { data: newStop, error } = await db
+      .from('route_stops')
+      .insert(newStopData)
+      .select() 
+      .single();
+
+    if (error) {
+      console.error("❌ Add stop error:", error);
+      return c.json({ success: false, error: "Failed to add stop" }, 500);
+    }
+
+    console.log(`✅ Stop added to route: ${routeId}`);
+    return c.json({ success: true, data: newStop }, 201); // 201은 생성 성공(Created) 상태 코드
+
+  } catch (error: any) {
+    console.error("❌ Add stop exception:", error);
+    return c.json({ success: false, error: "Server error" }, 500);
+  }
+});
+
 export default routes;
