@@ -53,9 +53,7 @@ export default function LoginWrapper() {
     try {
       const result = await api.login(email, password);
       login(result.token, result.user);
-      if (result.user.role === 'admin') {
-        navigate("/admin/dashboard");
-      } else if (result.user.role === 'driver') {
+      if (result.user.role === 'driver') {
         navigate("/driver");
       } else {
         navigate("/home");
