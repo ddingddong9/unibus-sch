@@ -75,6 +75,13 @@ class ApiClient {
           status: response.status,
           error: data.error || data.message
         });
+
+        if (response.status === 401) {
+          this.setToken(null);
+          localStorage.removeItem('user');
+          window.dispatchEvent(new Event('auth:expired'));
+        }
+
         throw new Error(data.error || data.message || `HTTP ${response.status}`);
       }
 
