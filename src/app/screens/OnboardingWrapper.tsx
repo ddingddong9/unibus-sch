@@ -27,11 +27,7 @@ export default function OnboardingWrapper() {
   ];
 
   const handleNext = () => {
-    if (currentSlide < slides.length - 1) {
-      setCurrentSlide(currentSlide + 1);
-    } else {
-      navigate("/login");
-    }
+    navigate("/signup");
   };
 
   const handleSkip = () => {
@@ -52,24 +48,19 @@ export default function OnboardingWrapper() {
 
       {/* Content */}
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-[320px]">
-        {/* Icon */}
         <div className={`bg-gradient-to-br ${slides[currentSlide].color} rounded-[32px] size-[160px] flex items-center justify-center mb-8 shadow-lg`}>
           <span className="text-[80px]">{slides[currentSlide].icon}</span>
         </div>
-
-        {/* Title */}
         <h1 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[28px] leading-[35px] text-center mb-4 tracking-[-0.7px]">
           {slides[currentSlide].title}
         </h1>
-
-        {/* Description */}
         <p className="font-['Public_Sans'] font-normal text-[#64748b] text-[16px] leading-[24px] text-center">
           {slides[currentSlide].description}
         </p>
       </div>
 
       {/* Bottom Section */}
-      <div className="w-full space-y-6 pb-[24px]">
+      <div className="w-full space-y-4 pb-[24px]">
         {/* Pagination Dots */}
         <div className="flex justify-center gap-2">
           {slides.map((_, index) => (
@@ -85,16 +76,27 @@ export default function OnboardingWrapper() {
           ))}
         </div>
 
-        {/* Next/Get Started Button */}
+        {/* Next / 회원가입 버튼 */}
         <button
           onClick={handleNext}
           className="w-full bg-[#1e3a8a] h-[56px] rounded-[12px] font-['Public_Sans'] font-bold text-white text-[16px] shadow-[0px_10px_15px_-3px_rgba(30,59,138,0.2),0px_4px_6px_-4px_rgba(30,59,138,0.2)] hover:bg-[#1e3a8a]/90 active:scale-[0.98] transition-all flex items-center justify-center gap-2"
         >
-          <span>{currentSlide < slides.length - 1 ? "Next" : "Get Started"}</span>
+          <span>회원가입하러 가기</span>
           <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
           </svg>
         </button>
+
+        {/* 로그인 링크 */}
+        <p className="text-center font-['Public_Sans'] text-[#94a3b8] text-[13px]">
+          이미 회원이신가요?{" "}
+          <button
+            onClick={() => navigate("/login")}
+            className="text-[#1e3a8a] font-semibold hover:underline"
+          >
+            로그인 하러가기
+          </button>
+        </p>
       </div>
     </div>
   );
