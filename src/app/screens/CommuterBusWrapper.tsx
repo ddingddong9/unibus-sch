@@ -20,7 +20,7 @@ const getColor = (color?: string) => color || "#1e3a8a";
 export default function CommuterBusWrapper() {
   const navigate = useNavigate();
   const { t, language } = useLanguage();
-  const [selectedRegion, setSelectedRegion] = useState<string>("all");
+  const [selectedRegion, setSelectedRegion] = useState<string>("to-school");
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
   const [routes, setRoutes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -43,12 +43,13 @@ export default function CommuterBusWrapper() {
     fetchRoutes();
   }, []);
 
-  // 유니크 지역 목록 (region 필드 기반)
-  const regions = ["all", ...Array.from(new Set(routes.map((r) => r.region).filter(Boolean)))];
+  const regions = ["to-school", "from-school", ...Array.from(new Set(routes.map((r) => r.region).filter(Boolean)))];
 
   const filteredRoutes =
-    selectedRegion === "all"
-      ? routes
+    selectedRegion === "to-school"
+      ? routes.filter((r) => r.name?.includes("[출발]"))
+      : selectedRegion === "from-school"
+      ? routes.filter((r) => r.name?.includes("[도착]"))
       : routes.filter((r) => r.region === selectedRegion);
 
   return (
@@ -93,7 +94,11 @@ export default function CommuterBusWrapper() {
                     : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
                 }`}
               >
-                {region === "all" ? t("전체 지역", "All Regions") : region}
+                {region === "to-school"
+                  ? t("등교", "To School")
+                  : region === "from-school"
+                  ? t("하교", "From School")
+                  : region}
               </button>
             ))}
           </div>
@@ -309,8 +314,10 @@ export default function CommuterBusWrapper() {
                 {t("노선을 찾을 수 없습니다", "No routes found")}
               </p>
               <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[14px] text-center">
-                {selectedRegion === "all"
-                  ? t("등록된 통근버스 노선이 없습니다", "No commuter routes registered")
+                {selectedRegion === "to-school"
+                  ? t("등교 노선이 없습니다", "No to-school routes")
+                  : selectedRegion === "from-school"
+                  ? t("하교 노선이 없습니다", "No from-school routes")
                   : t(`${selectedRegion} 지역 노선이 없습니다`, `No routes in ${selectedRegion}`)}
               </p>
             </div>
