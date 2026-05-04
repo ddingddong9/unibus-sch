@@ -97,7 +97,7 @@ export default function SignUpWrapper() {
           </button>
 
           <div className="flex flex-col font-['Public_Sans'] font-bold h-[23px] justify-center leading-[0] text-[#0f172a] text-[18px] text-center tracking-[-0.27px]">
-            <p className="leading-[22.5px]">Sign Up</p>
+            <p className="leading-[22.5px]">회원가입</p>
           </div>
 
           <div className="w-[40px]" />
@@ -119,10 +119,10 @@ export default function SignUpWrapper() {
           </div>
 
           <h1 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[28px] tracking-[-0.7px] leading-[35px] mb-2">
-            Create Account
+            계정 만들기
           </h1>
           <p className="font-['Public_Sans'] font-normal text-[#64748b] text-[16px] leading-[24px]">
-            Join SCH University shuttle service
+            순천향대학교 셔틀버스 서비스에 가입하세요
           </p>
         </div>
 
@@ -130,13 +130,13 @@ export default function SignUpWrapper() {
         <div className="space-y-4 mb-6">
           <div>
             <label className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] leading-[21px] block mb-2">
-              Full Name
+              이름
             </label>
             <input
               type="text"
               value={formData.name}
               onChange={(e) => handleChange("name", e.target.value)}
-              placeholder="Enter your full name"
+              placeholder="이름을 입력하세요"
               className={`w-full h-[56px] px-4 bg-white border rounded-[8px] font-['Public_Sans'] text-[16px] text-[#0f172a] placeholder:text-[#94a3b8] focus:outline-none focus:ring-2 transition-all ${
                 errors.name
                   ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
@@ -150,13 +150,13 @@ export default function SignUpWrapper() {
 
           <div>
             <label className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] leading-[21px] block mb-2">
-              Student ID
+              학번
             </label>
             <input
               type="text"
               value={formData.studentId}
               onChange={(e) => handleChange("studentId", e.target.value)}
-              placeholder="Enter your student ID"
+              placeholder="학번을 입력하세요"
               className={`w-full h-[56px] px-4 bg-white border rounded-[8px] font-['Public_Sans'] text-[16px] text-[#0f172a] placeholder:text-[#94a3b8] focus:outline-none focus:ring-2 transition-all ${
                 errors.studentId
                   ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
@@ -170,7 +170,7 @@ export default function SignUpWrapper() {
 
           <div>
             <label className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] leading-[21px] block mb-2">
-              Email
+              이메일
             </label>
             <input
               type="email"
@@ -190,13 +190,13 @@ export default function SignUpWrapper() {
 
           <div>
             <label className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] leading-[21px] block mb-2">
-              Password
+              비밀번호
             </label>
             <input
               type="password"
               value={formData.password}
               onChange={(e) => handleChange("password", e.target.value)}
-              placeholder="Create a password"
+              placeholder="비밀번호를 입력하세요"
               className={`w-full h-[56px] px-4 bg-white border rounded-[8px] font-['Public_Sans'] text-[16px] text-[#0f172a] placeholder:text-[#94a3b8] focus:outline-none focus:ring-2 transition-all ${
                 errors.password
                   ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
@@ -210,13 +210,13 @@ export default function SignUpWrapper() {
 
           <div>
             <label className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] leading-[21px] block mb-2">
-              Confirm Password
+              비밀번호 확인
             </label>
             <input
               type="password"
               value={formData.confirmPassword}
               onChange={(e) => handleChange("confirmPassword", e.target.value)}
-              placeholder="Confirm your password"
+              placeholder="비밀번호를 다시 입력하세요"
               className={`w-full h-[56px] px-4 bg-white border rounded-[8px] font-['Public_Sans'] text-[16px] text-[#0f172a] placeholder:text-[#94a3b8] focus:outline-none focus:ring-2 transition-all ${
                 errors.confirmPassword
                   ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
@@ -234,19 +234,19 @@ export default function SignUpWrapper() {
           onClick={handleSubmit}
           className="w-full bg-[#1e3a8a] h-[56px] rounded-[12px] font-['Public_Sans'] font-bold text-white text-[16px] shadow-[0px_10px_15px_-3px_rgba(30,59,138,0.2),0px_4px_6px_-4px_rgba(30,59,138,0.2)] hover:bg-[#1e3a8a]/90 active:scale-[0.98] transition-all mb-4"
         >
-          {loading ? "Loading..." : "Submit"}
+          {loading ? "처리 중..." : "회원가입"}
         </button>
 
         {/* Login Link */}
         <div className="flex gap-1 items-center justify-center">
           <p className="font-['Public_Sans'] font-normal text-[#475569] text-[14px] leading-[20px]">
-            Already have an account?
+            이미 계정이 있으신가요?
           </p>
           <button
             onClick={() => navigate("/login")}
             className="font-['Public_Sans'] font-bold text-[#0f172a] text-[14px] leading-[20px] hover:text-[#1e3b8a] transition-colors"
           >
-            Login
+            로그인
           </button>
         </div>
       </div>
