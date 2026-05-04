@@ -18,8 +18,8 @@ interface BusRoute {
 }
 
 const DEFAULT_COLORS = [
-  "#1e3a8a", "#3b82f6", "#10b981", "#f59e0b",
-  "#8b5cf6", "#ec4899", "#ef4444", "#0ea5e9",
+  "#FFB3C6", "#FFC8A2", "#FDEEA3",
+  "#B8F0B8", "#A8D8EA", "#C5A3D5", "#FFCCE7",
 ];
 
 export default function RouteManagement() {
