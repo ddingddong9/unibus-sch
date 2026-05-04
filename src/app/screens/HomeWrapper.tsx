@@ -1,10 +1,39 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import svgPaths from "../../imports/svg-odbnwpa57u";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import { HomeSkeleton } from "../components/SkeletonLoaders";
+import { api } from "../services/api";
+
+// 학내 순환 정류장 목록
+const CAMPUS_STOPS = [
+  { id: "rear-gate", nameKo: "후문",   lat: 36.772760, lng: 126.933816 },
+  { id: "hyang3",    nameKo: "향3",    lat: 36.768228, lng: 126.935383 },
+  { id: "hyang1",    nameKo: "향1",    lat: 36.767905, lng: 126.932505 },
+  { id: "library",   nameKo: "도서관", lat: 36.768856, lng: 126.930700 },
+  { id: "main-gate", nameKo: "정문",   lat: 36.769014, lng: 126.927978 },
+];
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// 캠퍼스 평균 속도 15km/h = 0.25km/min
+function getArrivalMinutes(stopLat: number, stopLng: number, buses: { lat: number; lng: number }[]) {
+  if (buses.length === 0) return null;
+  const minDist = Math.min(...buses.map(b => haversineKm(b.lat, b.lng, stopLat, stopLng)));
+  return Math.max(1, Math.round(minDist / 0.25));
+}
 
 const fadeUp = {
   hidden: { opacity: 0, y: 20 },
@@ -35,24 +64,68 @@ const listItem = {
 export default function HomeWrapper() {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const [nextArrival, setNextArrival] = useState(4);
+  const [nextArrival, setNextArrival] = useState<number | null>(null);
+  const [nearestStop, setNearestStop] = useState<string>("--");
   const [notifications] = useState(3);
   const [loading, setLoading] = useState(true);
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [activeBuses, setActiveBuses] = useState<{ lat: number; lng: number }[]>([]);
 
   const imgStylizedMapShowingCampusRoads = "";
 
-  // Simulate initial data fetch – gives skeleton a chance to display
+  // 사용자 GPS 위치 → 가장 가까운 정류장 계산
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 700);
-    return () => clearTimeout(timer);
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(
+      pos => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => {} // 권한 거부 시 무시
+    );
   }, []);
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      setNextArrival((prev) => (prev <= 1 ? 12 : prev - 1));
-    }, 60000);
-    return () => clearInterval(interval);
+    if (!userLocation) return;
+    let nearest = CAMPUS_STOPS[0];
+    let minDist = Infinity;
+    CAMPUS_STOPS.forEach(stop => {
+      const d = haversineKm(userLocation.lat, userLocation.lng, stop.lat, stop.lng);
+      if (d < minDist) { minDist = d; nearest = stop; }
+    });
+    setNearestStop(nearest.nameKo);
+  }, [userLocation]);
+
+  // 활성 버스 위치 fetch → 가장 가까운 정류장 도착 예정 시간 계산
+  const fetchBuses = useCallback(async () => {
+    try {
+      const [allBuses, locations] = await Promise.all([
+        api.getBuses(),
+        api.getBusLocations(),
+      ]);
+      const activeIds = new Set(
+        allBuses.filter((b: any) => b.status === 'active').map((b: any) => b.id)
+      );
+      const buses = locations
+        .filter((l: any) => activeIds.has(l.busId))
+        .map((l: any) => ({ lat: l.lat, lng: l.lng }));
+      setActiveBuses(buses);
+    } catch {
+      // 실패 시 유지
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchBuses();
+    const interval = setInterval(fetchBuses, 30000);
+    return () => clearInterval(interval);
+  }, [fetchBuses]);
+
+  // 버스 위치 + 가장 가까운 정류장 기반 도착 예정 시간 갱신
+  useEffect(() => {
+    const target = CAMPUS_STOPS.find(s => s.nameKo === nearestStop) ?? CAMPUS_STOPS[4];
+    const mins = getArrivalMinutes(target.lat, target.lng, activeBuses);
+    setNextArrival(mins);
+  }, [activeBuses, nearestStop]);
 
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-start relative size-full">
@@ -198,7 +271,7 @@ export default function HomeWrapper() {
                         </div>
 
                         <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[20px] text-white w-full">
-                          <p className="leading-[28px]">{t("공과대학 1호관", "Engineering Bldg. 1")}</p>
+                          <p className="leading-[28px]">{nearestStop}</p>
                         </div>
 
                         <div className="content-stretch flex items-end justify-between pt-[12px] relative shrink-0 w-full">
@@ -208,16 +281,18 @@ export default function HomeWrapper() {
                             </div>
                             <div className="flex items-baseline gap-1">
                               <motion.span
-                                key={nextArrival}
+                                key={nextArrival ?? 'null'}
                                 initial={{ opacity: 0, y: -8 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 className="font-['Public_Sans'] font-black text-[30px] text-white leading-[36px]"
                               >
-                                {nextArrival}
+                                {nextArrival ?? "--"}
                               </motion.span>
-                              <span className="font-['Public_Sans'] font-bold text-[18px] text-white leading-[28px]">
-                                {t("분", "mins")}
-                              </span>
+                              {nextArrival !== null && (
+                                <span className="font-['Public_Sans'] font-bold text-[18px] text-white leading-[28px]">
+                                  {t("분", "mins")}
+                                </span>
+                              )}
                             </div>
                           </div>
 
