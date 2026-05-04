@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, Navigate } from "react-router";
 import { motion } from "framer-motion";
 import svgPaths from "../../imports/svg-9blebrmjt8";
 import { useLanguage } from "../contexts/LanguageContext";
@@ -27,7 +27,7 @@ const item = {
 export default function LoginWrapper() {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -38,6 +38,10 @@ export default function LoginWrapper() {
   useEffect(() => {
     kakaoService.init().catch(() => {});
   }, []);
+
+  if (!isLoading && isAuthenticated) {
+    return <Navigate to="/home" replace />;
+  }
 
   const handleLogin = async () => {
     setError("");

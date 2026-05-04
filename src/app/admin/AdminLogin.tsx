@@ -1,16 +1,20 @@
 import { useState } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, Navigate } from "react-router";
 import { Lock } from "lucide-react";
 import { api } from "../services/api";
 import { useAuth } from "../contexts/AuthContext";
 
 export default function AdminLogin() {
   const navigate = useNavigate();
-  const { login } = useAuth();
+  const { login, isAuthenticated, isLoading: isAuthLoading, isAdmin } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+
+  if (!isAuthLoading && isAuthenticated && isAdmin) {
+    return <Navigate to="/admin/dashboard" replace />;
+  }
 
   const handleLogin = async () => {
     setError("");

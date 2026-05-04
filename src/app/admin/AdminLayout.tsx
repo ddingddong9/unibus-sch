@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, Bus, Bell, LogOut, Users } from "lucide-react";
+import { LayoutDashboard, FileText, Bus, Bell, LogOut, Users, Home } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
 
 interface AdminLayoutProps {
   children: ReactNode;
@@ -9,11 +10,17 @@ interface AdminLayoutProps {
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const navigate = useNavigate();
   const location = useLocation();
+  const { logout } = useAuth();
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (confirm("로그아웃 하시겠습니까?")) {
+      await logout();
       navigate("/admin/login");
     }
+  };
+
+  const handleGoToUserPage = () => {
+    navigate("/home");
   };
 
   const menuItems = [
@@ -66,8 +73,29 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </ul>
         </nav>
 
-        {/* Logout */}
-        <div className="p-4 border-t border-gray-200">
+        {/* User Page & Logout */}
+        <div className="p-4 border-t border-gray-200 space-y-2">
+          <button
+            onClick={handleGoToUserPage}
+            className="w-full flex items-center justify-between p-4 bg-[#1e3a8a]/5 border border-[#1e3a8a]/20 rounded-[12px] hover:bg-[#1e3a8a]/10 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="bg-[#1e3a8a] rounded-[8px] size-[40px] flex items-center justify-center shrink-0">
+                <Home className="w-5 h-5 text-white" />
+              </div>
+              <div className="text-left">
+                <p className="font-['Public_Sans'] font-semibold text-[#1e3a8a] text-[13px] leading-[18px]">
+                  사용자 페이지로
+                </p>
+                <p className="font-['Public_Sans'] font-normal text-[#64748b] text-[11px] leading-[16px]">
+                  일반 홈 화면으로 이동
+                </p>
+              </div>
+            </div>
+            <svg className="w-4 h-4 text-[#1e3a8a] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </button>
           <button
             onClick={handleLogout}
             className="w-full flex items-center gap-3 px-4 py-3 rounded-lg font-['Public_Sans'] text-[14px] text-[#64748b] hover:bg-gray-100 hover:text-red-600 transition-colors"
