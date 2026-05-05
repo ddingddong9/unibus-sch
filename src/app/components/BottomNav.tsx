@@ -29,45 +29,36 @@ export default function BottomNav() {
           </div>
         </button>
 
-        {/* Bus */}
+        {/* 순환버스 */}
         <button
           onClick={() => navigate("/campus-shuttle")}
           className="flex flex-col gap-[4px] items-center relative"
         >
           <div className="h-[20.583px] relative shrink-0 w-[17.333px]">
             <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 17.3333 20.5833">
-              <path d={svgPaths.p5662500} fill={isActive("/campus-shuttle") || isActive("/commuter-bus") ? "#1E3A8A" : "#94A3B8"} />
+              <path d={svgPaths.p5662500} fill={isActive("/campus-shuttle") ? "#1E3A8A" : "#94A3B8"} />
             </svg>
           </div>
-          <div className={`flex flex-col font-['Public_Sans'] ${isActive("/campus-shuttle") || isActive("/commuter-bus") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
-            <p className="leading-[16.5px]" style={{ color: isActive("/campus-shuttle") || isActive("/commuter-bus") ? "#1E3A8A" : "#94A3B8" }}>
-              {t("버스", "Bus")}
+          <div className={`flex flex-col font-['Public_Sans'] ${isActive("/campus-shuttle") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
+            <p className="leading-[16.5px]" style={{ color: isActive("/campus-shuttle") ? "#1E3A8A" : "#94A3B8" }}>
+              {t("순환버스", "Shuttle")}
             </p>
           </div>
         </button>
 
-        {/* QR Scanner */}
+        {/* 통학버스 */}
         <button
-          onClick={() => navigate("/qr-scanner")}
+          onClick={() => navigate("/commuter-bus")}
           className="flex flex-col gap-[4px] items-center relative"
         >
-          <div className="h-[18px] relative shrink-0 w-[48px]">
-            <div className={`absolute content-stretch flex items-center justify-center left-0 rounded-[9999px] size-[48px] top-[-32px] transition-all ${
-              isActive("/qr-scanner") ? "bg-[#1e3a8a]" : "bg-[#e2e8f0]"
-            }`}>
-              {isActive("/qr-scanner") && (
-                <div className="-translate-x-1/2 absolute bg-[rgba(255,255,255,0)] left-1/2 rounded-[9999px] shadow-[0px_10px_15px_-3px_rgba(30,58,138,0.3),0px_4px_6px_-4px_rgba(30,58,138,0.3)] size-[48px] top-0" />
-              )}
-              <div className="relative shrink-0 size-[23.333px]">
-                <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 23.3333 23.3333">
-                  <path d={svgPaths.p27226100} fill={isActive("/qr-scanner") ? "white" : "#94A3B8"} />
-                </svg>
-              </div>
-            </div>
+          <div className="h-[20.583px] relative shrink-0 w-[17.333px]">
+            <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 17.3333 20.5833">
+              <path d={svgPaths.p5662500} fill={isActive("/commuter-bus") ? "#1E3A8A" : "#94A3B8"} />
+            </svg>
           </div>
-          <div className={`flex flex-col font-['Public_Sans'] ${isActive("/qr-scanner") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
-            <p className="leading-[16.5px]" style={{ color: isActive("/qr-scanner") ? "#1E3A8A" : "#94A3B8" }}>
-              QR
+          <div className={`flex flex-col font-['Public_Sans'] ${isActive("/commuter-bus") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
+            <p className="leading-[16.5px]" style={{ color: isActive("/commuter-bus") ? "#1E3A8A" : "#94A3B8" }}>
+              {t("통학버스", "Commuter")}
             </p>
           </div>
         </button>

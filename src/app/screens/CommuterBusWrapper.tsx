@@ -55,8 +55,7 @@ export default function CommuterBusWrapper() {
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
       <div
-        className="bg-white content-stretch flex flex-col items-start max-w-[430px] overflow-auto pb-[94px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full"
-        style={{ minHeight: "100dvh" }}
+        className="bg-white content-stretch flex flex-col items-start max-w-[430px] overflow-y-auto pb-[120px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] w-full h-full"
       >
         {/* Header */}
         <div className="sticky top-0 z-30 w-full pt-safe">
@@ -212,6 +211,12 @@ export default function CommuterBusWrapper() {
                             {route.schedule}
                           </p>
                         )}
+
+                        {route.description && (
+                          <p className="font-['Public_Sans'] text-[#64748b] text-[12px] leading-[18px] mt-1">
+                            {route.description}
+                          </p>
+                        )}
                       </div>
 
                       <svg
@@ -256,13 +261,7 @@ export default function CommuterBusWrapper() {
                                   )}
                                 </div>
                                 <div className="flex-1 py-1">
-                                  <p
-                                    className={`font-['Public_Sans'] text-[14px] leading-[20px] ${
-                                      index === 0 || index === stopNames.length - 1
-                                        ? "font-bold text-[#0f172a]"
-                                        : "font-normal text-[#64748b]"
-                                    }`}
-                                  >
+                                  <p className="font-['Public_Sans'] text-[14px] leading-[20px] font-semibold text-[#0f172a]">
                                     {stop}
                                   </p>
                                 </div>

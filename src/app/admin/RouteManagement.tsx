@@ -7,7 +7,7 @@ interface BusRoute {
   id: string;
   name: string;
   type: "campus" | "commuter";
-  description?: string;
+  description?: string | null;
   color?: string;
   region?: string;
   schedule?: string;
@@ -107,7 +107,7 @@ export default function RouteManagement() {
       const payload = {
         name: formData.name.trim(),
         type: formData.type,
-        description: formData.description || undefined,
+        description: formData.description || null,
         color: formData.color,
         region: formData.region || undefined,
         schedule: formData.schedule || undefined,
