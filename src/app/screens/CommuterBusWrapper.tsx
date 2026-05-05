@@ -212,6 +212,12 @@ export default function CommuterBusWrapper() {
                             {route.schedule}
                           </p>
                         )}
+
+                        {route.description && (
+                          <p className="font-['Public_Sans'] text-[#64748b] text-[12px] leading-[18px] mt-1">
+                            {route.description}
+                          </p>
+                        )}
                       </div>
 
                       <svg
@@ -256,13 +262,7 @@ export default function CommuterBusWrapper() {
                                   )}
                                 </div>
                                 <div className="flex-1 py-1">
-                                  <p
-                                    className={`font-['Public_Sans'] text-[14px] leading-[20px] ${
-                                      index === 0 || index === stopNames.length - 1
-                                        ? "font-bold text-[#0f172a]"
-                                        : "font-normal text-[#64748b]"
-                                    }`}
-                                  >
+                                  <p className="font-['Public_Sans'] text-[14px] leading-[20px] font-semibold text-[#0f172a]">
                                     {stop}
                                   </p>
                                 </div>
