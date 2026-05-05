@@ -7,7 +7,7 @@ interface BusRoute {
   id: string;
   name: string;
   type: "campus" | "commuter";
-  description?: string;
+  description?: string | null;
   color?: string;
   region?: string;
   schedule?: string;

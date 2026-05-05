@@ -30,7 +30,7 @@ export interface BusRoute {
   id: string;
   name: string;
   type: 'campus' | 'commuter';
-  description?: string;
+  description?: string | null;
   color?: string;
   region?: string;
   schedule?: string;   // 콤마로 구분된 시간 "06:30, 07:30"
