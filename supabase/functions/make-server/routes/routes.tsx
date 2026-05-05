@@ -156,8 +156,8 @@ routes.post("/", requireAdmin, async (c) => {
         route_id: route.id,
         stop_name: stop.name,
         stop_order: stop.order || index + 1,
-        latitude: stop.lat,
-        longitude: stop.lng,
+        latitude: stop.lat ?? null,
+        longitude: stop.lng ?? null,
         arrival_time: stop.arrivalTime || null,
       }));
 
@@ -167,7 +167,7 @@ routes.post("/", requireAdmin, async (c) => {
 
       if (stopsError) {
         console.error("❌ Stops creation error:", stopsError);
-        // 노선 생성은 성공했지만 정류장 추가 실패
+        return c.json({ success: false, error: "정류장 추가 실패: " + stopsError.message }, 500);
       }
     }
 
@@ -199,7 +199,7 @@ routes.post("/", requireAdmin, async (c) => {
 routes.put("/:id", requireAdmin, async (c) => {
   try {
     const id = c.req.param("id");
-    const { name, description, color, isActive, region, schedule, duration, fare, stops } = await c.req.json();
+    const { name, type, description, color, isActive, region, schedule, duration, fare, stops } = await c.req.json();
 
     // 노선 존재 여부 확인
     const { data: existingRoute } = await db
@@ -215,6 +215,7 @@ routes.put("/:id", requireAdmin, async (c) => {
     // 노선 수정
     const dbUpdates: any = {};
     if (name) dbUpdates.name = name;
+    if (type) dbUpdates.type = type;
     if (description !== undefined) dbUpdates.description = description;
     if (color) dbUpdates.color = color;
     if (isActive !== undefined) dbUpdates.is_active = isActive;
@@ -248,14 +249,19 @@ routes.put("/:id", requireAdmin, async (c) => {
         route_id: id,
         stop_name: stop.name,
         stop_order: stop.order || index + 1,
-        latitude: stop.lat,
-        longitude: stop.lng,
+        latitude: stop.lat ?? null,
+        longitude: stop.lng ?? null,
         arrival_time: stop.arrivalTime || null,
       }));
 
-      await db
+      const { error: stopsInsertError } = await db
         .from('route_stops')
         .insert(stopsData);
+
+      if (stopsInsertError) {
+        console.error("❌ Stops update error:", stopsInsertError);
+        return c.json({ success: false, error: "정류장 저장 실패: " + stopsInsertError.message }, 500);
+      }
     }
 
     console.log(`✅ Route updated: ${id}`);
