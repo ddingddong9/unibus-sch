@@ -364,7 +364,7 @@ export default function NaverMapComponent({
     scriptLoadedRef.current = true;
 
     const script = document.createElement("script");
-    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}`;
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
     script.async = true;
     script.onload = () => { if (window.naver?.maps) initializeMap(); };
     script.onerror = () => console.error("네이버 지도 API 로드 실패. Client ID를 확인하세요.");

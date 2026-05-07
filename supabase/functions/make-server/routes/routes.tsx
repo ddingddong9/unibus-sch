@@ -64,6 +64,65 @@ routes.get("/", async (c) => {
   }
 });
 
+// Get route map path — geocode stops without coordinates, return markers + polyline
+routes.get("/:id/path", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const clientId  = Deno.env.get("NAVER_CLIENT_ID");
+    const secretKey = Deno.env.get("NAVER_SECRET_KEY");
+
+    const { data: stops, error } = await db
+      .from("route_stops")
+      .select("*")
+      .eq("route_id", id)
+      .order("stop_order");
+
+    if (error || !stops || stops.length === 0) {
+      return c.json({ success: false, error: "No stops found" }, 404);
+    }
+
+    // 좌표 없는 정류장은 Naver Geocoding API로 변환
+    const resolved = await Promise.all(
+      stops.map(async (stop: any) => {
+        let lat: number | null = stop.latitude ?? null;
+        let lng: number | null = stop.longitude ?? null;
+
+        if ((lat == null || lng == null) && clientId && secretKey) {
+          try {
+            const url = `https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=${encodeURIComponent(stop.stop_name)}`;
+            const res = await fetch(url, {
+              headers: {
+                "X-NCP-APIGW-API-KEY-ID": clientId,
+                "X-NCP-APIGW-API-KEY":    secretKey,
+              },
+            });
+            const data = await res.json();
+            const addr = data.addresses?.[0];
+            if (addr) {
+              lng = parseFloat(addr.x);
+              lat = parseFloat(addr.y);
+            }
+          } catch (e) {
+            console.warn(`Geocoding failed for "${stop.stop_name}":`, e);
+          }
+        }
+
+        return { id: stop.id, name: stop.stop_name, order: stop.stop_order, lat, lng };
+      })
+    );
+
+    // 좌표가 있는 정류장만 골라 폴리라인 생성 [[lng, lat], ...]
+    const path: [number, number][] = resolved
+      .filter((s) => s.lat != null && s.lng != null)
+      .map((s) => [s.lng!, s.lat!]);
+
+    return c.json({ success: true, data: { stops: resolved, path } });
+  } catch (err: any) {
+    console.error("❌ Route path error:", err);
+    return c.json({ success: false, error: "Failed to build route path" }, 500);
+  }
+});
+
 // Get route by ID with stops
 routes.get("/:id", async (c) => {
   try {
