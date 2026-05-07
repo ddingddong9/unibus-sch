@@ -119,20 +119,6 @@ export default function RouteMapModal({ route, color, onClose }: RouteMapModalPr
             />
           )}
 
-          {/* 출발/도착 배지 */}
-          {!loading && !noLocation && rawStops.length >= 2 && (
-            <div className="absolute top-3 left-3 flex flex-col gap-2 z-10 pointer-events-none">
-              <div
-                className="px-3 py-1 rounded-full text-white font-['Public_Sans'] font-bold text-[11px] shadow-lg"
-                style={{ backgroundColor: color }}
-              >
-                {t("출발", "Dep.")} · {rawStops[0]?.name}
-              </div>
-              <div className="px-3 py-1 rounded-full text-white font-['Public_Sans'] font-bold text-[11px] shadow-lg bg-[#1e3a8a]">
-                {t("도착", "Arr.")} · {rawStops[rawStops.length - 1]?.name}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* 정류장 목록 */}

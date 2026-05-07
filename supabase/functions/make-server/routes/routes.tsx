@@ -111,10 +111,44 @@ routes.get("/:id/path", async (c) => {
       })
     );
 
-    // 좌표가 있는 정류장만 골라 폴리라인 생성 [[lng, lat], ...]
-    const path: [number, number][] = resolved
-      .filter((s) => s.lat != null && s.lng != null)
-      .map((s) => [s.lng!, s.lat!]);
+    const validStops = resolved.filter((s) => s.lat != null && s.lng != null);
+
+    // Naver Directions API로 실제 도로 경로 생성 (max 5 waypoints per call)
+    let path: [number, number][] = [];
+
+    if (validStops.length >= 2 && clientId && secretKey) {
+      const MAX_WP = 5; // Naver Directions API 최대 경유지 수
+      for (let i = 0; i < validStops.length - 1; i += MAX_WP + 1) {
+        const end = Math.min(i + MAX_WP + 1, validStops.length - 1);
+        const chunk = validStops.slice(i, end + 1);
+        const start = `${chunk[0].lng},${chunk[0].lat}`;
+        const goal  = `${chunk[chunk.length - 1].lng},${chunk[chunk.length - 1].lat}`;
+        const waypoints = chunk.slice(1, -1).map((s) => `${s.lng},${s.lat}`).join("|");
+        const dirUrl = `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}${waypoints ? `&waypoints=${waypoints}` : ""}&option=traoptimal`;
+
+        try {
+          const res  = await fetch(dirUrl, {
+            headers: {
+              "X-NCP-APIGW-API-KEY-ID": clientId,
+              "X-NCP-APIGW-API-KEY":    secretKey,
+            },
+          });
+          const data = await res.json();
+          if (data.code === 0) {
+            const seg: [number, number][] = data.route?.traoptimal?.[0]?.path ?? [];
+            path = [...path, ...seg];
+          } else {
+            // Directions API 실패 시 해당 구간 직선 폴백
+            chunk.forEach((s) => path.push([s.lng!, s.lat!]));
+          }
+        } catch {
+          chunk.forEach((s) => path.push([s.lng!, s.lat!]));
+        }
+      }
+    } else {
+      // API 키 없거나 정류장 1개 이하 → 직선
+      path = validStops.map((s) => [s.lng!, s.lat!]);
+    }
 
     return c.json({ success: true, data: { stops: resolved, path } });
   } catch (err: any) {
