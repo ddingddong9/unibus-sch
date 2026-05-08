@@ -113,41 +113,52 @@ routes.get("/:id/path", async (c) => {
 
     const validStops = resolved.filter((s) => s.lat != null && s.lng != null);
 
-    // Naver Directions API로 실제 도로 경로 생성 (max 5 waypoints per call)
+    // 두 정류장 간 거리 계산 (km)
+    const haversineKm = (a: {lat: number; lng: number}, b: {lat: number; lng: number}) => {
+      const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+      const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+    };
+
+    // 너무 가까운 정류장(2km 미만)은 경로 계산에서 제외 — 마커로만 표시
+    // 첫 정류장과 마지막 정류장은 항상 포함
+    const routePoints = [validStops[0]];
+    for (let i = 1; i < validStops.length - 1; i++) {
+      const prev = routePoints[routePoints.length - 1];
+      if (haversineKm(prev, validStops[i]) >= 2) routePoints.push(validStops[i]);
+    }
+    routePoints.push(validStops[validStops.length - 1]);
+
+    // Naver Directions API로 실제 도로 경로 생성 (출발→도착, 경유지 max 5개)
     let path: [number, number][] = [];
 
-    if (validStops.length >= 2 && clientId && secretKey) {
-      const MAX_WP = 5; // Naver Directions API 최대 경유지 수
-      for (let i = 0; i < validStops.length - 1; i += MAX_WP + 1) {
-        const end = Math.min(i + MAX_WP + 1, validStops.length - 1);
-        const chunk = validStops.slice(i, end + 1);
-        const start = `${chunk[0].lng},${chunk[0].lat}`;
-        const goal  = `${chunk[chunk.length - 1].lng},${chunk[chunk.length - 1].lat}`;
-        const waypoints = chunk.slice(1, -1).map((s) => `${s.lng},${s.lat}`).join("|");
-        const dirUrl = `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}${waypoints ? `&waypoints=${waypoints}` : ""}&option=traoptimal`;
+    if (routePoints.length >= 2 && clientId && secretKey) {
+      const start     = `${routePoints[0].lng},${routePoints[0].lat}`;
+      const goal      = `${routePoints[routePoints.length - 1].lng},${routePoints[routePoints.length - 1].lat}`;
+      const waypoints = routePoints.slice(1, -1).slice(0, 5).map((s: any) => `${s.lng},${s.lat}`).join("|");
+      const dirUrl = `https://maps.apigw.ntruss.com/map-direction/v1/driving`
+        + `?start=${start}&goal=${goal}`
+        + (waypoints ? `&waypoints=${waypoints}` : "")
+        + `&option=traoptimal`;
 
-        try {
-          const res  = await fetch(dirUrl, {
-            headers: {
-              "X-NCP-APIGW-API-KEY-ID": clientId,
-              "X-NCP-APIGW-API-KEY":    secretKey,
-            },
-          });
-          const data = await res.json();
-          if (data.code === 0) {
-            const seg: [number, number][] = data.route?.traoptimal?.[0]?.path ?? [];
-            path = [...path, ...seg];
-          } else {
-            // Directions API 실패 시 해당 구간 직선 폴백
-            chunk.forEach((s) => path.push([s.lng!, s.lat!]));
-          }
-        } catch {
-          chunk.forEach((s) => path.push([s.lng!, s.lat!]));
+      try {
+        const res  = await fetch(dirUrl, {
+          headers: {
+            "X-NCP-APIGW-API-KEY-ID": clientId,
+            "X-NCP-APIGW-API-KEY":    secretKey,
+          },
+        });
+        const data = await res.json();
+        if (data.code === 0) {
+          path = data.route?.traoptimal?.[0]?.path ?? [];
+        } else {
+          path = routePoints.map((s: any) => [s.lng!, s.lat!]);
         }
+      } catch {
+        path = routePoints.map((s: any) => [s.lng!, s.lat!]);
       }
     } else {
-      // API 키 없거나 정류장 1개 이하 → 직선
-      path = validStops.map((s) => [s.lng!, s.lat!]);
+      path = routePoints.map((s: any) => [s.lng!, s.lat!]);
     }
 
     return c.json({ success: true, data: { stops: resolved, path } });

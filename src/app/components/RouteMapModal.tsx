@@ -32,11 +32,12 @@ export default function RouteMapModal({ route, color, onClose }: RouteMapModalPr
           setNoLocation(true);
         } else {
           setMapStops(
-            withCoords.map((s) => ({
+            withCoords.map((s, i) => ({
               id: s.id,
               name: s.name,
               position: { lat: s.lat!, lng: s.lng! },
-            }))
+              type: i === 0 ? 'start' : i === withCoords.length - 1 ? 'end' : 'middle',
+            } as any))
           );
           setRoutePath(path);
         }
