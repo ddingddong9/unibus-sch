@@ -240,6 +240,14 @@ class ApiClient {
     throw new Error(response.error || 'Failed to fetch route');
   }
 
+  async getRoutePath(id: string): Promise<{ stops: Array<{ id: string; name: string; order: number; lat: number | null; lng: number | null }>; path: [number, number][] }> {
+    const response = await this.request<ApiResponse<any>>(`/routes/${id}/path`);
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to fetch route path');
+  }
+
   async createRoute(route: Partial<BusRoute>): Promise<BusRoute> {
     const response = await this.request<ApiResponse<BusRoute>>('/routes', {
       method: 'POST',

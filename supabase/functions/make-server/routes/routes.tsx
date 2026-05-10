@@ -64,6 +64,110 @@ routes.get("/", async (c) => {
   }
 });
 
+// Get route map path — geocode stops without coordinates, return markers + polyline
+routes.get("/:id/path", async (c) => {
+  try {
+    const id = c.req.param("id");
+    const clientId  = Deno.env.get("NAVER_CLIENT_ID");
+    const secretKey = Deno.env.get("NAVER_SECRET_KEY");
+
+    const { data: stops, error } = await db
+      .from("route_stops")
+      .select("*")
+      .eq("route_id", id)
+      .order("stop_order");
+
+    if (error || !stops || stops.length === 0) {
+      return c.json({ success: false, error: "No stops found" }, 404);
+    }
+
+    // 좌표 없는 정류장은 Naver Geocoding API로 변환
+    const resolved = await Promise.all(
+      stops.map(async (stop: any) => {
+        let lat: number | null = stop.latitude ?? null;
+        let lng: number | null = stop.longitude ?? null;
+
+        if ((lat == null || lng == null) && clientId && secretKey) {
+          try {
+            const url = `https://maps.apigw.ntruss.com/map-geocode/v2/geocode?query=${encodeURIComponent(stop.stop_name)}`;
+            const res = await fetch(url, {
+              headers: {
+                "X-NCP-APIGW-API-KEY-ID": clientId,
+                "X-NCP-APIGW-API-KEY":    secretKey,
+              },
+            });
+            const data = await res.json();
+            const addr = data.addresses?.[0];
+            if (addr) {
+              lng = parseFloat(addr.x);
+              lat = parseFloat(addr.y);
+            }
+          } catch (e) {
+            console.warn(`Geocoding failed for "${stop.stop_name}":`, e);
+          }
+        }
+
+        return { id: stop.id, name: stop.stop_name, order: stop.stop_order, lat, lng };
+      })
+    );
+
+    const validStops = resolved.filter((s) => s.lat != null && s.lng != null);
+
+    // 두 정류장 간 거리 계산 (km)
+    const haversineKm = (a: {lat: number; lng: number}, b: {lat: number; lng: number}) => {
+      const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+      const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
+      return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
+    };
+
+    // 너무 가까운 정류장(2km 미만)은 경로 계산에서 제외 — 마커로만 표시
+    // 첫 정류장과 마지막 정류장은 항상 포함
+    const routePoints = [validStops[0]];
+    for (let i = 1; i < validStops.length - 1; i++) {
+      const prev = routePoints[routePoints.length - 1];
+      if (haversineKm(prev, validStops[i]) >= 2) routePoints.push(validStops[i]);
+    }
+    routePoints.push(validStops[validStops.length - 1]);
+
+    // Naver Directions API로 실제 도로 경로 생성 (출발→도착, 경유지 max 5개)
+    let path: [number, number][] = [];
+
+    if (routePoints.length >= 2 && clientId && secretKey) {
+      const start     = `${routePoints[0].lng},${routePoints[0].lat}`;
+      const goal      = `${routePoints[routePoints.length - 1].lng},${routePoints[routePoints.length - 1].lat}`;
+      const waypoints = routePoints.slice(1, -1).slice(0, 5).map((s: any) => `${s.lng},${s.lat}`).join("|");
+      const dirUrl = `https://maps.apigw.ntruss.com/map-direction/v1/driving`
+        + `?start=${start}&goal=${goal}`
+        + (waypoints ? `&waypoints=${waypoints}` : "")
+        + `&option=traoptimal`;
+
+      try {
+        const res  = await fetch(dirUrl, {
+          headers: {
+            "X-NCP-APIGW-API-KEY-ID": clientId,
+            "X-NCP-APIGW-API-KEY":    secretKey,
+          },
+        });
+        const data = await res.json();
+        if (data.code === 0) {
+          path = data.route?.traoptimal?.[0]?.path ?? [];
+        } else {
+          path = routePoints.map((s: any) => [s.lng!, s.lat!]);
+        }
+      } catch {
+        path = routePoints.map((s: any) => [s.lng!, s.lat!]);
+      }
+    } else {
+      path = routePoints.map((s: any) => [s.lng!, s.lat!]);
+    }
+
+    return c.json({ success: true, data: { stops: resolved, path } });
+  } catch (err: any) {
+    console.error("❌ Route path error:", err);
+    return c.json({ success: false, error: "Failed to build route path" }, 500);
+  }
+});
+
 // Get route by ID with stops
 routes.get("/:id", async (c) => {
   try {

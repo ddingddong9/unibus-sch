@@ -9,7 +9,7 @@ interface NaverMapProps {
     heading?: number; // [변경] heading 추가
     label: string;
   }>;
-  stops?: Array<{ id: string; name: string; position: { lat: number; lng: number } }>;
+  stops?: Array<{ id: string; name: string; position: { lat: number; lng: number }; type?: 'start' | 'end' | 'middle' }>;
   userLocation?: { lat: number; lng: number } | null;
   focusLocation?: { lat: number; lng: number; zoom?: number; key?: number } | null;
   fitBoundsKey?: number;
@@ -43,13 +43,13 @@ const BUS_MARKER_CONTENT = (label: string, rotation = 0) => `
   </div>
 `;
 
-const STOP_MARKER_CONTENT = (name: string) => `
-  <div style="display:flex;flex-direction:column;align-items:center;cursor:default;">
-    <div style="background:#1e3b8a;color:white;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;white-space:nowrap;font-family:sans-serif;box-shadow:0 2px 6px rgba(0,0,0,0.2);letter-spacing:0.2px;">
+const STOP_MARKER_CONTENT = (name: string, _type: 'start' | 'end' | 'middle' = 'middle') => `
+  <div style="display:flex;flex-direction:column;align-items:center;cursor:default;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.3));">
+    <div style="background:#1e3a8a;color:white;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;white-space:nowrap;font-family:sans-serif;letter-spacing:0.2px;">
       ${name}
     </div>
-    <div style="width:2.5px;height:10px;background:#1e3b8a;"></div>
-    <div style="width:9px;height:9px;border-radius:50%;background:#1e3b8a;border:2px solid white;box-shadow:0 1px 4px rgba(0,0,0,0.2);"></div>
+    <div style="width:2.5px;height:10px;background:#1e3a8a;"></div>
+    <div style="width:14px;height:14px;border-radius:50%;background:#1e3a8a;border:3px solid white;box-shadow:0 2px 6px rgba(30,58,138,0.5);"></div>
   </div>
 `;
 
@@ -278,15 +278,42 @@ export default function NaverMapComponent({
     if (!mapInstance.current || !window.naver) return;
     stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
     stopMarkersRef.current = [];
+
+    const route = routePathRef.current;
+
     stopsRef.current.forEach(stop => {
+      let lat = stop.position.lat;
+      let lng = stop.position.lng;
+
+      // 경로가 있으면 가장 가까운 선분 위 점으로 스냅 (최대 150m 이내만)
+      const MAX_SNAP_DEG = 0.0014; // ~150m
+      if (route.length > 1) {
+        let bestDist = Infinity;
+        let snapLng = lng, snapLat = lat;
+        for (let i = 0; i < route.length - 1; i++) {
+          const [aLng, aLat] = route[i];
+          const [bLng, bLat] = route[i + 1];
+          const snap = snapToSegment(lng, lat, aLng, aLat, bLng, bLat);
+          if (snap.dist < bestDist) {
+            bestDist = snap.dist;
+            snapLng = snap.x;
+            snapLat = snap.y;
+          }
+        }
+        if (Math.sqrt(bestDist) <= MAX_SNAP_DEG) {
+          lng = snapLng;
+          lat = snapLat;
+        }
+      }
+
       try {
         const marker = new window.naver.maps.Marker({
-          position: new window.naver.maps.LatLng(stop.position.lat, stop.position.lng),
+          position: new window.naver.maps.LatLng(lat, lng),
           map: mapInstance.current,
           icon: {
-            content: STOP_MARKER_CONTENT(stop.name),
+            content: STOP_MARKER_CONTENT(stop.name, stop.type ?? 'middle'),
             size: new window.naver.maps.Size(30, 50),
-            anchor: new window.naver.maps.Point(15, 30),
+            anchor: new window.naver.maps.Point(15, 38),
           },
           zIndex: 10,
         });
@@ -364,7 +391,7 @@ export default function NaverMapComponent({
     scriptLoadedRef.current = true;
 
     const script = document.createElement("script");
-    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}`;
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
     script.async = true;
     script.onload = () => { if (window.naver?.maps) initializeMap(); };
     script.onerror = () => console.error("네이버 지도 API 로드 실패. Client ID를 확인하세요.");
@@ -387,7 +414,11 @@ export default function NaverMapComponent({
   useEffect(() => { updateBusMarkers(); }, [buses]);
   useEffect(() => { updateStopMarkers(); }, [stops]);
   useEffect(() => { updateUserMarker(userLocation ?? null); }, [userLocation]);
-  useEffect(() => { updatePolyline(routePath); }, [routePath]);
+  useEffect(() => {
+    updatePolyline(routePath);
+    // 경로 로드 후 정류장 마커를 경로 위에 스냅해서 다시 그림
+    updateStopMarkers();
+  }, [routePath]);
 
   useEffect(() => {
     if (!focusLocation || !mapInstance.current || !window.naver) return;

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import BottomNav from "../components/BottomNav";
+import RouteMapModal from "../components/RouteMapModal";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
 
@@ -25,6 +26,7 @@ export default function CommuterBusWrapper() {
   const [routes, setRoutes] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [routeModalId, setRouteModalId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchRoutes = async () => {
@@ -274,21 +276,35 @@ export default function CommuterBusWrapper() {
                           </p>
                         )}
 
-                        <button
-                          className={`w-full mt-4 h-[44px] rounded-[8px] font-['Public_Sans'] font-bold text-white text-[14px] shadow-lg hover:shadow-xl active:scale-[0.98] transition-all ${
-                            !route.isActive ? "opacity-50 cursor-not-allowed" : ""
-                          }`}
-                          style={{
-                            background: route.isActive
-                              ? `linear-gradient(to right, #1e3a8a, ${color})`
-                              : "#94a3b8",
-                          }}
-                          disabled={!route.isActive}
-                        >
-                          {route.isActive
-                            ? t("노선 예약하기", "Book This Route")
-                            : t("현재 운행 중단", "Currently Suspended")}
-                        </button>
+                        <div className="flex gap-2 mt-4">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setRouteModalId(route.id);
+                            }}
+                            className="flex-1 h-[44px] rounded-[8px] font-['Public_Sans'] font-bold text-[#1e3a8a] text-[14px] border-2 border-[#1e3a8a] hover:bg-[#f0f4ff] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                          >
+                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
+                            </svg>
+                            {t("노선 전체 보기", "View Full Route")}
+                          </button>
+                          <button
+                            className={`flex-1 h-[44px] rounded-[8px] font-['Public_Sans'] font-bold text-white text-[14px] shadow-lg hover:shadow-xl active:scale-[0.98] transition-all ${
+                              !route.isActive ? "opacity-50 cursor-not-allowed" : ""
+                            }`}
+                            style={{
+                              background: route.isActive
+                                ? `linear-gradient(to right, #1e3a8a, ${color})`
+                                : "#94a3b8",
+                            }}
+                            disabled={!route.isActive}
+                          >
+                            {route.isActive
+                              ? t("예약", "Book")
+                              : t("운행 중단", "Suspended")}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -323,6 +339,19 @@ export default function CommuterBusWrapper() {
           )}
         </div>
       </div>
+
+      {/* Route Map Modal */}
+      {routeModalId && (() => {
+        const modal = routes.find((r) => r.id === routeModalId);
+        if (!modal) return null;
+        return (
+          <RouteMapModal
+            route={modal}
+            color={getColor(modal.color)}
+            onClose={() => setRouteModalId(null)}
+          />
+        );
+      })()}
 
       {/* Bottom Navigation */}
       <BottomNav />
