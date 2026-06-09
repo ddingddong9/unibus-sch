@@ -16,7 +16,8 @@ export default function DriverActiveWrapper() {
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const latestCoordsRef = useRef<{ lat: number; lng: number; speed: number } | null>(null);
+  const latestCoordsRef = useRef<{ lat: number; lng: number; speed: number; heading: number } | null>(null);
+  const prevLatLngRef = useRef<{ lat: number; lng: number } | null>(null);
 
   // 버스 없이 접근 시 홈으로
   useEffect(() => {
@@ -35,7 +36,19 @@ export default function DriverActiveWrapper() {
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
         const { latitude, longitude, speed } = pos.coords;
-        const curr = { lat: latitude, lng: longitude, speed: speed || 0 };
+        let heading = latestCoordsRef.current?.heading ?? 0;
+        const prev = prevLatLngRef.current;
+        if (prev) {
+          const toRad = (d: number) => (d * Math.PI) / 180;
+          const dLng = toRad(longitude - prev.lng);
+          const rlat1 = toRad(prev.lat);
+          const rlat2 = toRad(latitude);
+          const y = Math.sin(dLng) * Math.cos(rlat2);
+          const x = Math.cos(rlat1) * Math.sin(rlat2) - Math.sin(rlat1) * Math.cos(rlat2) * Math.cos(dLng);
+          heading = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+        }
+        prevLatLngRef.current = { lat: latitude, lng: longitude };
+        const curr = { lat: latitude, lng: longitude, speed: speed || 0, heading };
         latestCoordsRef.current = curr;
         setCoords(curr);
         setGpsStatus("active");
@@ -48,8 +61,8 @@ export default function DriverActiveWrapper() {
     intervalRef.current = setInterval(async () => {
       if (!latestCoordsRef.current) return;
       try {
-        const { lat, lng, speed } = latestCoordsRef.current;
-        await api.driverSendLocation(lat, lng, speed, 0);
+        const { lat, lng, speed, heading } = latestCoordsRef.current;
+        await api.driverSendLocation(lat, lng, speed, heading);
         setSendCount((n) => n + 1);
       } catch {
         // 전송 실패해도 계속 시도

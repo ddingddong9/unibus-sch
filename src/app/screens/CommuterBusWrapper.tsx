@@ -1,9 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
 import BottomNav from "../components/BottomNav";
 import RouteMapModal from "../components/RouteMapModal";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
+import NaverMapComponent from "../components/NaverMapComponent";
 
 // hex → tailwind-style inline color
 const COLOR_FALLBACKS: Record<string, string> = {
@@ -18,6 +19,18 @@ const COLOR_FALLBACKS: Record<string, string> = {
 
 const getColor = (color?: string) => color || "#1e3a8a";
 
+function openPayco() {
+  const ua = navigator.userAgent;
+  window.location.href = "payco://";
+  setTimeout(() => {
+    if (/iPhone|iPad/i.test(ua)) {
+      window.location.href = "https://apps.apple.com/kr/app/payco/id924292361";
+    } else {
+      window.location.href = "https://play.google.com/store/apps/details?id=com.nhnent.payapp";
+    }
+  }, 1500);
+}
+
 export default function CommuterBusWrapper() {
   const navigate = useNavigate();
   const { t, language } = useLanguage();
@@ -27,6 +40,10 @@ export default function CommuterBusWrapper() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [routeModalId, setRouteModalId] = useState<string | null>(null);
+  const [liveBuses, setLiveBuses] = useState<Array<{ id: string; position: { lat: number; lng: number }; heading?: number; label: string }>>([]);
+  const [hasActiveBuses, setHasActiveBuses] = useState(false);
+  const [routeBusMap, setRouteBusMap] = useState<Record<string, { position: { lat: number; lng: number }; etaMins: number }>>({});
+  const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     const fetchRoutes = async () => {
@@ -34,7 +51,6 @@ export default function CommuterBusWrapper() {
         setLoading(true);
         setError(null);
         const allRoutes = await api.getRoutes();
-        // 통근버스(commuter) 타입만 필터
         setRoutes(allRoutes.filter((r: any) => r.type === "commuter"));
       } catch (e: any) {
         setError(e.message || "노선 정보를 불러오지 못했습니다.");
@@ -45,6 +61,60 @@ export default function CommuterBusWrapper() {
     fetchRoutes();
   }, []);
 
+  useEffect(() => {
+    const DEST: Record<string, { lat: number; lng: number }> = {
+      "서울": { lat: 37.497, lng: 127.047 },
+      "인천": { lat: 37.456, lng: 126.705 },
+    };
+    const haversineKm = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
+      const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
+      const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
+      const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+    };
+
+    const fetchLive = async () => {
+      try {
+        const [buses, locations] = await Promise.all([api.getBuses(), api.getBusLocations()]);
+        const commuterBuses = buses.filter((b: any) => b.type === "commuter" && b.status === "active");
+        const locMap = new Map(locations.map((l: any) => [l.busId, l]));
+
+        const markers = commuterBuses
+          .map((b: any) => {
+            const loc = locMap.get(b.id);
+            if (!loc) return null;
+            return { id: b.id, position: { lat: loc.lat, lng: loc.lng }, heading: loc.heading, label: b.name };
+          })
+          .filter(Boolean) as { id: string; position: { lat: number; lng: number }; heading?: number; label: string }[];
+
+        const newRouteBusMap: Record<string, { position: { lat: number; lng: number }; etaMins: number }> = {};
+        commuterBuses.forEach((b: any) => {
+          const routeId = b.currentRoute?.id;
+          if (!routeId) return;
+          const loc = locMap.get(b.id);
+          if (!loc) return;
+          const pos = { lat: loc.lat, lng: loc.lng };
+          const routeObj = routes.find((r) => r.id === routeId);
+          const region = routeObj?.region ?? "";
+          const dest = DEST[region] ?? { lat: 37.5, lng: 127.0 };
+          const km = haversineKm(pos, dest);
+          const etaMins = Math.round((km / 60) * 60);
+          newRouteBusMap[routeId] = { position: pos, etaMins };
+        });
+
+        setLiveBuses(markers);
+        setHasActiveBuses(markers.length > 0);
+        setRouteBusMap(newRouteBusMap);
+      } catch {
+        // 실패 시 조용히 무시
+      }
+    };
+    fetchLive();
+    liveIntervalRef.current = setInterval(fetchLive, 5000);
+    return () => { if (liveIntervalRef.current) clearInterval(liveIntervalRef.current); };
+  }, [routes]);
+
+  // 유니크 지역 목록 (region 필드 기반)
   const regions = ["to-school", "from-school", ...Array.from(new Set(routes.map((r) => r.region).filter(Boolean)))];
 
   const filteredRoutes =
@@ -105,6 +175,27 @@ export default function CommuterBusWrapper() {
           </div>
         </div>
 
+        {/* 실시간 통학버스 지도 */}
+        {hasActiveBuses && (
+          <div className="w-full px-[16px] pt-[16px]">
+            <div className="rounded-[16px] overflow-hidden border border-[#e2e8f0] shadow-sm">
+              <div className="flex items-center gap-2 px-4 py-3 bg-[#1e3a8a]">
+                <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
+                <span className="font-['Public_Sans'] font-bold text-white text-[13px]">{t("실시간 운행 현황", "Live Bus Tracking")}</span>
+              </div>
+              <div style={{ height: 220 }}>
+                <NaverMapComponent
+                  center={{ lat: 37.05, lng: 127.0 }}
+                  zoom={9}
+                  buses={liveBuses}
+                  stops={[]}
+                  routePath={[]}
+                />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Content */}
         <div className="flex-1 w-full px-[16px] py-[16px] space-y-3">
           {/* Loading */}
@@ -145,6 +236,7 @@ export default function CommuterBusWrapper() {
                 route.stops?.map((s: any) => s.name) || [];
               const color = getColor(route.color);
               const isExpanded = expandedRoute === route.id;
+              const liveInfo = routeBusMap[route.id];
 
               return (
                 <div
@@ -173,7 +265,7 @@ export default function CommuterBusWrapper() {
                       </div>
 
                       <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
+                        <div className="flex items-center gap-2 mb-1 flex-wrap">
                           <h3 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] leading-[24px]">
                             {route.name}
                           </h3>
@@ -182,12 +274,27 @@ export default function CommuterBusWrapper() {
                               {route.region}
                             </span>
                           )}
-                          {!route.isActive && (
+                          {liveInfo ? (
+                            <span className="flex items-center gap-1 bg-[#22c55e]/10 text-[#16a34a] px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px]">
+                              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse inline-block" />
+                              {t("운행 중", "In Service")}
+                            </span>
+                          ) : !route.isActive ? (
                             <span className="bg-red-50 text-red-400 px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px]">
                               {t("운행 중단", "Suspended")}
                             </span>
-                          )}
+                          ) : null}
                         </div>
+                        {liveInfo && (
+                          <div className="flex items-center gap-1 mb-1">
+                            <svg className="w-3 h-3 text-[#1e3a8a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                            </svg>
+                            <span className="font-['Public_Sans'] font-bold text-[#1e3a8a] text-[12px]">
+                              {t(`도착 예상 ${liveInfo.etaMins}분`, `ETA ${liveInfo.etaMins} min`)}
+                            </span>
+                          </div>
+                        )}
 
                         <div className="flex items-center gap-4 text-[#64748b] text-[12px] font-['Public_Sans'] mb-2">
                           {route.duration && (
@@ -290,6 +397,7 @@ export default function CommuterBusWrapper() {
                             {t("노선 전체 보기", "View Full Route")}
                           </button>
                           <button
+                            onClick={route.isActive ? openPayco : undefined}
                             className={`flex-1 h-[44px] rounded-[8px] font-['Public_Sans'] font-bold text-white text-[14px] shadow-lg hover:shadow-xl active:scale-[0.98] transition-all ${
                               !route.isActive ? "opacity-50 cursor-not-allowed" : ""
                             }`}
@@ -301,7 +409,7 @@ export default function CommuterBusWrapper() {
                             disabled={!route.isActive}
                           >
                             {route.isActive
-                              ? t("예약", "Book")
+                              ? t("PAYCO 예약", "Book via PAYCO")
                               : t("운행 중단", "Suspended")}
                           </button>
                         </div>

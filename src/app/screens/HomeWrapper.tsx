@@ -64,14 +64,10 @@ const listItem = {
 export default function HomeWrapper() {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const [nextArrival, setNextArrival] = useState<number | null>(null);
   const [nearestStop, setNearestStop] = useState<string>("--");
-  const [notifications] = useState(3);
   const [loading, setLoading] = useState(true);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [activeBuses, setActiveBuses] = useState<{ lat: number; lng: number }[]>([]);
-
-  const imgStylizedMapShowingCampusRoads = "";
 
   // 사용자 GPS 위치 → 가장 가까운 정류장 계산
   useEffect(() => {
@@ -93,7 +89,7 @@ export default function HomeWrapper() {
     setNearestStop(nearest.nameKo);
   }, [userLocation]);
 
-  // 활성 버스 위치 fetch → 가장 가까운 정류장 도착 예정 시간 계산
+  // 활성 버스 위치 fetch
   const fetchBuses = useCallback(async () => {
     try {
       const [allBuses, locations] = await Promise.all([
@@ -120,12 +116,11 @@ export default function HomeWrapper() {
     return () => clearInterval(interval);
   }, [fetchBuses]);
 
-  // 버스 위치 + 가장 가까운 정류장 기반 도착 예정 시간 갱신
-  useEffect(() => {
-    const target = CAMPUS_STOPS.find(s => s.nameKo === nearestStop) ?? CAMPUS_STOPS[4];
-    const mins = getArrivalMinutes(target.lat, target.lng, activeBuses);
-    setNextArrival(mins);
-  }, [activeBuses, nearestStop]);
+  // 활성 버스 여부 (캠퍼스 버스 기준)
+  const busActive = activeBuses.length > 0;
+  // 가장 가까운 정류장까지 도착 예정 시간
+  const target = CAMPUS_STOPS.find(s => s.nameKo === nearestStop) ?? CAMPUS_STOPS[4];
+  const nextArrival = getArrivalMinutes(target.lat, target.lng, activeBuses);
 
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-start relative size-full">
@@ -152,9 +147,6 @@ export default function HomeWrapper() {
                     <path d={svgPaths.p164b49c0} fill="#0F172A" />
                   </svg>
                 </div>
-                {notifications > 0 && (
-                  <div className="absolute bg-[#ef4444] right-[10px] rounded-[9999px] size-[8px] top-[10px] border-2 border-white animate-pulse" />
-                )}
               </button>
             </div>
           </div>
@@ -277,21 +269,30 @@ export default function HomeWrapper() {
                         <div className="content-stretch flex items-end justify-between pt-[12px] relative shrink-0 w-full">
                           <div className="content-stretch flex flex-col items-start relative shrink-0">
                             <div className="flex flex-col font-['Public_Sans'] font-normal justify-center leading-[0] text-[14px] text-white opacity-80">
-                              <p className="leading-[20px]">{t("다음 도착", "Next Arrival")}</p>
+                              <p className="leading-[20px]">{t("운행 현황", "Service Status")}</p>
                             </div>
-                            <div className="flex items-baseline gap-1">
-                              <motion.span
-                                key={nextArrival ?? 'null'}
-                                initial={{ opacity: 0, y: -8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="font-['Public_Sans'] font-black text-[30px] text-white leading-[36px]"
-                              >
-                                {nextArrival ?? "--"}
-                              </motion.span>
-                              {nextArrival !== null && (
-                                <span className="font-['Public_Sans'] font-bold text-[18px] text-white leading-[28px]">
-                                  {t("분", "mins")}
-                                </span>
+                            <div className="flex items-center gap-2 mt-1">
+                              {loading ? (
+                                <span className="font-['Public_Sans'] font-bold text-[16px] text-white/70">{t("확인 중...", "Checking...")}</span>
+                              ) : busActive ? (
+                                <>
+                                  <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
+                                  <div className="flex items-baseline gap-1">
+                                    <span className="font-['Public_Sans'] font-black text-[20px] text-white leading-[28px]">
+                                      {nextArrival ? `${nextArrival}분` : t("운행 중", "In Service")}
+                                    </span>
+                                    {nextArrival && (
+                                      <span className="font-['Public_Sans'] font-bold text-[14px] text-white/80">
+                                        {t("후 도착", "to arrive")}
+                                      </span>
+                                    )}
+                                  </div>
+                                </>
+                              ) : (
+                                <>
+                                  <div className="w-2 h-2 rounded-full bg-white/40" />
+                                  <span className="font-['Public_Sans'] font-black text-[20px] text-white/70 leading-[28px]">{t("운행 없음", "No Service")}</span>
+                                </>
                               )}
                             </div>
                           </div>
@@ -399,7 +400,7 @@ export default function HomeWrapper() {
                   >
                     <div className="flex-[1_0_0] min-h-px min-w-px opacity-60 relative w-full">
                       <div className="absolute inset-0 overflow-hidden">
-                        <img alt="" className="absolute h-[267.19%] left-0 max-w-none top-[-83.59%] w-full" src={imgStylizedMapShowingCampusRoads} />
+                        <img alt="" className="absolute h-[267.19%] left-0 max-w-none top-[-83.59%] w-full" />
                       </div>
                       <div className="absolute bg-[rgba(255,255,255,0.4)] inset-0 mix-blend-saturation" />
                     </div>

@@ -402,10 +402,9 @@ class ApiClient {
   // ============ CAMPUS ENDPOINTS ============
 
   async getCampusRoutePath(): Promise<{ path: [number, number][]; stops: any[] }> {
-    const res = await fetch('/api/campus-route');
-    const data = await res.json();
-    if (data.success && data.data) return data.data;
-    throw new Error(data.error || 'Failed to fetch campus route path');
+    const response = await this.request<ApiResponse<{ path: [number, number][]; stops: any[] }>>('/campus/path');
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to fetch campus route path');
   }
 
   // ============ UTILITY ============

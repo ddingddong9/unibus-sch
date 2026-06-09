@@ -259,36 +259,6 @@ buses.post("/:id/location", requireDriver, async (c) => {
   }
 });
 
-// Delete bus (admin only)
-buses.delete("/:id", requireAdmin, async (c) => {
-  try {
-    const id = c.req.param("id");
-
-    const { data: existing } = await db
-      .from('buses')
-      .select('id')
-      .eq('id', id)
-      .single();
-
-    if (!existing) {
-      return c.json({ success: false, error: "Bus not found" }, 404);
-    }
-
-    const { error } = await db.from('buses').delete().eq('id', id);
-
-    if (error) {
-      console.error("❌ Delete bus error:", error);
-      return c.json({ success: false, error: "Failed to delete bus" }, 500);
-    }
-
-    console.log(`✅ Bus deleted: ${id}`);
-    return c.json({ success: true });
-  } catch (error: any) {
-    console.error("❌ Delete bus error:", error);
-    return c.json({ success: false, error: "Failed to delete bus" }, 500);
-  }
-});
-
 // Update bus (admin only)
 buses.put("/:id", requireAdmin, async (c) => {
   try {
@@ -345,6 +315,44 @@ buses.put("/:id", requireAdmin, async (c) => {
   } catch (error: any) {
     console.error("❌ Update bus error:", error);
     return c.json({ success: false, error: "Failed to update bus" }, 500);
+  }
+});
+
+// Delete bus (admin only)
+buses.delete("/:id", requireAdmin, async (c) => {
+  try {
+    const id = c.req.param("id");
+
+    const { data: existingBus } = await db
+      .from('buses')
+      .select('id, status')
+      .eq('id', id)
+      .single();
+
+    if (!existingBus) {
+      return c.json({ success: false, error: "Bus not found" }, 404);
+    }
+
+    if (existingBus.status === 'active') {
+      return c.json({ success: false, error: "Cannot delete an active bus. Stop the bus first." }, 409);
+    }
+
+    const { error: deleteError } = await db
+      .from('buses')
+      .delete()
+      .eq('id', id);
+
+    if (deleteError) {
+      console.error("❌ Bus delete error:", deleteError);
+      return c.json({ success: false, error: "Failed to delete bus" }, 500);
+    }
+
+    console.log(`✅ Bus deleted: ${id}`);
+
+    return c.json({ success: true });
+  } catch (error: any) {
+    console.error("❌ Delete bus error:", error);
+    return c.json({ success: false, error: "Failed to delete bus" }, 500);
   }
 });
 
