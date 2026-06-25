@@ -106,9 +106,10 @@ export default function AdminLogin() {
 
           <button
             onClick={handleLogin}
+            disabled={isLoading}
             className="w-full h-[48px] bg-[#1e3b8a] text-white font-['Public_Sans'] font-bold text-[16px] rounded-lg shadow-lg hover:bg-[#1e3b8a]/90 active:scale-[0.98] transition-all"
           >
-            로그인
+            {isLoading ? "로그인 중..." : "로그인"}
           </button>
         </div>
 

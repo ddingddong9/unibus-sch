@@ -1,15 +1,13 @@
-import { projectId, publicAnonKey } from '../../../utils/supabase/info';
+import { publicAnonKey, supabaseUrl } from '../../../utils/supabase/info';
 import type {
   ApiResponse,
   User,
   Notice,
   BusRoute,
-  LoginRequest,
-  SignupRequest,
-  KakaoUser
+  SignupRequest
 } from '../types';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || 'http://localhost:54321';
+const SUPABASE_URL = supabaseUrl;
 const API_BASE_URL = `${SUPABASE_URL}/functions/v1/make-server`;
 
 class ApiClient {
@@ -202,24 +200,33 @@ class ApiClient {
   }
 
   async uploadNoticeImage(file: File): Promise<string> {
-    const ext = file.name.split('.').pop();
-    const filename = `${Date.now()}_${crypto.randomUUID()}.${ext}`;
-    const res = await fetch(
-      `${SUPABASE_URL}/storage/v1/object/notice-images/${filename}`,
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${publicAnonKey}`,
-          'Content-Type': file.type,
-        },
-        body: file,
-      }
-    );
-    if (!res.ok) {
-      const err = await res.text();
-      throw new Error(`이미지 업로드 실패: ${err}`);
+    const form = new FormData();
+    form.append('file', file);
+
+    const headers: HeadersInit = {
+      'Authorization': `Bearer ${publicAnonKey}`,
+    };
+
+    if (this.token) {
+      headers['X-Auth-Token'] = this.token;
     }
-    return `${SUPABASE_URL}/storage/v1/object/public/notice-images/${filename}`;
+
+    const res = await fetch(`${API_BASE_URL}/notices/images`, {
+      method: 'POST',
+      headers,
+      body: form,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.error || '이미지 업로드 실패');
+    }
+
+    const data = await res.json();
+    if (data.success && data.data?.url) {
+      return data.data.url;
+    }
+    throw new Error(data.error || '이미지 업로드 실패');
   }
 
   // ============ ROUTE ENDPOINTS ============

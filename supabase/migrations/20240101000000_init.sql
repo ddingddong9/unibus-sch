@@ -70,6 +70,8 @@ CREATE INDEX IF NOT EXISTS idx_auth_tokens_user_id ON auth_tokens(user_id);
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_token ON auth_tokens(token);
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_expires ON auth_tokens(expires_at);
 
+ALTER TABLE auth_tokens ENABLE ROW LEVEL SECURITY;
+
 -- ------------------------------------------------------------
 -- notices 테이블
 -- ------------------------------------------------------------
@@ -77,11 +79,13 @@ CREATE TABLE IF NOT EXISTS notices (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title VARCHAR(255) NOT NULL,
   content TEXT NOT NULL,
-  category VARCHAR(50) NOT NULL DEFAULT 'general' CHECK (category IN ('general', 'important', 'event', 'maintenance')),
+  category VARCHAR(50) NOT NULL DEFAULT 'general' CHECK (category IN ('general', 'route', 'system', 'lost')),
   priority VARCHAR(20) NOT NULL DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
   author_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   is_pinned BOOLEAN DEFAULT FALSE,
   view_count INTEGER DEFAULT 0,
+  image_urls TEXT[] DEFAULT '{}',
+  content_below TEXT DEFAULT '',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -109,6 +113,10 @@ CREATE TABLE IF NOT EXISTS routes (
   type VARCHAR(20) NOT NULL CHECK (type IN ('shuttle', 'commute')),
   description TEXT,
   color VARCHAR(7) DEFAULT '#1E3B8A',
+  region VARCHAR(100),
+  schedule TEXT,
+  duration VARCHAR(50),
+  fare VARCHAR(50),
   is_active BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -218,7 +226,7 @@ ORDER BY bus_id, timestamp DESC;
 
 -- 관리자 계정 (이미 있으면 스킵)
 INSERT INTO users (email, password_hash, name, role, provider)
-VALUES ('admin@sch.ac.kr', 'admin123', '관리자', 'admin', 'local')
+VALUES ('admin@sch.ac.kr', '$2a$10$ESjDbWfCsrJi0liWDS.0P.c1KPMFjSGdfBNxZsTBeCxUJZh/BCH6O', '관리자', 'admin', 'local')
 ON CONFLICT (email) DO NOTHING;
 
 -- 샘플 셔틀 노선
@@ -236,30 +244,12 @@ ON CONFLICT DO NOTHING;
 -- users 테이블 RLS
 ALTER TABLE users ENABLE ROW LEVEL SECURITY;
 
--- 모든 사용자가 users 조회 가능 (비밀번호는 제외하고 조회)
+-- 사용자 정보는 Edge Function 관리자 API를 통해서만 조회한다.
 DROP POLICY IF EXISTS users_select_all ON users;
-CREATE POLICY users_select_all ON users
-  FOR SELECT
-  USING (true);
 
--- 사용자는 자신의 정보만 수정 가능
 DROP POLICY IF EXISTS users_update_own ON users;
-CREATE POLICY users_update_own ON users
-  FOR UPDATE
-  USING (id::TEXT = current_setting('request.jwt.claims', true)::json->>'sub')
-  WITH CHECK (id::TEXT = current_setting('request.jwt.claims', true)::json->>'sub');
 
--- 관리자는 모든 사용자 정보 수정 가능
 DROP POLICY IF EXISTS users_admin_all ON users;
-CREATE POLICY users_admin_all ON users
-  FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM users 
-      WHERE id::TEXT = current_setting('request.jwt.claims', true)::json->>'sub' 
-        AND role = 'admin'
-    )
-  );
 
 -- notices 테이블 RLS
 ALTER TABLE notices ENABLE ROW LEVEL SECURITY;
@@ -270,17 +260,7 @@ CREATE POLICY notices_select_all ON notices
   FOR SELECT
   USING (true);
 
--- 관리자만 공지사항 작성/수정/삭제 가능
 DROP POLICY IF EXISTS notices_admin_all ON notices;
-CREATE POLICY notices_admin_all ON notices
-  FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM users 
-      WHERE id::TEXT = current_setting('request.jwt.claims', true)::json->>'sub' 
-        AND role = 'admin'
-    )
-  );
 
 -- buses 테이블 RLS
 ALTER TABLE buses ENABLE ROW LEVEL SECURITY;
@@ -291,17 +271,7 @@ CREATE POLICY buses_select_all ON buses
   FOR SELECT
   USING (true);
 
--- 관리자만 버스 정보 수정 가능
 DROP POLICY IF EXISTS buses_admin_all ON buses;
-CREATE POLICY buses_admin_all ON buses
-  FOR ALL
-  USING (
-    EXISTS (
-      SELECT 1 FROM users 
-      WHERE id::TEXT = current_setting('request.jwt.claims', true)::json->>'sub' 
-        AND role = 'admin'
-    )
-  );
 
 -- bus_locations 테이블 RLS
 ALTER TABLE bus_locations ENABLE ROW LEVEL SECURITY;
@@ -344,6 +314,8 @@ SELECT
   n.priority,
   n.is_pinned,
   n.view_count,
+  n.image_urls,
+  n.content_below,
   n.created_at,
   n.updated_at,
   u.id AS author_id,

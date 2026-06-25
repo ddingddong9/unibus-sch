@@ -2,7 +2,7 @@
 
 import { Hono } from "npm:hono";
 import { db } from "../db.tsx";
-import { requireAuth, requireAdmin } from "../middleware/auth.tsx";
+import { requireAdmin } from "../middleware/auth.tsx";
 import { CreateNoticeRequest } from "../types/index.tsx";
 
 const notices = new Hono();
@@ -93,6 +93,47 @@ notices.get("/:id", async (c) => {
   } catch (error: any) {
     console.error("❌ Get notice error:", error);
     return c.json({ success: false, error: "Failed to fetch notice" }, 500);
+  }
+});
+
+// Upload notice image (admin only)
+notices.post("/images", requireAdmin, async (c) => {
+  try {
+    const body = await c.req.parseBody();
+    const file = body.file;
+
+    if (!(file instanceof File)) {
+      return c.json({ success: false, error: "Image file is required" }, 400);
+    }
+
+    if (!file.type.startsWith("image/")) {
+      return c.json({ success: false, error: "Only image files are allowed" }, 400);
+    }
+
+    const ext = file.name.split(".").pop() || "bin";
+    const filename = `${Date.now()}_${crypto.randomUUID()}.${ext}`;
+    const bytes = new Uint8Array(await file.arrayBuffer());
+
+    const { error: uploadError } = await db.storage
+      .from("notice-images")
+      .upload(filename, bytes, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("❌ Notice image upload error:", uploadError);
+      return c.json({ success: false, error: "Failed to upload image" }, 500);
+    }
+
+    const { data } = db.storage
+      .from("notice-images")
+      .getPublicUrl(filename);
+
+    return c.json({ success: true, data: { url: data.publicUrl } });
+  } catch (error: any) {
+    console.error("❌ Notice image upload error:", error);
+    return c.json({ success: false, error: "Failed to upload image" }, 500);
   }
 });
 

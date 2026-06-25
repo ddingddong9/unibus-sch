@@ -59,7 +59,7 @@ export default function NoticeManagement() {
     try {
       const uploaded = await Promise.all(files.map(f => api.uploadNoticeImage(f)));
       setFormData(prev => ({ ...prev, imageUrls: [...prev.imageUrls, ...uploaded] }));
-    } catch (error) {
+    } catch {
       alert("이미지 업로드 실패. 다시 시도해주세요.");
     } finally {
       setIsUploading(false);
