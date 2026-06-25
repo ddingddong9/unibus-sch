@@ -64,8 +64,8 @@ users.put("/:id/role", requireAdmin, async (c) => {
     if (role !== 'driver') {
       await db
         .from('buses')
-        .update({ is_running: false, current_driver_id: null })
-        .eq('current_driver_id', targetId);
+        .update({ is_running: false, current_driver_id: null, assigned_driver_id: null })
+        .or(`current_driver_id.eq.${targetId},assigned_driver_id.eq.${targetId}`);
     }
 
     const { error: updateError } = await db

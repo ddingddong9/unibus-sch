@@ -165,6 +165,7 @@ CREATE TABLE IF NOT EXISTS buses (
   license_plate VARCHAR(20),
   status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'maintenance')),
   current_route_id UUID REFERENCES routes(id) ON DELETE SET NULL,
+  assigned_driver_id UUID REFERENCES users(id) ON DELETE SET NULL,
   is_running BOOLEAN DEFAULT FALSE,
   current_driver_id UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -175,6 +176,7 @@ CREATE TABLE IF NOT EXISTS buses (
 CREATE INDEX IF NOT EXISTS idx_buses_type ON buses(type);
 CREATE INDEX IF NOT EXISTS idx_buses_status ON buses(status);
 CREATE INDEX IF NOT EXISTS idx_buses_route ON buses(current_route_id);
+CREATE INDEX IF NOT EXISTS idx_buses_assigned_driver ON buses(assigned_driver_id);
 
 -- buses 자동 updated_at 트리거
 DROP TRIGGER IF EXISTS buses_updated_at ON buses;
@@ -333,13 +335,22 @@ SELECT
   b.capacity,
   b.license_plate,
   b.status,
+  b.assigned_driver_id,
+  du.name AS assigned_driver_name,
+  du.email AS assigned_driver_email,
+  b.is_running,
+  b.current_driver_id,
+  cu.name AS current_driver_name,
+  cu.email AS current_driver_email,
   b.created_at,
   b.updated_at,
   r.id AS route_id,
   r.name AS route_name,
   r.color AS route_color
 FROM buses b
-LEFT JOIN routes r ON b.current_route_id = r.id;
+LEFT JOIN routes r ON b.current_route_id = r.id
+LEFT JOIN users du ON b.assigned_driver_id = du.id
+LEFT JOIN users cu ON b.current_driver_id = cu.id;
 
 -- ============================================================
 -- 7단계: 완료 확인

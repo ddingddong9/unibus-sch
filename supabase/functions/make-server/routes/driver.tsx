@@ -6,20 +6,37 @@ import { requireDriver } from "../middleware/auth.tsx";
 
 const driver = new Hono();
 
+const toClientBusType = (type: string) => type === 'shuttle' ? 'campus' : type === 'commute' ? 'commuter' : type;
+
 // 운행 가능한 버스 목록 조회
 driver.get("/buses", requireDriver, async (c) => {
   try {
+    const driverId = c.get('userId');
     const { data: buses, error } = await db
       .from('buses')
-      .select('id, name, type, capacity, status, is_running, current_driver_id')
+      .select('id, name, type, capacity, status, is_running, current_driver_id, assigned_driver_id')
       .eq('status', 'active')
+      .or(`assigned_driver_id.is.null,assigned_driver_id.eq.${driverId}`)
       .order('id');
 
     if (error) {
       return c.json({ success: false, error: "Failed to fetch buses" }, 500);
     }
 
-    return c.json({ success: true, data: buses });
+    const formattedBuses = buses?.map(bus => ({
+      id: bus.id,
+      name: bus.name,
+      type: toClientBusType(bus.type),
+      capacity: bus.capacity,
+      status: bus.status,
+      is_running: bus.is_running,
+      current_driver_id: bus.current_driver_id,
+      assigned_driver_id: bus.assigned_driver_id,
+      is_assigned_to_me: bus.assigned_driver_id === driverId,
+      is_shared: !bus.assigned_driver_id,
+    })) || [];
+
+    return c.json({ success: true, data: formattedBuses });
   } catch (error: any) {
     return c.json({ success: false, error: "Failed to fetch buses" }, 500);
   }
@@ -38,12 +55,20 @@ driver.post("/start", requireDriver, async (c) => {
     // 버스 존재 여부 + 이미 운행 중인지 확인
     const { data: bus, error: busError } = await db
       .from('buses')
-      .select('id, name, is_running, current_driver_id')
+      .select('id, name, status, is_running, current_driver_id, assigned_driver_id')
       .eq('id', busId)
       .single();
 
     if (busError || !bus) {
       return c.json({ success: false, error: "Bus not found" }, 404);
+    }
+
+    if (bus.status !== 'active') {
+      return c.json({ success: false, error: "운행 가능한 상태의 버스가 아닙니다" }, 409);
+    }
+
+    if (bus.assigned_driver_id && bus.assigned_driver_id !== driverId) {
+      return c.json({ success: false, error: "본인에게 배정된 버스만 운행할 수 있습니다" }, 403);
     }
 
     if (bus.is_running && bus.current_driver_id !== driverId) {
@@ -157,12 +182,25 @@ driver.get("/status", requireDriver, async (c) => {
 
     const { data: bus } = await db
       .from('buses')
-      .select('id, name, type')
+      .select('id, name, type, capacity, status, is_running, current_driver_id, assigned_driver_id')
       .eq('current_driver_id', driverId)
       .eq('is_running', true)
       .single();
 
-    return c.json({ success: true, data: { activeBus: bus || null } });
+    const activeBus = bus ? {
+      id: bus.id,
+      name: bus.name,
+      type: toClientBusType(bus.type),
+      capacity: bus.capacity,
+      status: bus.status,
+      is_running: bus.is_running,
+      current_driver_id: bus.current_driver_id,
+      assigned_driver_id: bus.assigned_driver_id,
+      is_assigned_to_me: bus.assigned_driver_id === driverId,
+      is_shared: !bus.assigned_driver_id,
+    } : null;
+
+    return c.json({ success: true, data: { activeBus } });
   } catch (error: any) {
     return c.json({ success: true, data: { activeBus: null } });
   }

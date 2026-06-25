@@ -10,6 +10,9 @@ interface Bus {
   capacity: number;
   is_running: boolean;
   current_driver_id: string | null;
+  assigned_driver_id?: string | null;
+  is_assigned_to_me?: boolean;
+  is_shared?: boolean;
 }
 
 export default function DriverHomeWrapper() {
@@ -100,13 +103,19 @@ export default function DriverHomeWrapper() {
               </div>
             </div>
           ) : buses.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center">
-              <p className="text-gray-400 text-sm">배정된 버스가 없습니다</p>
+            <div className="flex-1 flex items-center justify-center px-4">
+              <div className="text-center">
+                <p className="text-gray-500 text-sm font-semibold">운행 가능한 버스가 없습니다</p>
+                <p className="text-gray-400 text-xs mt-2 leading-relaxed">
+                  관리자에게 버스 활성화 또는 기사 배정을 요청해 주세요.
+                </p>
+              </div>
             </div>
           ) : (
             buses.map((bus) => {
               const isMine = bus.current_driver_id === user?.id;
               const isOtherDriver = bus.is_running && !isMine;
+              const typeLabel = bus.type === 'campus' ? '셔틀' : '통학';
 
               return (
                 <button
@@ -133,9 +142,14 @@ export default function DriverHomeWrapper() {
                     <div className="flex items-center gap-2 mb-1">
                       <span className="font-black text-[#0f172a] text-lg leading-tight">{bus.name}</span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
-                        ${bus.type === 'shuttle' ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}
+                        ${bus.type === 'campus' ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}
                       >
-                        {bus.type === 'shuttle' ? '셔틀' : '통학'}
+                        {typeLabel}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
+                        ${bus.is_assigned_to_me ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500"}`}
+                      >
+                        {bus.is_assigned_to_me ? '내 배정' : '공용'}
                       </span>
                     </div>
                     <p className="text-gray-400 text-xs">{bus.id} · 정원 {bus.capacity}명</p>
