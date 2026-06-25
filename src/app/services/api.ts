@@ -315,7 +315,7 @@ class ApiClient {
     throw new Error(response.error || 'Failed to create bus');
   }
 
-  async updateBus(id: string, updates: Partial<{ name: string; capacity: number; licensePlate: string; status: string; currentRouteId: string | null; assignedDriverId: string | null; isRunning: boolean }>): Promise<any> {
+  async updateBus(id: string, updates: Partial<{ name: string; type: string; capacity: number; licensePlate: string; status: string; currentRouteId: string | null; assignedDriverId: string | null; isRunning: boolean }>): Promise<any> {
     const response = await this.request<ApiResponse<any>>(`/buses/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),

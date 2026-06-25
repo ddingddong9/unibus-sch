@@ -120,7 +120,7 @@ export default function CampusShuttleWrapper() {
 
       // 활성 버스 ID + 이름 등록
       activeBusIdsRef.current = new Set(
-        allBuses.filter((b: any) => b.status === 'active').map((b: any) => b.id)
+        allBuses.filter((b: any) => b.type === 'campus' && b.status === 'active').map((b: any) => b.id)
       );
       busNamesRef.current = new Map(
         allBuses.map((b: any) => [b.id, b.name])
@@ -133,7 +133,7 @@ export default function CampusShuttleWrapper() {
 
       // 활성 버스 중 위치 있는 것만 표시
       const markers: BusMarker[] = allBuses
-        .filter((b: any) => b.status === 'active' && locationMap.has(b.id))
+        .filter((b: any) => b.type === 'campus' && b.status === 'active' && locationMap.has(b.id))
         .map((b: any) => {
           const loc = locationMap.get(b.id);
           return {
@@ -206,7 +206,7 @@ export default function CampusShuttleWrapper() {
         { event: 'UPDATE', schema: 'public', table: 'buses' },
         (payload) => {
           const row = payload.new as any;
-          if (row.status === 'inactive') {
+          if (row.status === 'inactive' || row.type !== 'shuttle') {
             // 미운행 전환 → 지도에서 제거
             activeBusIdsRef.current.delete(row.id);
             setBuses(prev => prev.filter(b => b.id !== row.id));
