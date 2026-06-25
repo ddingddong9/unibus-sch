@@ -361,6 +361,15 @@ class ApiClient {
     throw new Error(response.error || 'Failed to fetch users');
   }
 
+  async updateUser(userId: string, updates: Partial<{ name: string }>): Promise<any> {
+    const response = await this.request<ApiResponse<any>>(`/users/${userId}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to update user');
+  }
+
   async updateUserRole(userId: string, role: 'user' | 'admin' | 'driver'): Promise<void> {
     const response = await this.request<ApiResponse>(`/users/${userId}/role`, {
       method: 'PUT',

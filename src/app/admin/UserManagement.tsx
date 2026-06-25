@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Search, Users, ShieldCheck, Bus, User } from "lucide-react";
+import { Search, Users, ShieldCheck, Bus, User, Pencil, Check, X } from "lucide-react";
 import AdminLayout from "./AdminLayout";
 import { api } from "../services/api";
 
@@ -25,6 +25,8 @@ export default function UserManagement() {
   const [searchQuery, setSearchQuery] = useState("");
   const [filterRole, setFilterRole] = useState<"all" | ManagedUser["role"]>("all");
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [editingNameId, setEditingNameId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
@@ -54,6 +56,36 @@ export default function UserManagement() {
       showToast("역할이 변경되었습니다", "success");
     } catch (err: any) {
       showToast(err.message || "역할 변경에 실패했습니다", "error");
+    } finally {
+      setUpdatingId(null);
+    }
+  };
+
+  const startNameEdit = (user: ManagedUser) => {
+    setEditingNameId(user.id);
+    setEditingName(user.name);
+  };
+
+  const cancelNameEdit = () => {
+    setEditingNameId(null);
+    setEditingName("");
+  };
+
+  const handleNameSave = async (userId: string) => {
+    const nextName = editingName.trim();
+    if (!nextName) {
+      showToast("이름을 입력해주세요", "error");
+      return;
+    }
+
+    setUpdatingId(userId);
+    try {
+      const updated = await api.updateUser(userId, { name: nextName });
+      setUsers(users.map(u => u.id === userId ? { ...u, name: updated.name } : u));
+      cancelNameEdit();
+      showToast("이름이 변경되었습니다", "success");
+    } catch (err: any) {
+      showToast(err.message || "이름 변경에 실패했습니다", "error");
     } finally {
       setUpdatingId(null);
     }
@@ -197,9 +229,51 @@ export default function UserManagement() {
                               {user.name.charAt(0)}
                             </span>
                           </div>
-                          <span className="font-['Public_Sans'] font-medium text-[#0f172a] text-[15px]">
-                            {user.name}
-                          </span>
+                          {editingNameId === user.id ? (
+                            <div className="flex items-center gap-2 min-w-[220px]">
+                              <input
+                                type="text"
+                                value={editingName}
+                                onChange={(e) => setEditingName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleNameSave(user.id);
+                                  if (e.key === "Escape") cancelNameEdit();
+                                }}
+                                disabled={isUpdating}
+                                className="h-[34px] w-full px-3 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[14px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-1 focus:ring-[#1e3b8a]/20 disabled:opacity-50"
+                                autoFocus
+                              />
+                              <button
+                                onClick={() => handleNameSave(user.id)}
+                                disabled={isUpdating}
+                                className="p-2 text-green-700 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+                                aria-label="이름 저장"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={cancelNameEdit}
+                                disabled={isUpdating}
+                                className="p-2 text-[#94a3b8] hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                                aria-label="이름 편집 취소"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-['Public_Sans'] font-medium text-[#0f172a] text-[15px] truncate">
+                                {user.name}
+                              </span>
+                              <button
+                                onClick={() => startNameEdit(user)}
+                                className="p-1.5 text-[#94a3b8] hover:text-[#1e3b8a] hover:bg-[#1e3b8a]/5 rounded-lg transition-colors"
+                                aria-label="이름 수정"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 font-['Public_Sans'] text-[#64748b] text-[14px]">
