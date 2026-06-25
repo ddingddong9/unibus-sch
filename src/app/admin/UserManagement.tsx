@@ -170,7 +170,7 @@ export default function UserManagement() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
           {loading ? (
             <div className="flex items-center justify-center py-20">
               <div className="text-center">
@@ -197,7 +197,7 @@ export default function UserManagement() {
               </div>
             </div>
           ) : (
-            <table className="w-full">
+            <table className="w-full min-w-[1040px]">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-4 text-left font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px]">이름</th>
@@ -205,7 +205,7 @@ export default function UserManagement() {
                   <th className="px-6 py-4 text-left font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px]">학번</th>
                   <th className="px-6 py-4 text-left font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px]">가입 방식</th>
                   <th className="px-6 py-4 text-left font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px]">가입일</th>
-                  <th className="px-6 py-4 text-left font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] w-[200px]">역할</th>
+                  <th className="px-6 py-4 text-left font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] w-[260px] whitespace-nowrap">역할</th>
                 </tr>
               </thead>
               <tbody>
@@ -294,10 +294,10 @@ export default function UserManagement() {
                       <td className="px-6 py-4 font-['Public_Sans'] text-[#64748b] text-[14px]">
                         {new Date(user.createdAt).toLocaleDateString('ko-KR')}
                       </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
+                      <td className="px-6 py-4 w-[260px]">
+                        <div className="flex items-center gap-2 whitespace-nowrap">
                           {/* 현재 역할 뱃지 */}
-                          <span className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-['Public_Sans'] text-[12px] font-medium ${roleInfo.color}`}>
+                          <span className={`shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-['Public_Sans'] text-[12px] font-medium whitespace-nowrap ${roleInfo.color}`}>
                             <RoleIcon className="w-3 h-3" />
                             {roleInfo.label}
                           </span>
@@ -309,7 +309,7 @@ export default function UserManagement() {
                             <select
                               value={user.role}
                               onChange={(e) => handleRoleChange(user.id, e.target.value as ManagedUser["role"])}
-                              className="h-[32px] px-2 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[13px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-1 focus:ring-[#1e3b8a]/20 cursor-pointer"
+                              className="h-[32px] min-w-[112px] px-2 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[13px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-1 focus:ring-[#1e3b8a]/20 cursor-pointer"
                             >
                               <option value="user">일반 사용자</option>
                               <option value="driver">버스 기사</option>
