@@ -6,17 +6,6 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
 import NaverMapComponent from "../components/NaverMapComponent";
 
-// hex → tailwind-style inline color
-const COLOR_FALLBACKS: Record<string, string> = {
-  "#3b82f6": "#3b82f6",
-  "#10b981": "#10b981",
-  "#f59e0b": "#f59e0b",
-  "#8b5cf6": "#8b5cf6",
-  "#ec4899": "#ec4899",
-  "#1e3a8a": "#1e3a8a",
-  "#1E3B8A": "#1e3a8a",
-};
-
 const getColor = (color?: string) => color || "#1e3a8a";
 
 function openPayco() {
@@ -33,7 +22,7 @@ function openPayco() {
 
 export default function CommuterBusWrapper() {
   const navigate = useNavigate();
-  const { t, language } = useLanguage();
+  const { t } = useLanguage();
   const [selectedRegion, setSelectedRegion] = useState<string>("to-school");
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
   const [routes, setRoutes] = useState<any[]>([]);

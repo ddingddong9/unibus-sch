@@ -6,6 +6,9 @@ import { requireAdmin } from "../middleware/auth.tsx";
 
 const routes = new Hono();
 
+const toClientRouteType = (type: string) => type === 'shuttle' ? 'campus' : type === 'commute' ? 'commuter' : type;
+const toDbRouteType = (type: string) => type === 'campus' ? 'shuttle' : type === 'commuter' ? 'commute' : type;
+
 // Get all routes with stops
 routes.get("/", async (c) => {
   try {
@@ -33,7 +36,7 @@ routes.get("/", async (c) => {
         return {
           id: route.id,
           name: route.name,
-          type: route.type,
+          type: toClientRouteType(route.type),
           description: route.description,
           color: route.color,
           region: route.region,
@@ -112,6 +115,10 @@ routes.get("/:id/path", async (c) => {
     );
 
     const validStops = resolved.filter((s) => s.lat != null && s.lng != null);
+
+    if (validStops.length === 0) {
+      return c.json({ success: true, data: { stops: resolved, path: [] } });
+    }
 
     // 두 정류장 간 거리 계산 (km)
     const haversineKm = (a: {lat: number; lng: number}, b: {lat: number; lng: number}) => {
@@ -194,7 +201,7 @@ routes.get("/:id", async (c) => {
     const formattedRoute = {
       id: route.id,
       name: route.name,
-      type: route.type,
+      type: toClientRouteType(route.type),
       description: route.description,
       color: route.color,
       region: route.region,
@@ -237,7 +244,7 @@ routes.post("/", requireAdmin, async (c) => {
       .from('routes')
       .insert({
         name,
-        type,
+        type: toDbRouteType(type),
         description: description || null,
         color: color || '#1E3B8A',
         region: region || null,
@@ -282,7 +289,7 @@ routes.post("/", requireAdmin, async (c) => {
       data: {
         id: route.id,
         name: route.name,
-        type: route.type,
+        type: toClientRouteType(route.type),
         description: route.description,
         color: route.color,
         region: route.region,
@@ -319,7 +326,7 @@ routes.put("/:id", requireAdmin, async (c) => {
     // 노선 수정
     const dbUpdates: any = {};
     if (name) dbUpdates.name = name;
-    if (type) dbUpdates.type = type;
+    if (type) dbUpdates.type = toDbRouteType(type);
     if (description !== undefined) dbUpdates.description = description;
     if (color) dbUpdates.color = color;
     if (isActive !== undefined) dbUpdates.is_active = isActive;
@@ -375,7 +382,7 @@ routes.put("/:id", requireAdmin, async (c) => {
       data: {
         id: updatedRoute.id,
         name: updatedRoute.name,
-        type: updatedRoute.type,
+        type: toClientRouteType(updatedRoute.type),
         description: updatedRoute.description,
         color: updatedRoute.color,
         region: updatedRoute.region,

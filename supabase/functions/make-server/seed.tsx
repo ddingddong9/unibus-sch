@@ -183,7 +183,7 @@ export async function seedDatabase() {
         {
           title: '임시 정류장 변경 안내',
           content: '공사로 인해 공과대학 정류장이 남쪽으로 50m 임시 이동됩니다.\n\n변경 기간: 3월 15일 ~ 4월 30일\n임시 정류장 위치: 공대 본관 후문 앞',
-          category: 'important',
+          category: 'route',
           priority: 'high',
           author_id: admin.id,
           is_pinned: true,
@@ -191,7 +191,7 @@ export async function seedDatabase() {
         {
           title: '심야 셔틀 운행 연장',
           content: '시험기간 동안 심야 셔틀이 오후 11시까지 운행됩니다.\n\n운행 기간: 중간고사/기말고사 기간\n운행 노선: 순환선 A, B',
-          category: 'event',
+          category: 'general',
           priority: 'medium',
           author_id: admin.id,
         },

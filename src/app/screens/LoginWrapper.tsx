@@ -62,7 +62,7 @@ export default function LoginWrapper() {
       } else {
         navigate("/home");
       }
-    } catch (err: any) {
+    } catch {
       setError(t("로그인에 실패했습니다. 이메일과 비밀번호를 확인해주세요.", "Login failed. Please check your email and password."));
     } finally {
       setLoading(false);
@@ -77,7 +77,7 @@ export default function LoginWrapper() {
       const result = await api.kakaoLogin(kakaoUser.kakaoId, kakaoUser.email, kakaoUser.name, kakaoUser.profileImage);
       login(result.token, result.user);
       navigate("/home");
-    } catch (err: any) {
+    } catch {
       setError(t("카카오 로그인에 실패했습니다. 다시 시도해주세요.", "Kakao login failed. Please try again."));
     } finally {
       setLoading(false);

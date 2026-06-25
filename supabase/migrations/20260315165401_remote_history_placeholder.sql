@@ -1,0 +1,4 @@
+-- Remote-only migration placeholder.
+-- This version exists in the linked Supabase project's migration history, but
+-- the original SQL file is not present in this repository history.
+-- Keep this file so local migration history can stay aligned with remote.

@@ -6,6 +6,9 @@ import { requireAdmin, requireDriver } from "../middleware/auth.tsx";
 
 const buses = new Hono();
 
+const toClientBusType = (type: string) => type === 'shuttle' ? 'campus' : type === 'commute' ? 'commuter' : type;
+const toDbBusType = (type: string) => type === 'campus' ? 'shuttle' : type === 'commuter' || type === 'direct' ? 'commute' : type;
+
 // Get all buses - JOIN으로 노선 정보 포함
 buses.get("/", async (c) => {
   try {
@@ -24,7 +27,7 @@ buses.get("/", async (c) => {
     const formattedBuses = allBuses?.map(bus => ({
       id: bus.id,
       name: bus.name,
-      type: bus.type,
+      type: toClientBusType(bus.type),
       capacity: bus.capacity,
       licensePlate: bus.license_plate,
       status: bus.status,
@@ -75,7 +78,7 @@ buses.get("/:id", async (c) => {
     const formattedBus = {
       id: bus.id,
       name: bus.name,
-      type: bus.type,
+      type: toClientBusType(bus.type),
       capacity: bus.capacity,
       licensePlate: bus.license_plate,
       status: bus.status,
@@ -149,7 +152,7 @@ buses.post("/", requireAdmin, async (c) => {
       .from('buses')
       .insert({
         name,
-        type,
+        type: toDbBusType(type),
         capacity: capacity || 45,
         license_plate: licensePlate || null,
         current_route_id: routeId || null,
@@ -170,7 +173,7 @@ buses.post("/", requireAdmin, async (c) => {
       data: {
         id: bus.id,
         name: bus.name,
-        type: bus.type,
+        type: toClientBusType(bus.type),
         capacity: bus.capacity,
         licensePlate: bus.license_plate,
         status: bus.status,
@@ -279,6 +282,7 @@ buses.put("/:id", requireAdmin, async (c) => {
     // snake_case로 변환
     const dbUpdates: any = {};
     if (updates.name) dbUpdates.name = updates.name;
+    if (updates.type) dbUpdates.type = toDbBusType(updates.type);
     if (updates.capacity) dbUpdates.capacity = updates.capacity;
     if (updates.licensePlate) dbUpdates.license_plate = updates.licensePlate;
     if (updates.status) dbUpdates.status = updates.status;
@@ -304,7 +308,7 @@ buses.put("/:id", requireAdmin, async (c) => {
       data: {
         id: updatedBus.id,
         name: updatedBus.name,
-        type: updatedBus.type,
+        type: toClientBusType(updatedBus.type),
         capacity: updatedBus.capacity,
         licensePlate: updatedBus.license_plate,
         status: updatedBus.status,
