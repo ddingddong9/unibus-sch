@@ -37,6 +37,7 @@ export interface BusRoute {
   duration?: string;   // "50분"
   fare?: string;       // "₩3,500"
   stops: BusStop[];
+  shapePoints?: RouteShapePoint[];
   isActive: boolean;
   createdAt?: string;
   updatedAt: string;
@@ -50,6 +51,15 @@ export interface BusStop {
     lng: number;
   };
   order: number;
+}
+
+export interface RouteShapePoint {
+  id?: string;
+  name?: string | null;
+  afterStopOrder: number;
+  order: number;
+  lat: number;
+  lng: number;
 }
 
 export interface BusSchedule {

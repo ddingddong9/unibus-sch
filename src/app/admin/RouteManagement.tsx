@@ -1,5 +1,5 @@
-import { useState, useEffect } from "react";
-import { Plus, Edit, Trash2, ToggleLeft, ToggleRight, MapPin, Clock, Search, RefreshCw } from "lucide-react";
+import { useState, useEffect, useRef, useCallback } from "react";
+import { Plus, Edit, Trash2, ToggleLeft, ToggleRight, MapPin, Clock, Search, RefreshCw, Route as RouteIcon, Save, X } from "lucide-react";
 import AdminLayout from "./AdminLayout";
 import { api } from "../services/api";
 
@@ -13,7 +13,8 @@ interface BusRoute {
   schedule?: string;
   duration?: string;
   fare?: string;
-  stops: Array<{ id: string; name: string; order: number }>;
+  stops: Array<{ id: string; name: string; order: number; lat?: number | null; lng?: number | null }>;
+  shapePoints?: Array<{ id?: string; name?: string | null; afterStopOrder: number; order: number; lat: number; lng: number }>;
   isActive: boolean;
 }
 
@@ -29,6 +30,7 @@ export default function RouteManagement() {
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [editingRoute, setEditingRoute] = useState<BusRoute | null>(null);
+  const [mapEditingRoute, setMapEditingRoute] = useState<BusRoute | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [formData, setFormData] = useState({
     name: "",
@@ -246,6 +248,7 @@ export default function RouteManagement() {
                       key={route.id}
                       route={route}
                       onEdit={handleEdit}
+                      onMapEdit={setMapEditingRoute}
                       onDelete={handleDelete}
                       onToggleActive={toggleActive}
                     />
@@ -269,6 +272,7 @@ export default function RouteManagement() {
                       key={route.id}
                       route={route}
                       onEdit={handleEdit}
+                      onMapEdit={setMapEditingRoute}
                       onDelete={handleDelete}
                       onToggleActive={toggleActive}
                     />
@@ -472,6 +476,16 @@ export default function RouteManagement() {
           </div>
         </div>
       )}
+      {mapEditingRoute && (
+        <RouteMapEditor
+          route={mapEditingRoute}
+          onClose={() => setMapEditingRoute(null)}
+          onSaved={async () => {
+            setMapEditingRoute(null);
+            await fetchRoutes();
+          }}
+        />
+      )}
     </AdminLayout>
   );
 }
@@ -479,11 +493,12 @@ export default function RouteManagement() {
 interface RouteCardProps {
   route: BusRoute;
   onEdit: (route: BusRoute) => void;
+  onMapEdit: (route: BusRoute) => void;
   onDelete: (id: string) => void;
   onToggleActive: (route: BusRoute) => void;
 }
 
-function RouteCard({ route, onEdit, onDelete, onToggleActive }: RouteCardProps) {
+function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: RouteCardProps) {
   return (
     <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
       <div className="flex items-start justify-between mb-4">
@@ -521,6 +536,13 @@ function RouteCard({ route, onEdit, onDelete, onToggleActive }: RouteCardProps) 
           </button>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={() => onMapEdit(route)}
+            className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+            title="지도에서 경로 편집"
+          >
+            <RouteIcon className="w-5 h-5" />
+          </button>
           <button
             onClick={() => onEdit(route)}
             className="p-2 text-[#1e3b8a] hover:bg-[#1e3b8a]/10 rounded-lg transition-colors"
@@ -587,6 +609,350 @@ function RouteCard({ route, onEdit, onDelete, onToggleActive }: RouteCardProps) 
             {route.fare && <span>{route.fare}</span>}
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+interface RouteMapEditorProps {
+  route: BusRoute;
+  onClose: () => void;
+  onSaved: () => void;
+}
+
+declare global {
+  interface Window { naver: any; }
+}
+
+const STOP_MARKER = (name: string, index: number) => `
+  <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 7px rgba(15,23,42,0.25));cursor:grab;">
+    <div style="background:white;color:#0f172a;border:1px solid rgba(15,23,42,0.12);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;margin-bottom:4px;font-family:sans-serif;">${name}</div>
+    <div style="width:30px;height:30px;border-radius:999px;background:#1e3b8a;border:3px solid white;color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;font-family:sans-serif;">${index}</div>
+  </div>
+`;
+
+const SHAPE_MARKER = (index: number) => `
+  <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 7px rgba(15,23,42,0.22));cursor:grab;">
+    <div style="background:#fff7ed;color:#9a3412;border:1px solid #fed7aa;padding:3px 7px;border-radius:999px;font-size:10px;font-weight:800;white-space:nowrap;margin-bottom:5px;font-family:sans-serif;">보정점 ${index}</div>
+    <div style="width:24px;height:24px;background:#f97316;border:3px solid white;transform:rotate(45deg);border-radius:5px;"></div>
+  </div>
+`;
+
+function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const mapInstance = useRef<any>(null);
+  const markerRefs = useRef<any[]>([]);
+  const polylineRef = useRef<any>(null);
+  const [stops, setStops] = useState<BusRoute["stops"]>(route.stops || []);
+  const [shapePoints, setShapePoints] = useState<NonNullable<BusRoute["shapePoints"]>>(route.shapePoints || []);
+  const [path, setPath] = useState<[number, number][]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("마커를 드래그하면 네이버 경로가 다시 계산됩니다.");
+  const [newShapeAfterStopOrder, setNewShapeAfterStopOrder] = useState<number | null>(null);
+
+  const clearMapObjects = () => {
+    markerRefs.current.forEach(marker => { try { marker.setMap(null); } catch (_) {} });
+    markerRefs.current = [];
+    if (polylineRef.current) {
+      try { polylineRef.current.setMap(null); } catch (_) {}
+      polylineRef.current = null;
+    }
+  };
+
+  const ensureMapScript = () => new Promise<void>((resolve, reject) => {
+    if (window.naver?.maps) {
+      resolve();
+      return;
+    }
+    const existing = document.querySelector<HTMLScriptElement>('script[data-naver-admin-map="true"]');
+    if (existing) {
+      existing.addEventListener("load", () => resolve(), { once: true });
+      existing.addEventListener("error", () => reject(new Error("네이버 지도 스크립트를 불러오지 못했습니다.")), { once: true });
+      return;
+    }
+    const script = document.createElement("script");
+    script.dataset.naverAdminMap = "true";
+    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${import.meta.env.VITE_NAVER_CLIENT_ID}&submodules=geocoder`;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("네이버 지도 스크립트를 불러오지 못했습니다."));
+    document.head.appendChild(script);
+  });
+
+  const refreshPreview = useCallback(async (
+    nextStops = stops,
+    nextShapePoints = shapePoints,
+  ) => {
+    const drawableStops = nextStops.filter(stop => stop.lat != null && stop.lng != null);
+    if (drawableStops.length < 2) return;
+    setMessage("네이버 경로를 다시 계산하는 중입니다.");
+    try {
+      const { path: nextPath } = await api.previewRoutePath(route.id, {
+        stops: nextStops.map(stop => ({
+          id: stop.id,
+          name: stop.name,
+          order: stop.order,
+          lat: stop.lat ?? null,
+          lng: stop.lng ?? null,
+        })),
+        shapePoints: nextShapePoints,
+      });
+      setPath(nextPath);
+      setMessage("경로 미리보기가 업데이트되었습니다.");
+    } catch (error: any) {
+      setMessage(error.message || "경로 미리보기를 다시 계산하지 못했습니다.");
+    }
+  }, [route.id, stops, shapePoints]);
+
+  useEffect(() => {
+    let disposed = false;
+    const setup = async () => {
+      setLoading(true);
+      try {
+        const [_, routePath] = await Promise.all([
+          ensureMapScript(),
+          api.getRoutePath(route.id),
+        ]);
+        if (disposed) return;
+
+        setStops(routePath.stops.map(stop => ({
+          id: stop.id,
+          name: stop.name,
+          order: stop.order,
+          lat: stop.lat,
+          lng: stop.lng,
+        })));
+        setShapePoints(routePath.shapePoints || []);
+        setPath(routePath.path || []);
+        const selectableStops = routePath.stops.filter(stop => stop.lat != null && stop.lng != null);
+        setNewShapeAfterStopOrder(selectableStops[Math.max(0, selectableStops.length - 2)]?.order ?? 1);
+
+        const first = routePath.stops.find(stop => stop.lat != null && stop.lng != null);
+        if (mapRef.current && !mapInstance.current) {
+          mapInstance.current = new window.naver.maps.Map(mapRef.current, {
+            center: new window.naver.maps.LatLng(first?.lat ?? 36.7694, first?.lng ?? 126.9322),
+            zoom: route.type === "campus" ? 16 : 12,
+          });
+        }
+      } catch (error: any) {
+        setMessage(error.message || "지도 편집기를 불러오지 못했습니다.");
+      } finally {
+        if (!disposed) setLoading(false);
+      }
+    };
+    setup();
+    return () => {
+      disposed = true;
+      clearMapObjects();
+    };
+  }, [route.id, route.type]);
+
+  useEffect(() => {
+    if (!mapInstance.current || !window.naver || loading) return;
+    clearMapObjects();
+
+    if (path.length > 1) {
+      polylineRef.current = new window.naver.maps.Polyline({
+        map: mapInstance.current,
+        path: path.map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng)),
+        strokeColor: route.color || "#1e3b8a",
+        strokeWeight: 5,
+        strokeOpacity: 0.85,
+      });
+    }
+
+    const bounds = new window.naver.maps.LatLngBounds();
+    stops.forEach((stop, index) => {
+      if (stop.lat == null || stop.lng == null) return;
+      const marker = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(stop.lat, stop.lng),
+        map: mapInstance.current,
+        draggable: true,
+        icon: {
+          content: STOP_MARKER(stop.name, index + 1),
+          size: new window.naver.maps.Size(80, 58),
+          anchor: new window.naver.maps.Point(40, 58),
+        },
+        zIndex: 30,
+      });
+      window.naver.maps.Event.addListener(marker, "dragend", () => {
+        const pos = marker.getPosition();
+        const nextStops = stops.map(item => item.id === stop.id ? { ...item, lat: pos.lat(), lng: pos.lng() } : item);
+        setStops(nextStops);
+        refreshPreview(nextStops, shapePoints);
+      });
+      markerRefs.current.push(marker);
+      bounds.extend(marker.getPosition());
+    });
+
+    shapePoints.forEach((point, index) => {
+      const marker = new window.naver.maps.Marker({
+        position: new window.naver.maps.LatLng(point.lat, point.lng),
+        map: mapInstance.current,
+        draggable: true,
+        icon: {
+          content: SHAPE_MARKER(index + 1),
+          size: new window.naver.maps.Size(80, 58),
+          anchor: new window.naver.maps.Point(40, 58),
+        },
+        zIndex: 25,
+      });
+      window.naver.maps.Event.addListener(marker, "dragend", () => {
+        const pos = marker.getPosition();
+        const nextPoints = shapePoints.map((item, pointIndex) => pointIndex === index ? { ...item, lat: pos.lat(), lng: pos.lng() } : item);
+        setShapePoints(nextPoints);
+        refreshPreview(stops, nextPoints);
+      });
+      markerRefs.current.push(marker);
+      bounds.extend(marker.getPosition());
+    });
+
+    if (!bounds.isEmpty()) {
+      mapInstance.current.fitBounds(bounds);
+    }
+  }, [loading, path, stops, shapePoints, refreshPreview, route.color]);
+
+  const addShapePoint = () => {
+    const drawableStops = stops.filter(stop => stop.lat != null && stop.lng != null);
+    if (drawableStops.length < 2) {
+      setMessage("좌표가 있는 정류장이 2개 이상 필요합니다.");
+      return;
+    }
+    const selectedIndex = Math.max(0, drawableStops.findIndex(stop => stop.order === newShapeAfterStopOrder));
+    const from = drawableStops[selectedIndex] || drawableStops[Math.max(0, drawableStops.length - 2)];
+    const to = drawableStops[selectedIndex + 1] || drawableStops[drawableStops.length - 1];
+    const afterStopOrder = from.order;
+    const sameSegmentCount = shapePoints.filter(point => point.afterStopOrder === afterStopOrder).length;
+    const nextPoints = [
+      ...shapePoints,
+      {
+        name: "경로 보정점",
+        afterStopOrder,
+        order: sameSegmentCount + 1,
+        lat: ((from.lat || 0) + (to.lat || 0)) / 2,
+        lng: ((from.lng || 0) + (to.lng || 0)) / 2,
+      },
+    ];
+    setShapePoints(nextPoints);
+    refreshPreview(stops, nextPoints);
+  };
+
+  const removeLastShapePoint = () => {
+    const nextPoints = shapePoints.slice(0, -1);
+    setShapePoints(nextPoints);
+    refreshPreview(stops, nextPoints);
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await api.updateRoute(route.id, {
+        stops: stops.map(stop => ({
+          id: stop.id,
+          name: stop.name,
+          order: stop.order,
+          lat: stop.lat ?? null,
+          lng: stop.lng ?? null,
+        })),
+        shapePoints,
+      } as any);
+      await onSaved();
+    } catch (error: any) {
+      setMessage(error.message || "지도 경로 저장에 실패했습니다.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[92vh] overflow-hidden flex flex-col">
+        <div className="p-5 border-b border-gray-200 flex items-center justify-between gap-4">
+          <div>
+            <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[22px]">{route.name} 지도 경로 편집</h2>
+            <p className="font-['Public_Sans'] text-[#64748b] text-[13px] mt-1">정류장과 보정점을 드래그해서 실제 운행 경로를 조정합니다.</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-[#64748b] hover:bg-gray-100 rounded-lg">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+        <div className="grid grid-cols-[1fr_300px] min-h-[620px]">
+          <div className="relative">
+            <div ref={mapRef} className="absolute inset-0" />
+            {loading && (
+              <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
+                <div className="w-10 h-10 border-2 border-[#1e3b8a] border-t-transparent rounded-full animate-spin" />
+              </div>
+            )}
+          </div>
+          <aside className="border-l border-gray-200 p-5 overflow-auto">
+            <div className="space-y-3 mb-5">
+              <label className="block">
+                <span className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[13px] mb-1.5">보정점 추가 구간</span>
+                <select
+                  value={newShapeAfterStopOrder ?? ""}
+                  onChange={(event) => setNewShapeAfterStopOrder(Number(event.target.value))}
+                  className="w-full h-[38px] px-3 rounded-lg border border-[#cbd5e1] bg-white font-['Public_Sans'] text-[13px] text-[#0f172a]"
+                >
+                  {stops.slice(0, -1).map((stop, index) => (
+                    <option key={stop.id} value={stop.order}>
+                      {stop.name} → {stops[index + 1]?.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                onClick={addShapePoint}
+                className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#1e3b8a] text-white font-['Public_Sans'] font-semibold text-[14px]"
+              >
+                <Plus className="w-4 h-4" />
+                보정점 추가
+              </button>
+              <button
+                onClick={removeLastShapePoint}
+                disabled={shapePoints.length === 0}
+                className="w-full px-4 py-2.5 rounded-lg border border-gray-200 text-[#64748b] font-['Public_Sans'] font-semibold text-[14px] disabled:opacity-40"
+              >
+                마지막 보정점 삭제
+              </button>
+            </div>
+            <div className="mb-5 p-4 rounded-lg bg-blue-50 border border-blue-100">
+              <p className="font-['Public_Sans'] text-blue-900 text-[12px] leading-5">{message}</p>
+            </div>
+            <div className="mb-5">
+              <h3 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">정류장</h3>
+              <div className="space-y-2">
+                {stops.map((stop) => (
+                  <div key={stop.id} className="px-3 py-2 rounded-lg bg-gray-50 font-['Public_Sans'] text-[12px] text-[#64748b]">
+                    {stop.order}. {stop.name}
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="mb-6">
+              <h3 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">숨은 보정점</h3>
+              {shapePoints.length === 0 ? (
+                <p className="font-['Public_Sans'] text-[#94a3b8] text-[12px]">보정점이 없습니다.</p>
+              ) : (
+                <div className="space-y-2">
+                  {shapePoints.map((point, index) => (
+                    <div key={`${point.afterStopOrder}-${point.order}-${index}`} className="px-3 py-2 rounded-lg bg-orange-50 font-['Public_Sans'] text-[12px] text-orange-800">
+                      {index + 1}. {point.name || "경로 보정점"} · {point.afterStopOrder}번 정류장 뒤
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-green-600 text-white font-['Public_Sans'] font-semibold text-[14px] disabled:opacity-50"
+            >
+              <Save className="w-4 h-4" />
+              {saving ? "저장 중..." : "지도 경로 저장"}
+            </button>
+          </aside>
+        </div>
       </div>
     </div>
   );
