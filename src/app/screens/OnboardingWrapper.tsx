@@ -4,7 +4,11 @@ import { useNavigate } from "react-router";
 
 const fadeUp = {
   hidden: { opacity: 0, y: 22 },
-  visible: { opacity: 1, y: 0 },
+  visible: {
+    opacity: 1,
+    y: 0,
+    transition: { duration: 0.55, ease: [0.22, 1, 0.36, 1] },
+  },
 };
 
 const sectionMotion = {
@@ -29,8 +33,15 @@ const routeItems = [
 
 const noticeItems = [
   "학내순환 운행 변경 안내",
-  "통학버스 예약 및 탑승 안내",
+  "통학버스 노선 및 시간 안내",
   "정류장별 대기 정보 확인",
+];
+
+const liveStatusItems = [
+  "학내순환 2호차 도서관 접근 중",
+  "서울 등교 노선 07:30",
+  "정문 정류장 도착 예정",
+  "인천 하교 노선 18:10",
 ];
 
 function BrandMark() {
@@ -114,6 +125,33 @@ function MovingRouteGraphic() {
   );
 }
 
+function LiveStatusRail() {
+  const railItems = [...liveStatusItems, ...liveStatusItems];
+
+  return (
+    <motion.div
+      variants={fadeUp}
+      className="mt-4 overflow-hidden rounded-lg border border-[#dbe4ef] bg-white py-3 shadow-sm"
+    >
+      <motion.div
+        className="flex w-max gap-2 px-3"
+        animate={{ x: ["0%", "-50%"] }}
+        transition={{ duration: 18, repeat: Infinity, ease: "linear" }}
+      >
+        {railItems.map((item, index) => (
+          <div
+            key={`${item}-${index}`}
+            className="flex h-9 items-center gap-2 rounded-full bg-[#f8fafc] px-3 font-['Public_Sans'] text-[12px] font-bold text-[#334155]"
+          >
+            <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+            {item}
+          </div>
+        ))}
+      </motion.div>
+    </motion.div>
+  );
+}
+
 function StopPreview() {
   return (
     <motion.div variants={fadeUp} className="rounded-lg border border-[#e2e8f0] bg-white p-5 shadow-sm">
@@ -153,7 +191,7 @@ function CommuterPreview() {
     <motion.div variants={fadeUp} className="rounded-lg border border-[#e2e8f0] bg-white p-5 shadow-sm">
       <div className="mb-4">
         <p className="font-['Public_Sans'] text-[12px] font-bold text-[#64748b]">통학버스</p>
-        <h3 className="font-['Public_Sans'] text-[20px] font-extrabold text-[#0f172a]">노선과 예약 흐름 확인</h3>
+        <h3 className="font-['Public_Sans'] text-[20px] font-extrabold text-[#0f172a]">노선과 시간 확인</h3>
       </div>
       <div className="space-y-3">
         {[
@@ -173,8 +211,23 @@ function CommuterPreview() {
           </motion.div>
         ))}
       </div>
-      <div className="mt-4 h-11 rounded-lg bg-[#fa2828] px-4 font-['Public_Sans'] text-[14px] font-extrabold leading-[44px] text-white shadow-[0_12px_22px_rgba(250,40,40,0.18)]">
-        PAYCO 예약으로 이동
+      <div className="mt-4 rounded-lg bg-[#f8fafc] p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <p className="font-['Public_Sans'] text-[12px] font-bold text-[#64748b]">노선 미리보기</p>
+          <p className="font-['Public_Sans'] text-[12px] font-bold text-[#1e3a8a]">상세 정보 확인</p>
+        </div>
+        <div className="relative h-2 overflow-hidden rounded-full bg-[#dbe4ef]">
+          <motion.div
+            className="absolute inset-y-0 left-0 rounded-full bg-[#1e3a8a]"
+            animate={{ width: ["28%", "76%", "28%"] }}
+            transition={{ duration: 5.5, repeat: Infinity, ease: "easeInOut" }}
+          />
+        </div>
+        <div className="mt-3 grid grid-cols-3 gap-2 font-['Public_Sans'] text-[11px] font-bold text-[#64748b]">
+          <span>출발지</span>
+          <span className="text-center">학교</span>
+          <span className="text-right">도착지</span>
+        </div>
       </div>
     </motion.div>
   );
@@ -251,6 +304,7 @@ export default function OnboardingWrapper() {
             <motion.div variants={fadeUp} className="mt-6">
               <MovingRouteGraphic />
             </motion.div>
+            <LiveStatusRail />
           </motion.section>
 
           <motion.section className="py-8" {...sectionMotion}>
