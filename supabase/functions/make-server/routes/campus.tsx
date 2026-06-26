@@ -10,6 +10,17 @@ const STOPS = [
   { id: "main-gate", name: "정문",   lat: 36.769014, lng: 126.927978 },
 ];
 
+const ROUTE_POINTS = [
+  STOPS[0],
+  STOPS[1],
+  STOPS[2],
+  STOPS[3],
+  // Directions API shaping point: keep the displayed stop list unchanged,
+  // but guide the 도서관 → 정문 segment through the campus access road.
+  { id: "library-main-gate-shape", name: "정문 진입로", lat: 36.768960, lng: 126.929760 },
+  STOPS[4],
+];
+
 campus.get("/path", async (c) => {
   const clientId  = Deno.env.get("NAVER_CLIENT_ID");
   const secretKey = Deno.env.get("NAVER_SECRET_KEY");
@@ -18,9 +29,9 @@ campus.get("/path", async (c) => {
     return c.json({ success: false, error: "Naver API keys not configured" }, 500);
   }
 
-  const start     = `${STOPS[0].lng},${STOPS[0].lat}`;
-  const goal      = `${STOPS[4].lng},${STOPS[4].lat}`;
-  const waypoints = STOPS.slice(1, 4).map(s => `${s.lng},${s.lat}`).join("|");
+  const start     = `${ROUTE_POINTS[0].lng},${ROUTE_POINTS[0].lat}`;
+  const goal      = `${ROUTE_POINTS[ROUTE_POINTS.length - 1].lng},${ROUTE_POINTS[ROUTE_POINTS.length - 1].lat}`;
+  const waypoints = ROUTE_POINTS.slice(1, -1).map(s => `${s.lng},${s.lat}`).join("|");
   const url = `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
 
   let res: Response;

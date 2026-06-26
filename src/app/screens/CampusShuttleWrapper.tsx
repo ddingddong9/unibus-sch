@@ -83,7 +83,7 @@ export default function CampusShuttleWrapper() {
 
   // ── 캠퍼스 경로 fetch (24h 캐시) ──
   useEffect(() => {
-    const CACHE_KEY = 'campus_route_path_v4';
+    const CACHE_KEY = 'campus_route_path_v5';
     const CACHE_TTL = 24 * 60 * 60 * 1000;
     localStorage.removeItem('campus_route_path');
     localStorage.removeItem('campus_route_path_v2');
