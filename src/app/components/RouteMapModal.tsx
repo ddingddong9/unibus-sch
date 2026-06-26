@@ -116,7 +116,6 @@ export default function RouteMapModal({ route, color, onClose }: RouteMapModalPr
               zoom={12}
               stops={mapStops}
               routePath={routePath}
-              stopSnapMeters={route.type === "commuter" ? 900 : 150}
               fitBoundsKey={1}
             />
           )}

@@ -22,15 +22,24 @@ const ROUTE_POINTS = [
   STOPS[4],
 ];
 
+const CAMPUS_ROUTE_ID = "00000000-0000-0000-0000-000000000001";
+
 const getStoredCampusRoute = async () => {
-  const { data: route } = await db
+  const { data: routeById } = await db
+    .from("routes")
+    .select("id")
+    .eq("id", CAMPUS_ROUTE_ID)
+    .maybeSingle();
+
+  const { data: routeByName } = routeById ? { data: null } : await db
     .from("routes")
     .select("id")
     .eq("type", "shuttle")
     .ilike("name", "%학내순환%")
     .limit(1)
-    .single();
+    .maybeSingle();
 
+  const route = routeById || routeByName;
   if (!route) return null;
 
   const { data: stops } = await db
