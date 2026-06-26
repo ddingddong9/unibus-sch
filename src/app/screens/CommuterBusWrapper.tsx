@@ -193,7 +193,7 @@ export default function CommuterBusWrapper() {
                 <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
                 <span className="font-['Public_Sans'] font-bold text-white text-[13px]">{t("실시간 운행 현황", "Live Bus Tracking")}</span>
               </div>
-              <div style={{ height: 220 }}>
+              <div className="relative overflow-hidden" style={{ height: 220 }}>
                 <NaverMapComponent
                   center={{ lat: 37.05, lng: 127.0 }}
                   zoom={9}
