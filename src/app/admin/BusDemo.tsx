@@ -65,6 +65,11 @@ function interpolatePath(points: Point[], stepsPerSegment: number) {
   });
 }
 
+function pathFromNaver(path: [number, number][] | undefined, fallback: Point[]) {
+  if (!path || path.length < 2) return fallback;
+  return path.map(([lng, lat]) => ({ lat, lng }));
+}
+
 function heading(from: Point, to: Point) {
   const y = Math.sin((to.lng - from.lng) * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180);
   const x =
@@ -134,11 +139,28 @@ export default function BusDemo() {
       }
 
       const commuterRoutes = routes.filter((route: any) => route.type === "commuter");
+      setStatus("네이버 경로 API에서 발표용 도로 경로를 불러오는 중입니다.");
+
+      const campusRoadPath = await api.getCampusRoutePath()
+        .then(({ path }) => pathFromNaver(path, campusPath))
+        .catch(() => campusPath);
+
+      const commuterRoadPaths = await Promise.all(
+        commuterPaths.map(async (fallbackPath, index) => {
+          const route = commuterRoutes[index % Math.max(commuterRoutes.length, 1)];
+          if (!route?.id) return fallbackPath;
+
+          return api.getRoutePath(route.id)
+            .then(({ path }) => pathFromNaver(path, fallbackPath))
+            .catch(() => fallbackPath);
+        })
+      );
+
       const selected = buses.slice(0, 5);
       const nextPlans: DemoBusPlan[] = selected.map((bus: any, index: number) => {
         const kind: DemoKind = index < 3 ? "campus" : "commuter";
         const route = kind === "commuter" ? commuterRoutes[(index - 3) % Math.max(commuterRoutes.length, 1)] : null;
-        const basePath = kind === "campus" ? campusPath : commuterPaths[(index - 3) % commuterPaths.length];
+        const basePath = kind === "campus" ? campusRoadPath : commuterRoadPaths[(index - 3) % commuterRoadPaths.length];
         const offsetPath = basePath.map((point, pointIndex) => basePath[(pointIndex + index * 12) % basePath.length]);
         return {
           busId: bus.id,
