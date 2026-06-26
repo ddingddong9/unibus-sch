@@ -14,7 +14,6 @@ interface NaverMapProps {
   focusLocation?: { lat: number; lng: number; zoom?: number; key?: number } | null;
   fitBoundsKey?: number;
   routePath?: [number, number][]; // [[lng, lat], ...] from Naver Directions API
-  stopSnapMeters?: number;
   onBusClick?: (busId: string) => void;
   clientId?: string;
 }
@@ -78,7 +77,6 @@ export default function NaverMapComponent({
   focusLocation = null,
   fitBoundsKey = 0,
   routePath = [],
-  stopSnapMeters = 150,
   onBusClick,
   clientId = import.meta.env.VITE_NAVER_CLIENT_ID || "YOUR_NAVER_CLIENT_ID",
 }: NaverMapProps) {
@@ -115,14 +113,6 @@ export default function NaverMapComponent({
     const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
     const cx = ax + t * dx, cy = ay + t * dy;
     return { x: cx, y: cy, t, dist: (px - cx) ** 2 + (py - cy) ** 2 };
-  };
-
-  const approxMeters = (lat1: number, lng1: number, lat2: number, lng2: number) => {
-    const metersPerLat = 111_320;
-    const metersPerLng = 111_320 * Math.cos((((lat1 + lat2) / 2) * Math.PI) / 180);
-    const dLat = (lat2 - lat1) * metersPerLat;
-    const dLng = (lng2 - lng1) * metersPerLng;
-    return Math.sqrt(dLat * dLat + dLng * dLng);
   };
 
   // ── [변경] RAF 기반 마커 보간 ──
@@ -290,36 +280,10 @@ export default function NaverMapComponent({
     stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
     stopMarkersRef.current = [];
 
-    const route = routePathRef.current;
-
     stopsRef.current.forEach(stop => {
-      let lat = stop.position.lat;
-      let lng = stop.position.lng;
-
-      // 경로가 있으면 가장 가까운 선분 위 점으로 표시용 스냅.
-      // 통학버스처럼 넓은 범위를 한 화면에 보여줄 때 정류장이 경로에서 과하게 떨어져 보이는 현상을 줄인다.
-      if (route.length > 1) {
-        let bestDist = Infinity;
-        let snapLng = lng, snapLat = lat;
-        for (let i = 0; i < route.length - 1; i++) {
-          const [aLng, aLat] = route[i];
-          const [bLng, bLat] = route[i + 1];
-          const snap = snapToSegment(lng, lat, aLng, aLat, bLng, bLat);
-          if (snap.dist < bestDist) {
-            bestDist = snap.dist;
-            snapLng = snap.x;
-            snapLat = snap.y;
-          }
-        }
-        if (approxMeters(lat, lng, snapLat, snapLng) <= stopSnapMeters) {
-          lng = snapLng;
-          lat = snapLat;
-        }
-      }
-
       try {
         const marker = new window.naver.maps.Marker({
-          position: new window.naver.maps.LatLng(lat, lng),
+          position: new window.naver.maps.LatLng(stop.position.lat, stop.position.lng),
           map: mapInstance.current,
           icon: {
             content: STOP_MARKER_CONTENT(stop.name, stop.type ?? 'middle'),
