@@ -762,6 +762,7 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
     }
 
     const bounds = new window.naver.maps.LatLngBounds();
+    let boundsPointCount = 0;
     stops.forEach((stop, index) => {
       if (stop.lat == null || stop.lng == null) return;
       const marker = new window.naver.maps.Marker({
@@ -783,6 +784,7 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
       });
       markerRefs.current.push(marker);
       bounds.extend(marker.getPosition());
+      boundsPointCount += 1;
     });
 
     shapePoints.forEach((point, index) => {
@@ -805,9 +807,10 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
       });
       markerRefs.current.push(marker);
       bounds.extend(marker.getPosition());
+      boundsPointCount += 1;
     });
 
-    if (!bounds.isEmpty()) {
+    if (boundsPointCount > 0) {
       mapInstance.current.fitBounds(bounds);
     }
   }, [loading, path, stops, shapePoints, refreshPreview, route.color]);
