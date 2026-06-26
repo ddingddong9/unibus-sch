@@ -91,6 +91,7 @@ export interface SignupRequest {
 
 export interface KakaoUser {
   kakaoId: string;
+  accessToken: string;
   email?: string;
   name?: string;
   profileImage?: string;

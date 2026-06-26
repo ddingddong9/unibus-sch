@@ -121,10 +121,10 @@ class ApiClient {
     throw new Error(data.error || 'Login failed');
   }
 
-  async kakaoLogin(kakaoId: string, email?: string, name?: string, profileImage?: string): Promise<{ token: string; user: User }> {
+  async kakaoLogin(kakaoId: string, accessToken: string, email?: string, name?: string, profileImage?: string): Promise<{ token: string; user: User }> {
     const data = await this.request<ApiResponse>('/auth/kakao', {
       method: 'POST',
-      body: JSON.stringify({ kakaoId, email, name, profileImage }),
+      body: JSON.stringify({ kakaoId, accessToken, email, name, profileImage }),
     });
     
     if (data.success && data.token) {

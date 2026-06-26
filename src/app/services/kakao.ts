@@ -52,6 +52,7 @@ export class KakaoLoginService {
 
   async login(): Promise<{
     kakaoId: string;
+    accessToken: string;
     email?: string;
     name?: string;
     profileImage?: string;
@@ -64,19 +65,21 @@ export class KakaoLoginService {
       window.Kakao.Auth.login({
         scope: 'profile_nickname,profile_image',
         success: (authObj: any) => {
-          console.log('Kakao login success:', authObj);
-          
+          if (!authObj.access_token) {
+            reject(new Error('Kakao access token missing'));
+            return;
+          }
+
           // Get user info
           window.Kakao.API.request({
             url: '/v2/user/me',
             success: (response: any) => {
-              console.log('Kakao user info:', response);
-              
               const kakaoAccount = response.kakao_account || {};
               const profile = kakaoAccount.profile || {};
               
               resolve({
                 kakaoId: String(response.id),
+                accessToken: authObj.access_token,
                 email: kakaoAccount.email,
                 name: profile.nickname,
                 profileImage: profile.profile_image_url,

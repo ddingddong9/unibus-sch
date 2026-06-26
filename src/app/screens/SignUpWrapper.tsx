@@ -34,8 +34,8 @@ export default function SignUpWrapper() {
 
     if (!formData.password) {
       newErrors.password = t("비밀번호를 입력해주세요", "Password is required");
-    } else if (formData.password.length < 6) {
-      newErrors.password = t("비밀번호는 최소 6자 이상이어야 합니다", "Password must be at least 6 characters");
+    } else if (formData.password.length < 8) {
+      newErrors.password = t("비밀번호는 최소 8자 이상이어야 합니다", "Password must be at least 8 characters");
     }
 
     if (formData.password !== formData.confirmPassword) {

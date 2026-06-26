@@ -14,8 +14,27 @@ import campus from "./routes/campus.tsx";
 
 const app = new Hono();
 
+const configuredOrigins = (Deno.env.get("ALLOWED_ORIGINS") || "")
+  .split(",")
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const allowedOriginPatterns = [
+  /^http:\/\/localhost:\d+$/,
+  /^http:\/\/127\.0\.0\.1:\d+$/,
+  /^https:\/\/unibus-sch(?:-[a-z0-9-]+)?\.vercel\.app$/,
+  /^https:\/\/unibus-sch-git-[a-z0-9-]+-ddingddong9s-projects\.vercel\.app$/,
+];
+
+const resolveAllowedOrigin = (origin: string) => {
+  if (!origin) return "";
+  if (configuredOrigins.includes(origin)) return origin;
+  if (allowedOriginPatterns.some((pattern) => pattern.test(origin))) return origin;
+  return "";
+};
+
 app.use('*', cors({
-  origin: '*',
+  origin: resolveAllowedOrigin,
   allowHeaders: ['authorization', 'x-client-info', 'apikey', 'content-type', 'x-auth-token'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));

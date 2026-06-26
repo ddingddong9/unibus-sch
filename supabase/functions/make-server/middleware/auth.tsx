@@ -2,6 +2,7 @@
 
 import { Context } from "npm:hono";
 import { db } from "../db.tsx";
+import { findTokenRecord } from "../security/tokens.ts";
 
 export async function requireAuth(c: Context, next: () => Promise<void>) {
   const authToken = c.req.header('X-Auth-Token');
@@ -10,12 +11,7 @@ export async function requireAuth(c: Context, next: () => Promise<void>) {
     return c.json({ error: 'Unauthorized: No token provided' }, 401);
   }
 
-  // 토큰 조회 (관계형 DB)
-  const { data: tokenData, error } = await db
-    .from('auth_tokens')
-    .select('user_id, expires_at')
-    .eq('token', authToken)
-    .single();
+  const { data: tokenData, error } = await findTokenRecord(authToken);
   
   if (error || !tokenData) {
     return c.json({ error: 'Unauthorized: Invalid token' }, 401);
@@ -39,11 +35,7 @@ export async function requireDriver(c: Context, next: () => Promise<void>) {
     return c.json({ error: 'Unauthorized: No token provided' }, 401);
   }
 
-  const { data: tokenData, error: tokenError } = await db
-    .from('auth_tokens')
-    .select('user_id, expires_at')
-    .eq('token', authToken)
-    .single();
+  const { data: tokenData, error: tokenError } = await findTokenRecord(authToken);
 
   if (tokenError || !tokenData) {
     return c.json({ error: 'Unauthorized: Invalid token' }, 401);
@@ -77,12 +69,7 @@ export async function requireAdmin(c: Context, next: () => Promise<void>) {
     return c.json({ error: 'Unauthorized: No token provided' }, 401);
   }
 
-  // 토큰 조회 (관계형 DB)
-  const { data: tokenData, error: tokenError } = await db
-    .from('auth_tokens')
-    .select('user_id, expires_at')
-    .eq('token', authToken)
-    .single();
+  const { data: tokenData, error: tokenError } = await findTokenRecord(authToken);
   
   if (tokenError || !tokenData) {
     return c.json({ error: 'Unauthorized: Invalid token' }, 401);
