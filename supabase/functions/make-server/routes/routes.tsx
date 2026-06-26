@@ -442,16 +442,32 @@ routes.put("/:id", requireAdmin, async (c) => {
     if (duration !== undefined) dbUpdates.duration = duration;
     if (fare !== undefined) dbUpdates.fare = fare;
 
-    const { data: updatedRoute, error: updateError } = await db
-      .from('routes')
-      .update(dbUpdates)
-      .eq('id', id)
-      .select()
-      .single();
+    let updatedRoute = null;
+    if (Object.keys(dbUpdates).length > 0) {
+      const { data, error: updateError } = await db
+        .from('routes')
+        .update(dbUpdates)
+        .eq('id', id)
+        .select()
+        .single();
 
-    if (updateError || !updatedRoute) {
-      console.error("❌ Route update error:", updateError);
-      return c.json({ success: false, error: "Failed to update route" }, 500);
+      if (updateError || !data) {
+        console.error("❌ Route update error:", updateError);
+        return c.json({ success: false, error: "Failed to update route" }, 500);
+      }
+      updatedRoute = data;
+    } else {
+      const { data, error: refetchError } = await db
+        .from('routes')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (refetchError || !data) {
+        console.error("❌ Route refetch error:", refetchError);
+        return c.json({ success: false, error: "Failed to update route" }, 500);
+      }
+      updatedRoute = data;
     }
 
     // 정류장 업데이트 (있는 경우)
