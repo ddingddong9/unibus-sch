@@ -155,6 +155,31 @@ CREATE INDEX IF NOT EXISTS idx_route_stops_order ON route_stops(route_id, stop_o
 CREATE UNIQUE INDEX IF NOT EXISTS idx_route_stops_unique ON route_stops(route_id, stop_order);
 
 -- ------------------------------------------------------------
+-- route_shape_points 테이블 (승객에게 보이지 않는 경로 보정점)
+-- ------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS route_shape_points (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  route_id UUID NOT NULL REFERENCES routes(id) ON DELETE CASCADE,
+  name VARCHAR(100),
+  after_stop_order INTEGER NOT NULL,
+  point_order INTEGER NOT NULL DEFAULT 1,
+  latitude DECIMAL(10, 8) NOT NULL,
+  longitude DECIMAL(11, 8) NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_route_shape_points_route_id ON route_shape_points(route_id);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_route_shape_points_order
+  ON route_shape_points(route_id, after_stop_order, point_order);
+
+DROP TRIGGER IF EXISTS route_shape_points_updated_at ON route_shape_points;
+CREATE TRIGGER route_shape_points_updated_at
+BEFORE UPDATE ON route_shape_points
+FOR EACH ROW
+EXECUTE FUNCTION update_updated_at();
+
+-- ------------------------------------------------------------
 -- buses 테이블
 -- ------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS buses (
@@ -165,6 +190,7 @@ CREATE TABLE IF NOT EXISTS buses (
   license_plate VARCHAR(20),
   status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'inactive', 'maintenance')),
   current_route_id UUID REFERENCES routes(id) ON DELETE SET NULL,
+  assigned_driver_id UUID REFERENCES users(id) ON DELETE SET NULL,
   is_running BOOLEAN DEFAULT FALSE,
   current_driver_id UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -175,6 +201,7 @@ CREATE TABLE IF NOT EXISTS buses (
 CREATE INDEX IF NOT EXISTS idx_buses_type ON buses(type);
 CREATE INDEX IF NOT EXISTS idx_buses_status ON buses(status);
 CREATE INDEX IF NOT EXISTS idx_buses_route ON buses(current_route_id);
+CREATE INDEX IF NOT EXISTS idx_buses_assigned_driver ON buses(assigned_driver_id);
 
 -- buses 자동 updated_at 트리거
 DROP TRIGGER IF EXISTS buses_updated_at ON buses;
@@ -300,6 +327,13 @@ CREATE POLICY route_stops_select_all ON route_stops
   FOR SELECT
   USING (true);
 
+ALTER TABLE route_shape_points ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS route_shape_points_select_all ON route_shape_points;
+CREATE POLICY route_shape_points_select_all ON route_shape_points
+  FOR SELECT
+  USING (true);
+
 -- ============================================================
 -- 6단계: 유용한 뷰 생성
 -- ============================================================
@@ -333,13 +367,22 @@ SELECT
   b.capacity,
   b.license_plate,
   b.status,
+  b.assigned_driver_id,
+  du.name AS assigned_driver_name,
+  du.email AS assigned_driver_email,
+  b.is_running,
+  b.current_driver_id,
+  cu.name AS current_driver_name,
+  cu.email AS current_driver_email,
   b.created_at,
   b.updated_at,
   r.id AS route_id,
   r.name AS route_name,
   r.color AS route_color
 FROM buses b
-LEFT JOIN routes r ON b.current_route_id = r.id;
+LEFT JOIN routes r ON b.current_route_id = r.id
+LEFT JOIN users du ON b.assigned_driver_id = du.id
+LEFT JOIN users cu ON b.current_driver_id = cu.id;
 
 -- ============================================================
 -- 7단계: 완료 확인
@@ -355,6 +398,8 @@ UNION ALL
 SELECT 'routes', COUNT(*) FROM routes
 UNION ALL
 SELECT 'route_stops', COUNT(*) FROM route_stops
+UNION ALL
+SELECT 'route_shape_points', COUNT(*) FROM route_shape_points
 UNION ALL
 SELECT 'buses', COUNT(*) FROM buses
 UNION ALL

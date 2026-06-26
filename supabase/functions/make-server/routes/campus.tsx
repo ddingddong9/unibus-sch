@@ -1,4 +1,5 @@
 import { Hono } from "npm:hono";
+import { db } from "../db.tsx";
 
 const campus = new Hono();
 
@@ -10,6 +11,76 @@ const STOPS = [
   { id: "main-gate", name: "정문",   lat: 36.769014, lng: 126.927978 },
 ];
 
+const ROUTE_POINTS = [
+  STOPS[0],
+  STOPS[1],
+  STOPS[2],
+  STOPS[3],
+  // Directions API shaping point: keep the displayed stop list unchanged,
+  // but guide the 도서관 → 정문 segment through the campus access road.
+  { id: "library-main-gate-shape", name: "정문 진입로", lat: 36.768960, lng: 126.929760 },
+  STOPS[4],
+];
+
+const getStoredCampusRoute = async () => {
+  const { data: route } = await db
+    .from("routes")
+    .select("id")
+    .eq("type", "shuttle")
+    .ilike("name", "%학내순환%")
+    .limit(1)
+    .single();
+
+  if (!route) return null;
+
+  const { data: stops } = await db
+    .from("route_stops")
+    .select("*")
+    .eq("route_id", route.id)
+    .order("stop_order");
+
+  if (!stops || stops.length < 2) return null;
+
+  const { data: shapePoints } = await db
+    .from("route_shape_points")
+    .select("*")
+    .eq("route_id", route.id)
+    .order("after_stop_order")
+    .order("point_order");
+
+  const visibleStops = stops
+    .filter((stop: any) => stop.latitude != null && stop.longitude != null)
+    .map((stop: any) => ({
+      id: stop.id,
+      name: stop.stop_name,
+      lat: stop.latitude,
+      lng: stop.longitude,
+      order: stop.stop_order,
+    }));
+
+  const shapesByStop = new Map<number, any[]>();
+  for (const point of shapePoints || []) {
+    const current = shapesByStop.get(point.after_stop_order) || [];
+    current.push(point);
+    shapesByStop.set(point.after_stop_order, current);
+  }
+
+  const routePoints: any[] = [];
+  for (const stop of visibleStops) {
+    routePoints.push(stop);
+    for (const point of shapesByStop.get(stop.order) || []) {
+      routePoints.push({
+        id: point.id,
+        name: point.name || "경로 보정점",
+        lat: point.latitude,
+        lng: point.longitude,
+      });
+    }
+  }
+
+  return { stops: visibleStops, routePoints };
+};
+
 campus.get("/path", async (c) => {
   const clientId  = Deno.env.get("NAVER_CLIENT_ID");
   const secretKey = Deno.env.get("NAVER_SECRET_KEY");
@@ -18,9 +89,13 @@ campus.get("/path", async (c) => {
     return c.json({ success: false, error: "Naver API keys not configured" }, 500);
   }
 
-  const start     = `${STOPS[0].lng},${STOPS[0].lat}`;
-  const goal      = `${STOPS[4].lng},${STOPS[4].lat}`;
-  const waypoints = STOPS.slice(1, 4).map(s => `${s.lng},${s.lat}`).join("|");
+  const storedRoute = await getStoredCampusRoute();
+  const visibleStops = storedRoute?.stops?.length ? storedRoute.stops : STOPS;
+  const routePoints = storedRoute?.routePoints?.length ? storedRoute.routePoints : ROUTE_POINTS;
+
+  const start     = `${routePoints[0].lng},${routePoints[0].lat}`;
+  const goal      = `${routePoints[routePoints.length - 1].lng},${routePoints[routePoints.length - 1].lat}`;
+  const waypoints = routePoints.slice(1, -1).slice(0, 5).map(s => `${s.lng},${s.lat}`).join("|");
   const url = `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
 
   let res: Response;
@@ -42,13 +117,13 @@ campus.get("/path", async (c) => {
   if (data.code === 0) {
     const path: [number, number][] = data.route?.traoptimal?.[0]?.path ?? [];
     if (path.length > 0) {
-      return c.json({ success: true, data: { path, stops: STOPS } });
+      return c.json({ success: true, data: { path, stops: visibleStops } });
     }
   }
 
   // fallback: 정류장 직선 연결 (API 실패 시)
   const fallback: [number, number][] = [];
-  const allStops = [...STOPS, STOPS[0]]; // 순환: 마지막 → 후문
+  const allStops = [...visibleStops, visibleStops[0]]; // 순환: 마지막 → 첫 정류장
   for (let i = 0; i < allStops.length - 1; i++) {
     const from = allStops[i], to = allStops[i + 1];
     for (let s = 1; s <= 20; s++) {
@@ -57,7 +132,7 @@ campus.get("/path", async (c) => {
     }
   }
   console.warn("Directions5 fallback. code:", data.code, data.message ?? JSON.stringify(data.error));
-  return c.json({ success: true, data: { path: fallback, stops: STOPS, source: "fallback", debug: { code: data.code, message: data.message, error: data.error } } });
+  return c.json({ success: true, data: { path: fallback, stops: visibleStops, source: "fallback", debug: { code: data.code, message: data.message, error: data.error } } });
 });
 
 export default campus;

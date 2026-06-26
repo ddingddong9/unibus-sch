@@ -34,6 +34,49 @@ users.get("/", requireAdmin, async (c) => {
   }
 });
 
+// 사용자 기본 정보 변경
+users.put("/:id", requireAdmin, async (c) => {
+  try {
+    const targetId = c.req.param("id");
+    const { name } = await c.req.json();
+
+    const nextName = typeof name === "string" ? name.trim() : "";
+    if (!nextName) {
+      return c.json({ success: false, error: "이름을 입력해주세요" }, 400);
+    }
+
+    if (nextName.length > 50) {
+      return c.json({ success: false, error: "이름은 50자 이하로 입력해주세요" }, 400);
+    }
+
+    const { data: updated, error } = await db
+      .from('users')
+      .update({ name: nextName })
+      .eq('id', targetId)
+      .select('id, email, name, student_id, role, provider, created_at')
+      .single();
+
+    if (error || !updated) {
+      return c.json({ success: false, error: "Failed to update user" }, 500);
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        id: updated.id,
+        email: updated.email,
+        name: updated.name,
+        studentId: updated.student_id,
+        role: updated.role,
+        provider: updated.provider,
+        createdAt: updated.created_at,
+      }
+    });
+  } catch (error: any) {
+    return c.json({ success: false, error: "Failed to update user" }, 500);
+  }
+});
+
 // 사용자 역할 변경
 users.put("/:id/role", requireAdmin, async (c) => {
   try {
@@ -64,8 +107,8 @@ users.put("/:id/role", requireAdmin, async (c) => {
     if (role !== 'driver') {
       await db
         .from('buses')
-        .update({ is_running: false, current_driver_id: null })
-        .eq('current_driver_id', targetId);
+        .update({ is_running: false, current_driver_id: null, assigned_driver_id: null })
+        .or(`current_driver_id.eq.${targetId},assigned_driver_id.eq.${targetId}`);
     }
 
     const { error: updateError } = await db

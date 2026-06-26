@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Bus, RefreshCw, Plus, Trash2, Square, AlertTriangle, CheckCircle2, Clock } from "lucide-react";
+import { Bus, RefreshCw, Plus, Trash2, Square, AlertTriangle, CheckCircle2, Clock, UserCheck, Power } from "lucide-react";
 import AdminLayout from "./AdminLayout";
 import { api } from "../services/api";
 
@@ -37,12 +37,20 @@ const DIRECT_ROUTE = DIRECT_STOPS.flatMap((stop, i) => {
 });
 
 const busTypeLabel: Record<string, string> = {
-  campus: "학내순환", direct: "직행", commute: "통학",
+  campus: "학내순환", direct: "직행", commuter: "통학", commute: "통학",
 };
+
+interface ManagedDriver {
+  id: string;
+  email: string;
+  name: string;
+  role: "driver";
+}
 
 export default function BusManagement() {
   // 버스 목록
   const [buses, setBuses] = useState<any[]>([]);
+  const [drivers, setDrivers] = useState<ManagedDriver[]>([]);
   const [busesLoading, setBusesLoading] = useState(false);
 
   // 버스 등록 폼
@@ -81,7 +89,19 @@ export default function BusManagement() {
     }
   };
 
-  useEffect(() => { fetchBuses(); }, []);
+  const fetchDrivers = async () => {
+    try {
+      const data = await api.getUsers();
+      setDrivers(data.filter((user: any) => user.role === "driver"));
+    } catch (e) {
+      console.error("Driver fetch error:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchBuses();
+    fetchDrivers();
+  }, []);
 
   // 10초마다 자동 갱신
   useEffect(() => {
@@ -146,11 +166,35 @@ export default function BusManagement() {
   const handleForceStop = async (busId: string) => {
     setBusActionLoading(busId);
     try {
-      await api.updateBus(busId, { status: "inactive" });
+      await api.updateBus(busId, { isRunning: false });
       setForceStopConfirm(null);
       await fetchBuses();
     } catch (err: any) {
       alert(`강제 종료 실패: ${err.message}`);
+    } finally {
+      setBusActionLoading(null);
+    }
+  };
+
+  const handleToggleAvailability = async (bus: any) => {
+    setBusActionLoading(bus.id);
+    try {
+      await api.updateBus(bus.id, { status: bus.status === "active" ? "inactive" : "active" });
+      await fetchBuses();
+    } catch (err: any) {
+      alert(`상태 변경 실패: ${err.message}`);
+    } finally {
+      setBusActionLoading(null);
+    }
+  };
+
+  const handleAssignDriver = async (busId: string, assignedDriverId: string) => {
+    setBusActionLoading(busId);
+    try {
+      await api.updateBus(busId, { assignedDriverId: assignedDriverId || null });
+      await fetchBuses();
+    } catch (err: any) {
+      alert(`기사 배정 실패: ${err.message}`);
     } finally {
       setBusActionLoading(null);
     }
@@ -258,7 +302,7 @@ export default function BusManagement() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[32px] mb-2">버스 관리</h1>
-          <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">버스 등록, 운행 현황, 강제 종료 및 테스트를 관리합니다</p>
+          <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">버스 등록, 기사 배정, 운행 가능 상태와 실시간 운행을 관리합니다</p>
         </div>
 
         <div className="space-y-6">
@@ -301,6 +345,7 @@ export default function BusManagement() {
               <div className="space-y-2">
                 {buses.map((bus) => {
                   const isActive = bus.status === "active";
+                  const isRunning = Boolean(bus.isRunning);
                   const lastPing = bus.lastLocationAt || bus.updatedAt;
                   return (
                     <div
@@ -319,8 +364,27 @@ export default function BusManagement() {
                           <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                             isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
                           }`}>
-                            {isActive ? "운행중" : "미운행"}
+                            {isActive ? "운행 가능" : "비활성"}
                           </span>
+                          {isRunning && (
+                            <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-100 text-orange-700">
+                              운행 중
+                            </span>
+                          )}
+                          {bus.assignedDriverName ? (
+                            <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700">
+                              {bus.assignedDriverName} 기사
+                            </span>
+                          ) : (
+                            <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-500">
+                              공용
+                            </span>
+                          )}
+                          {bus.currentDriverName && (
+                            <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700">
+                              현재 {bus.currentDriverName}
+                            </span>
+                          )}
                           {bus.type && (
                             <span className="shrink-0 px-2 py-0.5 rounded-full text-[11px] bg-[#1e3b8a]/10 text-[#1e3b8a]">
                               {busTypeLabel[bus.type] ?? bus.type}
@@ -340,9 +404,37 @@ export default function BusManagement() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                        <label className="flex items-center gap-2">
+                          <UserCheck className="w-4 h-4 text-[#94a3b8]" />
+                          <select
+                            value={bus.assignedDriverId || ""}
+                            onChange={(e) => handleAssignDriver(bus.id, e.target.value)}
+                            disabled={busActionLoading === bus.id}
+                            className="h-[34px] min-w-[150px] px-2 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[12px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] disabled:opacity-50"
+                          >
+                            <option value="">공용 배차</option>
+                            {drivers.map(driver => (
+                              <option key={driver.id} value={driver.id}>{driver.name}</option>
+                            ))}
+                          </select>
+                        </label>
+
+                        <button
+                          onClick={() => handleToggleAvailability(bus)}
+                          disabled={busActionLoading === bus.id}
+                          className={`flex items-center gap-1.5 px-3 py-1.5 border rounded-lg text-[12px] font-['Public_Sans'] font-semibold transition-colors disabled:opacity-50 ${
+                            isActive
+                              ? "border-gray-200 text-[#64748b] hover:bg-gray-50"
+                              : "border-green-200 text-green-700 hover:bg-green-50"
+                          }`}
+                        >
+                          <Power className="w-3.5 h-3.5" />
+                          {isActive ? "비활성화" : "활성화"}
+                        </button>
+
                         {/* 강제 운행 종료 */}
-                        {isActive && (
+                        {isRunning && (
                           forceStopConfirm === bus.id ? (
                             <div className="flex items-center gap-2">
                               <span className="font-['Public_Sans'] text-[12px] text-[#64748b]">종료할까요?</span>
@@ -409,7 +501,7 @@ export default function BusManagement() {
           <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
             <h3 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[18px] mb-1">버스 등록</h3>
             <p className="font-['Public_Sans'] text-[#94a3b8] text-[13px] mb-5">
-              새 버스를 시스템에 등록합니다. 등록 후 기사 앱에서 즉시 선택 가능합니다.
+              새 버스를 시스템에 등록합니다. 등록 후 활성화하면 기사 앱에서 선택할 수 있습니다.
             </p>
             <form onSubmit={handleCreateBus} className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
               <div>

@@ -9,6 +9,95 @@ const routes = new Hono();
 const toClientRouteType = (type: string) => type === 'shuttle' ? 'campus' : type === 'commute' ? 'commuter' : type;
 const toDbRouteType = (type: string) => type === 'campus' ? 'shuttle' : type === 'commuter' ? 'commute' : type;
 
+const formatShapePoint = (point: any) => ({
+  id: point.id,
+  name: point.name,
+  afterStopOrder: point.after_stop_order,
+  order: point.point_order,
+  lat: point.latitude,
+  lng: point.longitude,
+});
+
+const getShapePoints = async (routeId: string) => {
+  const { data } = await db
+    .from('route_shape_points')
+    .select('*')
+    .eq('route_id', routeId)
+    .order('after_stop_order')
+    .order('point_order');
+
+  return data || [];
+};
+
+const buildDirectionsPoints = (stops: any[], shapePoints: any[]) => {
+  const points: Array<{ id: string; name: string; order: number; lat: number; lng: number; hidden?: boolean }> = [];
+  const shapesByStop = new Map<number, any[]>();
+
+  for (const point of shapePoints) {
+    const key = point.after_stop_order;
+    const current = shapesByStop.get(key) || [];
+    current.push(point);
+    shapesByStop.set(key, current);
+  }
+
+  for (const stop of stops) {
+    if (stop.lat == null || stop.lng == null) continue;
+    points.push({ id: stop.id, name: stop.name, order: stop.order, lat: stop.lat, lng: stop.lng });
+    const shapes = shapesByStop.get(stop.order) || [];
+    for (const shape of shapes) {
+      points.push({
+        id: shape.id,
+        name: shape.name || '경로 보정점',
+        order: stop.order,
+        lat: shape.latitude,
+        lng: shape.longitude,
+        hidden: true,
+      });
+    }
+  }
+
+  return points;
+};
+
+const buildNaverPath = async (
+  routePoints: Array<{ lat: number; lng: number }>,
+  clientId?: string | null,
+  secretKey?: string | null,
+) => {
+  if (routePoints.length < 2) {
+    return routePoints.map((point) => [point.lng, point.lat] as [number, number]);
+  }
+
+  if (!clientId || !secretKey) {
+    return routePoints.map((point) => [point.lng, point.lat] as [number, number]);
+  }
+
+  const start = `${routePoints[0].lng},${routePoints[0].lat}`;
+  const goal = `${routePoints[routePoints.length - 1].lng},${routePoints[routePoints.length - 1].lat}`;
+  const waypoints = routePoints.slice(1, -1).slice(0, 5).map((point) => `${point.lng},${point.lat}`).join("|");
+  const dirUrl = `https://maps.apigw.ntruss.com/map-direction/v1/driving`
+    + `?start=${start}&goal=${goal}`
+    + (waypoints ? `&waypoints=${waypoints}` : "")
+    + `&option=traoptimal`;
+
+  try {
+    const res = await fetch(dirUrl, {
+      headers: {
+        "X-NCP-APIGW-API-KEY-ID": clientId,
+        "X-NCP-APIGW-API-KEY": secretKey,
+      },
+    });
+    const data = await res.json();
+    if (data.code === 0) {
+      return data.route?.traoptimal?.[0]?.path ?? [];
+    }
+  } catch (error) {
+    console.warn("Directions preview failed:", error);
+  }
+
+  return routePoints.map((point) => [point.lng, point.lat] as [number, number]);
+};
+
 // Get all routes with stops
 routes.get("/", async (c) => {
   try {
@@ -33,6 +122,8 @@ routes.get("/", async (c) => {
           .eq('route_id', route.id)
           .order('stop_order');
 
+        const shapePoints = await getShapePoints(route.id);
+
         return {
           id: route.id,
           name: route.name,
@@ -52,6 +143,7 @@ routes.get("/", async (c) => {
             lng: stop.longitude,
             arrivalTime: stop.arrival_time,
           })) || [],
+          shapePoints: shapePoints.map(formatShapePoint),
           createdAt: route.created_at,
           updatedAt: route.updated_at,
         };
@@ -115,63 +207,51 @@ routes.get("/:id/path", async (c) => {
     );
 
     const validStops = resolved.filter((s) => s.lat != null && s.lng != null);
+    const shapePoints = await getShapePoints(id);
 
     if (validStops.length === 0) {
-      return c.json({ success: true, data: { stops: resolved, path: [] } });
+      return c.json({ success: true, data: { stops: resolved, shapePoints: shapePoints.map(formatShapePoint), path: [] } });
     }
 
-    // 두 정류장 간 거리 계산 (km)
-    const haversineKm = (a: {lat: number; lng: number}, b: {lat: number; lng: number}) => {
-      const R = 6371, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
-      const x = Math.sin(dLat/2)**2 + Math.cos(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.sin(dLng/2)**2;
-      return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1-x));
-    };
+    const routePoints = buildDirectionsPoints(validStops, shapePoints);
 
-    // 너무 가까운 정류장(2km 미만)은 경로 계산에서 제외 — 마커로만 표시
-    // 첫 정류장과 마지막 정류장은 항상 포함
-    const routePoints = [validStops[0]];
-    for (let i = 1; i < validStops.length - 1; i++) {
-      const prev = routePoints[routePoints.length - 1];
-      if (haversineKm(prev, validStops[i]) >= 2) routePoints.push(validStops[i]);
-    }
-    routePoints.push(validStops[validStops.length - 1]);
+    const path = await buildNaverPath(routePoints, clientId, secretKey);
 
-    // Naver Directions API로 실제 도로 경로 생성 (출발→도착, 경유지 max 5개)
-    let path: [number, number][] = [];
-
-    if (routePoints.length >= 2 && clientId && secretKey) {
-      const start     = `${routePoints[0].lng},${routePoints[0].lat}`;
-      const goal      = `${routePoints[routePoints.length - 1].lng},${routePoints[routePoints.length - 1].lat}`;
-      const waypoints = routePoints.slice(1, -1).slice(0, 5).map((s: any) => `${s.lng},${s.lat}`).join("|");
-      const dirUrl = `https://maps.apigw.ntruss.com/map-direction/v1/driving`
-        + `?start=${start}&goal=${goal}`
-        + (waypoints ? `&waypoints=${waypoints}` : "")
-        + `&option=traoptimal`;
-
-      try {
-        const res  = await fetch(dirUrl, {
-          headers: {
-            "X-NCP-APIGW-API-KEY-ID": clientId,
-            "X-NCP-APIGW-API-KEY":    secretKey,
-          },
-        });
-        const data = await res.json();
-        if (data.code === 0) {
-          path = data.route?.traoptimal?.[0]?.path ?? [];
-        } else {
-          path = routePoints.map((s: any) => [s.lng!, s.lat!]);
-        }
-      } catch {
-        path = routePoints.map((s: any) => [s.lng!, s.lat!]);
-      }
-    } else {
-      path = routePoints.map((s: any) => [s.lng!, s.lat!]);
-    }
-
-    return c.json({ success: true, data: { stops: resolved, path } });
+    return c.json({ success: true, data: { stops: resolved, shapePoints: shapePoints.map(formatShapePoint), path } });
   } catch (err: any) {
     console.error("❌ Route path error:", err);
     return c.json({ success: false, error: "Failed to build route path" }, 500);
+  }
+});
+
+routes.post("/:id/path/preview", requireAdmin, async (c) => {
+  try {
+    const clientId = Deno.env.get("NAVER_CLIENT_ID");
+    const secretKey = Deno.env.get("NAVER_SECRET_KEY");
+    const { stops = [], shapePoints = [] } = await c.req.json();
+    const routePoints = buildDirectionsPoints(
+      stops.map((stop: any, index: number) => ({
+        id: stop.id || `stop-${index}`,
+        name: stop.name || `정류장 ${index + 1}`,
+        order: stop.order || index + 1,
+        lat: stop.lat,
+        lng: stop.lng,
+      })),
+      shapePoints.map((point: any, index: number) => ({
+        id: point.id || `shape-${index}`,
+        name: point.name || '경로 보정점',
+        after_stop_order: point.afterStopOrder || point.after_stop_order || 1,
+        point_order: point.order || point.pointOrder || index + 1,
+        latitude: point.lat,
+        longitude: point.lng,
+      })),
+    );
+
+    const path = await buildNaverPath(routePoints, clientId, secretKey);
+    return c.json({ success: true, data: { path } });
+  } catch (error: any) {
+    console.error("❌ Route path preview error:", error);
+    return c.json({ success: false, error: "Failed to preview route path" }, 500);
   }
 });
 
@@ -198,6 +278,8 @@ routes.get("/:id", async (c) => {
       .eq('route_id', id)
       .order('stop_order');
 
+    const shapePoints = await getShapePoints(id);
+
     const formattedRoute = {
       id: route.id,
       name: route.name,
@@ -217,6 +299,7 @@ routes.get("/:id", async (c) => {
         lng: stop.longitude,
         arrivalTime: stop.arrival_time,
       })) || [],
+      shapePoints: shapePoints.map(formatShapePoint),
       createdAt: route.created_at,
       updatedAt: route.updated_at,
     };
@@ -233,7 +316,7 @@ routes.get("/:id", async (c) => {
 // Create route (admin only)
 routes.post("/", requireAdmin, async (c) => {
   try {
-    const { name, type, description, color, region, schedule, duration, fare, stops } = await c.req.json();
+    const { name, type, description, color, region, schedule, duration, fare, stops, shapePoints } = await c.req.json();
 
     if (!name || !type) {
       return c.json({ success: false, error: "Missing required fields" }, 400);
@@ -282,6 +365,30 @@ routes.post("/", requireAdmin, async (c) => {
       }
     }
 
+    if (shapePoints && shapePoints.length > 0) {
+      const shapePointsData = shapePoints
+        .filter((point: any) => point.lat != null && point.lng != null)
+        .map((point: any, index: number) => ({
+          route_id: route.id,
+          name: point.name || '경로 보정점',
+          after_stop_order: point.afterStopOrder || point.after_stop_order || 1,
+          point_order: point.order || point.pointOrder || index + 1,
+          latitude: point.lat,
+          longitude: point.lng,
+        }));
+
+      if (shapePointsData.length > 0) {
+        const { error: shapeInsertError } = await db
+          .from('route_shape_points')
+          .insert(shapePointsData);
+
+        if (shapeInsertError) {
+          console.error("❌ Shape points creation error:", shapeInsertError);
+          return c.json({ success: false, error: "경로 보정점 추가 실패: " + shapeInsertError.message }, 500);
+        }
+      }
+    }
+
     console.log(`✅ Route created: ${route.id}`);
 
     return c.json({
@@ -310,7 +417,7 @@ routes.post("/", requireAdmin, async (c) => {
 routes.put("/:id", requireAdmin, async (c) => {
   try {
     const id = c.req.param("id");
-    const { name, type, description, color, isActive, region, schedule, duration, fare, stops } = await c.req.json();
+    const { name, type, description, color, isActive, region, schedule, duration, fare, stops, shapePoints } = await c.req.json();
 
     // 노선 존재 여부 확인
     const { data: existingRoute } = await db
@@ -372,6 +479,35 @@ routes.put("/:id", requireAdmin, async (c) => {
       if (stopsInsertError) {
         console.error("❌ Stops update error:", stopsInsertError);
         return c.json({ success: false, error: "정류장 저장 실패: " + stopsInsertError.message }, 500);
+      }
+    }
+
+    if (shapePoints !== undefined) {
+      await db
+        .from('route_shape_points')
+        .delete()
+        .eq('route_id', id);
+
+      const shapePointsData = (shapePoints || [])
+        .filter((point: any) => point.lat != null && point.lng != null)
+        .map((point: any, index: number) => ({
+          route_id: id,
+          name: point.name || '경로 보정점',
+          after_stop_order: point.afterStopOrder || point.after_stop_order || 1,
+          point_order: point.order || point.pointOrder || index + 1,
+          latitude: point.lat,
+          longitude: point.lng,
+        }));
+
+      if (shapePointsData.length > 0) {
+        const { error: shapeInsertError } = await db
+          .from('route_shape_points')
+          .insert(shapePointsData);
+
+        if (shapeInsertError) {
+          console.error("❌ Shape points update error:", shapeInsertError);
+          return c.json({ success: false, error: "경로 보정점 저장 실패: " + shapeInsertError.message }, 500);
+        }
       }
     }
 

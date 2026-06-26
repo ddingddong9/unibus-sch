@@ -25,7 +25,7 @@ export default function NotificationSender() {
       id: 2,
       title: "신규 노선 개설",
       message: "천안역 직행 노선이 오늘부터 운행됩니다.",
-      target: "통근버스 이용자",
+      target: "통학버스 이용자",
       sentAt: "2024-03-14 07:00",
       recipientCount: 856,
     },
@@ -57,7 +57,7 @@ export default function NotificationSender() {
     const targetMap: { [key: string]: string } = {
       all: "전체",
       campus: "캠퍼스 셔틀 이용자",
-      commuter: "통근버스 이용자",
+      commuter: "통학버스 이용자",
     };
 
     const newNotification: SentNotification = {
@@ -149,7 +149,7 @@ export default function NotificationSender() {
                 >
                   <option value="all">전체 사용자 (3,482명)</option>
                   <option value="campus">캠퍼스 셔틀 이용자 (2,156명)</option>
-                  <option value="commuter">통근버스 이용자 (856명)</option>
+                  <option value="commuter">통학버스 이용자 (856명)</option>
                 </select>
               </div>
 
@@ -228,7 +228,7 @@ export default function NotificationSender() {
                 </div>
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-['Public_Sans'] text-[#64748b] text-[13px]">통근 버스</span>
+                    <span className="font-['Public_Sans'] text-[#64748b] text-[13px]">통학 버스</span>
                     <span className="font-['Public_Sans'] text-[#0f172a] text-[18px] font-bold">856</span>
                   </div>
                 </div>

@@ -22,23 +22,24 @@ declare global {
   interface Window { naver: any; }
 }
 
-// [변경] rotation 파라미터 추가 — 마커 아이콘 원형부만 회전
+// 지도 앱에서 익숙한 핀형 차량 마커. 핀 끝이 실제 좌표를 가리키고, 작은 화살표만 진행 방향을 표시한다.
 const BUS_MARKER_CONTENT = (label: string, rotation = 0) => `
-  <div style="display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 3px 6px rgba(0,0,0,0.25));">
-    <div style="background:#1e3b8a;width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:3px solid white;transform:rotate(${rotation}deg);transition:transform 0.3s ease;">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <rect x="2" y="5" width="20" height="13" rx="2" fill="white"/>
-        <rect x="2" y="9" width="20" height="2" fill="#1e3b8a" opacity="0.3"/>
-        <rect x="6" y="5" width="1.5" height="13" fill="#1e3b8a" opacity="0.2"/>
-        <rect x="16.5" y="5" width="1.5" height="13" fill="#1e3b8a" opacity="0.2"/>
-        <circle cx="7" cy="20" r="2" fill="white" stroke="#1e3b8a" stroke-width="1.5"/>
-        <circle cx="17" cy="20" r="2" fill="white" stroke="#1e3b8a" stroke-width="1.5"/>
-        <rect x="4" y="6.5" width="7" height="4" rx="0.5" fill="#1e3b8a" opacity="0.5"/>
-        <rect x="13" y="6.5" width="7" height="4" rx="0.5" fill="#1e3b8a" opacity="0.5"/>
-      </svg>
-    </div>
-    <div style="margin-top:3px;background:#1e3b8a;color:white;padding:3px 10px;border-radius:12px;font-size:11px;font-weight:800;letter-spacing:0.3px;white-space:nowrap;font-family:sans-serif;">
+  <div style="width:92px;height:66px;display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 4px 8px rgba(15,23,42,0.28));">
+    <div style="max-width:88px;margin-bottom:4px;background:white;color:#0f172a;border:1px solid rgba(15,23,42,0.12);box-shadow:0 2px 5px rgba(15,23,42,0.12);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:sans-serif;">
       ${label}
+    </div>
+    <div style="position:relative;width:38px;height:42px;">
+      <div style="position:absolute;left:50%;top:-6px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid #ef4444;transform:translateX(-50%) rotate(${rotation}deg);transform-origin:50% 22px;transition:transform 0.25s ease;"></div>
+      <svg width="38" height="42" viewBox="0 0 38 42" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M19 41C19 41 34 27.2 34 16.5C34 7.94 27.28 1 19 1C10.72 1 4 7.94 4 16.5C4 27.2 19 41 19 41Z" fill="#1e3b8a" stroke="white" stroke-width="3"/>
+        <circle cx="19" cy="16.5" r="11.5" fill="white"/>
+        <rect x="11" y="10" width="16" height="12" rx="2.5" fill="#1e3b8a"/>
+        <rect x="13" y="12.5" width="5" height="4" rx="0.8" fill="white" opacity="0.95"/>
+        <rect x="20" y="12.5" width="5" height="4" rx="0.8" fill="white" opacity="0.95"/>
+        <path d="M12.5 18.5H25.5" stroke="white" stroke-width="1.5" stroke-linecap="round" opacity="0.8"/>
+        <circle cx="14.5" cy="23" r="1.5" fill="#1e3b8a" stroke="white" stroke-width="1"/>
+        <circle cx="23.5" cy="23" r="1.5" fill="#1e3b8a" stroke="white" stroke-width="1"/>
+      </svg>
     </div>
   </div>
 `;
@@ -174,8 +175,8 @@ export default function NaverMapComponent({
       try {
         marker.setIcon({
           content: BUS_MARKER_CONTENT(marker.__label ?? '', Math.round(toHeading)),
-          size: new window.naver.maps.Size(40, 60),
-          anchor: new window.naver.maps.Point(20, 60),
+          size: new window.naver.maps.Size(92, 66),
+          anchor: new window.naver.maps.Point(46, 66),
         });
       } catch (_) {}
     }
@@ -245,8 +246,8 @@ export default function NaverMapComponent({
             map: mapInstance.current,
             icon: {
               content: BUS_MARKER_CONTENT(bus.label, bus.heading ?? 0),
-              size: new window.naver.maps.Size(40, 60),
-              anchor: new window.naver.maps.Point(20, 60),
+              size: new window.naver.maps.Size(92, 66),
+              anchor: new window.naver.maps.Point(46, 66),
             },
             zIndex: 20,
           });

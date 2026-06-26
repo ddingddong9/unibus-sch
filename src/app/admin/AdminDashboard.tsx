@@ -226,6 +226,7 @@ export default function AdminDashboard() {
     { title: "공지사항 작성", path: "/admin/notices",       icon: FileText },
     { title: "노선 추가",     path: "/admin/routes",        icon: Bus },
     { title: "버스 관리",     path: "/admin/buses",         icon: Bus },
+    { title: "운행 데모",     path: "/admin/demo",          icon: Bus },
     { title: "알림 보내기",   path: "/admin/notifications", icon: Bell },
     { title: "사용자 관리",   path: "/admin/users",         icon: Users },
   ];

@@ -31,6 +31,12 @@ buses.get("/", async (c) => {
       capacity: bus.capacity,
       licensePlate: bus.license_plate,
       status: bus.status,
+      isRunning: bus.is_running,
+      currentDriverId: bus.current_driver_id,
+      currentDriverName: bus.current_driver_name,
+      assignedDriverId: bus.assigned_driver_id,
+      assignedDriverName: bus.assigned_driver_name,
+      assignedDriverEmail: bus.assigned_driver_email,
       currentRoute: bus.route_id ? {
         id: bus.route_id,
         name: bus.route_name,
@@ -82,6 +88,12 @@ buses.get("/:id", async (c) => {
       capacity: bus.capacity,
       licensePlate: bus.license_plate,
       status: bus.status,
+      isRunning: bus.is_running,
+      currentDriverId: bus.current_driver_id,
+      currentDriverName: bus.current_driver_name,
+      assignedDriverId: bus.assigned_driver_id,
+      assignedDriverName: bus.assigned_driver_name,
+      assignedDriverEmail: bus.assigned_driver_email,
       currentRoute: bus.route_id ? {
         id: bus.route_id,
         name: bus.route_name,
@@ -287,6 +299,28 @@ buses.put("/:id", requireAdmin, async (c) => {
     if (updates.licensePlate) dbUpdates.license_plate = updates.licensePlate;
     if (updates.status) dbUpdates.status = updates.status;
     if (updates.currentRouteId !== undefined) dbUpdates.current_route_id = updates.currentRouteId;
+    if (updates.assignedDriverId !== undefined) {
+      if (updates.assignedDriverId === null || updates.assignedDriverId === "") {
+        dbUpdates.assigned_driver_id = null;
+      } else {
+        const { data: driver, error: driverError } = await db
+          .from('users')
+          .select('id, role')
+          .eq('id', updates.assignedDriverId)
+          .single();
+
+        if (driverError || !driver || driver.role !== 'driver') {
+          return c.json({ success: false, error: "선택한 사용자는 버스 기사가 아닙니다" }, 400);
+        }
+
+        dbUpdates.assigned_driver_id = updates.assignedDriverId;
+      }
+    }
+
+    if (updates.isRunning === false) {
+      dbUpdates.is_running = false;
+      dbUpdates.current_driver_id = null;
+    }
 
     // 버스 수정
     const { data: updatedBus, error: updateError } = await db
@@ -312,6 +346,9 @@ buses.put("/:id", requireAdmin, async (c) => {
         capacity: updatedBus.capacity,
         licensePlate: updatedBus.license_plate,
         status: updatedBus.status,
+        isRunning: updatedBus.is_running,
+        currentDriverId: updatedBus.current_driver_id,
+        assignedDriverId: updatedBus.assigned_driver_id,
         currentRouteId: updatedBus.current_route_id,
         updatedAt: updatedBus.updated_at,
       }
