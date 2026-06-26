@@ -70,6 +70,7 @@ export default function CampusShuttleWrapper() {
   const [fitBoundsKey, setFitBoundsKey] = useState(0);
   const [locationError, setLocationError] = useState<string | null>(null);
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
+  const [campusStops, setCampusStops] = useState(CAMPUS_STOPS);
   const [sheetVisible, setSheetVisible] = useState(true);
   const [dragY, setDragY] = useState(0);
   const isDragging = useRef(false);
@@ -81,30 +82,31 @@ export default function CampusShuttleWrapper() {
   // [변경] 버스 이름 map
   const busNamesRef = useRef<Map<string, string>>(new Map());
 
-  // ── 캠퍼스 경로 fetch (24h 캐시) ──
+  // ── 캠퍼스 경로 fetch ──
   useEffect(() => {
-    const CACHE_KEY = 'campus_route_path_v5';
-    const CACHE_TTL = 24 * 60 * 60 * 1000;
     localStorage.removeItem('campus_route_path');
     localStorage.removeItem('campus_route_path_v2');
     localStorage.removeItem('campus_route_path_v3');
-
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      try {
-        const { path, ts } = JSON.parse(cached);
-        if (Date.now() - ts < CACHE_TTL && path?.length > 0) {
-          setRoutePath(path);
-          return;
-        }
-      } catch (_) {}
-    }
+    localStorage.removeItem('campus_route_path_v5');
 
     api.getCampusRoutePath()
-      .then(({ path }) => {
+      .then(({ path, stops }) => {
         if (path?.length > 0) {
           setRoutePath(path);
-          localStorage.setItem(CACHE_KEY, JSON.stringify({ path, ts: Date.now() }));
+        }
+        if (stops?.length > 0) {
+          setCampusStops(
+            stops
+              .filter((stop: any) => stop.lat != null && stop.lng != null)
+              .map((stop: any, index: number) => ({
+                id: stop.id || `campus-stop-${index + 1}`,
+                nameKo: stop.name || `정류장 ${index + 1}`,
+                nameEn: stop.name || `Stop ${index + 1}`,
+                lat: Number(stop.lat),
+                lng: Number(stop.lng),
+                order: stop.order || index + 1,
+              }))
+          );
         }
       })
       .catch(e => console.warn("경로 불러오기 실패:", e));
@@ -269,13 +271,13 @@ export default function CampusShuttleWrapper() {
     setDragY(0);
   };
 
-  const stopsWithArrival = CAMPUS_STOPS.map(stop => {
+  const stopsWithArrival = campusStops.map(stop => {
     const arrival = getArrivalMinutes(stop.lat, stop.lng, buses);
     const status = arrival === null ? "waiting" : arrival <= 2 ? "arriving" : "scheduled";
     return { ...stop, arrival, status };
   });
 
-  const mapStops = CAMPUS_STOPS.map(s => ({
+  const mapStops = campusStops.map(s => ({
     id: s.id,
     name: s.nameKo,
     position: { lat: s.lat, lng: s.lng },

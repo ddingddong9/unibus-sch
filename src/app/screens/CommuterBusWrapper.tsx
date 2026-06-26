@@ -4,7 +4,6 @@ import BottomNav from "../components/BottomNav";
 import RouteMapModal from "../components/RouteMapModal";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
-import NaverMapComponent from "../components/NaverMapComponent";
 
 const getColor = (color?: string) => color || "#1e3a8a";
 
@@ -29,10 +28,7 @@ export default function CommuterBusWrapper() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [routeModalId, setRouteModalId] = useState<string | null>(null);
-  const [liveBuses, setLiveBuses] = useState<Array<{ id: string; position: { lat: number; lng: number }; heading?: number; label: string }>>([]);
-  const [hasActiveBuses, setHasActiveBuses] = useState(false);
   const [routeBusMap, setRouteBusMap] = useState<Record<string, { position: { lat: number; lng: number }; etaMins: number }>>({});
-  const [routePaths, setRoutePaths] = useState<Record<string, [number, number][]>>({});
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -43,20 +39,6 @@ export default function CommuterBusWrapper() {
         const allRoutes = await api.getRoutes();
         const commuterRoutes = allRoutes.filter((r: any) => r.type === "commuter");
         setRoutes(commuterRoutes);
-
-        const pathResults = await Promise.allSettled(
-          commuterRoutes.map(async (route: any) => {
-            const { path } = await api.getRoutePath(route.id);
-            return [route.id, path] as const;
-          })
-        );
-        setRoutePaths(
-          Object.fromEntries(
-            pathResults
-              .filter((result): result is PromiseFulfilledResult<readonly [string, [number, number][]]> => result.status === "fulfilled")
-              .map((result) => result.value)
-          )
-        );
       } catch (e: any) {
         setError(e.message || "노선 정보를 불러오지 못했습니다.");
       } finally {
@@ -84,14 +66,6 @@ export default function CommuterBusWrapper() {
         const commuterBuses = buses.filter((b: any) => b.type === "commuter" && b.status === "active");
         const locMap = new Map(locations.map((l: any) => [l.busId, l]));
 
-        const markers = commuterBuses
-          .map((b: any) => {
-            const loc = locMap.get(b.id);
-            if (!loc) return null;
-            return { id: b.id, position: { lat: loc.lat, lng: loc.lng }, heading: loc.heading, label: b.name };
-          })
-          .filter(Boolean) as { id: string; position: { lat: number; lng: number }; heading?: number; label: string }[];
-
         const newRouteBusMap: Record<string, { position: { lat: number; lng: number }; etaMins: number }> = {};
         commuterBuses.forEach((b: any) => {
           const routeId = b.currentRoute?.id;
@@ -107,8 +81,6 @@ export default function CommuterBusWrapper() {
           newRouteBusMap[routeId] = { position: pos, etaMins };
         });
 
-        setLiveBuses(markers);
-        setHasActiveBuses(markers.length > 0);
         setRouteBusMap(newRouteBusMap);
       } catch {
         // 실패 시 조용히 무시
@@ -128,11 +100,6 @@ export default function CommuterBusWrapper() {
       : selectedRegion === "from-school"
       ? routes.filter((r) => r.name?.includes("[도착]"))
       : routes.filter((r) => r.region === selectedRegion);
-
-  const liveRoutePath =
-    Object.keys(routeBusMap)
-      .map((routeId) => routePaths[routeId])
-      .find((path) => path?.length) ?? [];
 
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
@@ -184,27 +151,6 @@ export default function CommuterBusWrapper() {
             ))}
           </div>
         </div>
-
-        {/* 실시간 통학버스 지도 */}
-        {hasActiveBuses && (
-          <div className="w-full px-[16px] pt-[16px]">
-            <div className="rounded-[16px] overflow-hidden border border-[#e2e8f0] shadow-sm">
-              <div className="flex items-center gap-2 px-4 py-3 bg-[#1e3a8a]">
-                <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
-                <span className="font-['Public_Sans'] font-bold text-white text-[13px]">{t("실시간 운행 현황", "Live Bus Tracking")}</span>
-              </div>
-              <div className="relative overflow-hidden" style={{ height: 220 }}>
-                <NaverMapComponent
-                  center={{ lat: 37.05, lng: 127.0 }}
-                  zoom={9}
-                  buses={liveBuses}
-                  stops={[]}
-                  routePath={liveRoutePath}
-                />
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Content */}
         <div className="flex-1 w-full px-[16px] py-[16px] space-y-3">
