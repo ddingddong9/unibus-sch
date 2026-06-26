@@ -1,29 +1,31 @@
+import { lazy } from "react";
 import { createBrowserRouter } from "react-router-dom";
 import SplashScreen from "../imports/SplashScreen";
-import OnboardingWrapper from "./screens/OnboardingWrapper";
-import LoginWrapper from "./screens/LoginWrapper";
-import SignUpWrapper from "./screens/SignUpWrapper";
-import HomeWrapper from "./screens/HomeWrapper";
-import CampusShuttleWrapper from "./screens/CampusShuttleWrapper";
-import CommuterBusWrapper from "./screens/CommuterBusWrapper";
-import QrScannerWrapper from "./screens/QrScannerWrapper";
-import NoticeWrapper from "./screens/NoticeWrapper";
-import SettingsWrapper from "./screens/SettingsWrapper";
 import { Layout } from "./components/Layout";
 import { AnimatedMobileLayout } from "./components/AnimatedMobileLayout";
 import { ProtectedOutlet } from "./components/ProtectedOutlet";
 import { AdminOutlet } from "./components/AdminOutlet";
 import { DriverOutlet } from "./components/DriverOutlet";
-import DriverHomeWrapper from "./screens/driver/DriverHomeWrapper";
-import DriverActiveWrapper from "./screens/driver/DriverActiveWrapper";
-import AdminLogin from "./admin/AdminLogin";
-import AdminDashboard from "./admin/AdminDashboard";
-import NoticeManagement from "./admin/NoticeManagement";
-import RouteManagement from "./admin/RouteManagement";
-import BusManagement from "./admin/BusManagement";
-import BusDemo from "./admin/BusDemo";
-import NotificationSender from "./admin/NotificationSender";
-import UserManagement from "./admin/UserManagement";
+
+const OnboardingWrapper = lazy(() => import("./screens/OnboardingWrapper"));
+const LoginWrapper = lazy(() => import("./screens/LoginWrapper"));
+const SignUpWrapper = lazy(() => import("./screens/SignUpWrapper"));
+const HomeWrapper = lazy(() => import("./screens/HomeWrapper"));
+const CampusShuttleWrapper = lazy(() => import("./screens/CampusShuttleWrapper"));
+const CommuterBusWrapper = lazy(() => import("./screens/CommuterBusWrapper"));
+const QrScannerWrapper = lazy(() => import("./screens/QrScannerWrapper"));
+const NoticeWrapper = lazy(() => import("./screens/NoticeWrapper"));
+const SettingsWrapper = lazy(() => import("./screens/SettingsWrapper"));
+const DriverHomeWrapper = lazy(() => import("./screens/driver/DriverHomeWrapper"));
+const DriverActiveWrapper = lazy(() => import("./screens/driver/DriverActiveWrapper"));
+const AdminLogin = lazy(() => import("./admin/AdminLogin"));
+const AdminDashboard = lazy(() => import("./admin/AdminDashboard"));
+const NoticeManagement = lazy(() => import("./admin/NoticeManagement"));
+const RouteManagement = lazy(() => import("./admin/RouteManagement"));
+const BusManagement = lazy(() => import("./admin/BusManagement"));
+const BusDemo = lazy(() => import("./admin/BusDemo"));
+const NotificationSender = lazy(() => import("./admin/NotificationSender"));
+const UserManagement = lazy(() => import("./admin/UserManagement"));
 
 export const router = createBrowserRouter([
   // ── 모바일 앱 라우트 (AnimatedMobileLayout이 AnimatePresence 유지) ──
