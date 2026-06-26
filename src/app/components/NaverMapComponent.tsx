@@ -45,12 +45,12 @@ const BUS_MARKER_CONTENT = (label: string, rotation = 0) => `
 `;
 
 const STOP_MARKER_CONTENT = (name: string, _type: 'start' | 'end' | 'middle' = 'middle') => `
-  <div style="display:flex;flex-direction:column;align-items:center;cursor:default;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.3));">
-    <div style="background:#1e3a8a;color:white;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;white-space:nowrap;font-family:sans-serif;letter-spacing:0.2px;">
+  <div style="width:128px;height:58px;display:flex;flex-direction:column;align-items:center;cursor:default;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.3));">
+    <div style="max-width:122px;background:#1e3a8a;color:white;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:sans-serif;letter-spacing:0;">
       ${name}
     </div>
     <div style="width:2.5px;height:10px;background:#1e3a8a;"></div>
-    <div style="width:14px;height:14px;border-radius:50%;background:#1e3a8a;border:3px solid white;box-shadow:0 2px 6px rgba(30,58,138,0.5);"></div>
+    <div style="width:20px;height:20px;border-radius:50%;background:#1e3a8a;border:3px solid white;box-shadow:0 2px 6px rgba(30,58,138,0.5);box-sizing:border-box;"></div>
   </div>
 `;
 
@@ -287,8 +287,8 @@ export default function NaverMapComponent({
           map: mapInstance.current,
           icon: {
             content: STOP_MARKER_CONTENT(stop.name, stop.type ?? 'middle'),
-            size: new window.naver.maps.Size(30, 50),
-            anchor: new window.naver.maps.Point(15, 38),
+            size: new window.naver.maps.Size(128, 58),
+            anchor: new window.naver.maps.Point(64, 43),
           },
           zIndex: 10,
         });
