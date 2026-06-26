@@ -679,6 +679,22 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
     document.head.appendChild(script);
   });
 
+  const waitForMapContainer = () => new Promise<void>((resolve) => {
+    const check = (attempt = 0) => {
+      const rect = mapRef.current?.getBoundingClientRect();
+      if ((rect?.width || 0) > 0 && (rect?.height || 0) > 0) {
+        resolve();
+        return;
+      }
+      if (attempt > 10) {
+        resolve();
+        return;
+      }
+      requestAnimationFrame(() => check(attempt + 1));
+    };
+    requestAnimationFrame(() => check());
+  });
+
   const refreshPreview = useCallback(async (
     nextStops = stops,
     nextShapePoints = shapePoints,
@@ -728,11 +744,18 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
         setNewShapeAfterStopOrder(selectableStops[Math.max(0, selectableStops.length - 2)]?.order ?? 1);
 
         const first = routePath.stops.find(stop => stop.lat != null && stop.lng != null);
+        await waitForMapContainer();
+        if (disposed) return;
+
         if (mapRef.current && !mapInstance.current) {
           mapInstance.current = new window.naver.maps.Map(mapRef.current, {
             center: new window.naver.maps.LatLng(first?.lat ?? 36.7694, first?.lng ?? 126.9322),
             zoom: route.type === "campus" ? 16 : 12,
           });
+          const rect = mapRef.current.getBoundingClientRect();
+          if (rect.width > 0 && rect.height > 0) {
+            mapInstance.current.setSize(new window.naver.maps.Size(rect.width, rect.height));
+          }
         }
       } catch (error: any) {
         setMessage(error.message || "지도 편집기를 불러오지 못했습니다.");
@@ -880,8 +903,8 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
           </button>
         </div>
         <div className="grid grid-cols-[1fr_300px] min-h-[620px]">
-          <div className="relative">
-            <div ref={mapRef} className="absolute inset-0" />
+          <div className="relative min-h-[620px] bg-[#e2e8f0]">
+            <div ref={mapRef} className="absolute inset-0 w-full h-full" />
             {loading && (
               <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
                 <div className="w-10 h-10 border-2 border-[#1e3b8a] border-t-transparent rounded-full animate-spin" />
