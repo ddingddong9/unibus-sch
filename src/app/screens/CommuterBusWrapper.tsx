@@ -32,6 +32,7 @@ export default function CommuterBusWrapper() {
   const [liveBuses, setLiveBuses] = useState<Array<{ id: string; position: { lat: number; lng: number }; heading?: number; label: string }>>([]);
   const [hasActiveBuses, setHasActiveBuses] = useState(false);
   const [routeBusMap, setRouteBusMap] = useState<Record<string, { position: { lat: number; lng: number }; etaMins: number }>>({});
+  const [routePaths, setRoutePaths] = useState<Record<string, [number, number][]>>({});
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -40,7 +41,22 @@ export default function CommuterBusWrapper() {
         setLoading(true);
         setError(null);
         const allRoutes = await api.getRoutes();
-        setRoutes(allRoutes.filter((r: any) => r.type === "commuter"));
+        const commuterRoutes = allRoutes.filter((r: any) => r.type === "commuter");
+        setRoutes(commuterRoutes);
+
+        const pathResults = await Promise.allSettled(
+          commuterRoutes.map(async (route: any) => {
+            const { path } = await api.getRoutePath(route.id);
+            return [route.id, path] as const;
+          })
+        );
+        setRoutePaths(
+          Object.fromEntries(
+            pathResults
+              .filter((result): result is PromiseFulfilledResult<readonly [string, [number, number][]]> => result.status === "fulfilled")
+              .map((result) => result.value)
+          )
+        );
       } catch (e: any) {
         setError(e.message || "노선 정보를 불러오지 못했습니다.");
       } finally {
@@ -113,6 +129,11 @@ export default function CommuterBusWrapper() {
       ? routes.filter((r) => r.name?.includes("[도착]"))
       : routes.filter((r) => r.region === selectedRegion);
 
+  const liveRoutePath =
+    Object.keys(routeBusMap)
+      .map((routeId) => routePaths[routeId])
+      .find((path) => path?.length) ?? [];
+
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
       <div
@@ -132,7 +153,7 @@ export default function CommuterBusWrapper() {
 
             <div className="flex flex-col items-center">
               <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[18px] leading-[22.5px]">
-                {t("통근버스", "Commuter Bus")}
+                {t("통학버스", "Commuter Bus")}
               </p>
               <p className="font-['Public_Sans'] font-bold text-[#1e3a8a] text-[10px] leading-[15px] tracking-[1px] uppercase">
                 {t("지역 노선", "Regional Routes")}
@@ -178,7 +199,7 @@ export default function CommuterBusWrapper() {
                   zoom={9}
                   buses={liveBuses}
                   stops={[]}
-                  routePath={[]}
+                  routePath={liveRoutePath}
                 />
               </div>
             </div>
@@ -392,7 +413,7 @@ export default function CommuterBusWrapper() {
                             }`}
                             style={{
                               background: route.isActive
-                                ? `linear-gradient(to right, #1e3a8a, ${color})`
+                                ? "linear-gradient(135deg, #fa2828 0%, #ff5a1f 100%)"
                                 : "#94a3b8",
                             }}
                             disabled={!route.isActive}

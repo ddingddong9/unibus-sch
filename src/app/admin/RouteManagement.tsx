@@ -259,11 +259,11 @@ export default function RouteManagement() {
 
             <div>
               <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px] mb-4">
-                통근 버스 ({commuterRoutes.length})
+                통학 버스 ({commuterRoutes.length})
               </h2>
               {commuterRoutes.length === 0 ? (
                 <p className="text-[#94a3b8] font-['Public_Sans'] text-[14px] py-4">
-                  통근버스 노선이 없습니다.
+                  통학버스 노선이 없습니다.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -320,7 +320,7 @@ export default function RouteManagement() {
                     className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
                   >
                     <option value="campus">캠퍼스 셔틀</option>
-                    <option value="commuter">통근 버스</option>
+                    <option value="commuter">통학 버스</option>
                   </select>
                 </div>
               </div>
@@ -329,7 +329,7 @@ export default function RouteManagement() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
-                    지역 (통근버스용)
+                    지역 (통학버스용)
                   </label>
                   <input
                     type="text"

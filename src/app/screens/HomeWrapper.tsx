@@ -334,7 +334,7 @@ export default function HomeWrapper() {
                       path: "/commuter-bus",
                       icon: svgPaths.p285d3c40,
                       viewBox: "0 0 23.3333 18.6667",
-                      title: t("통근버스", "Commuter Bus"),
+                      title: t("통학버스", "Commuter Bus"),
                       sub: t("인천, 서울, 경기", "Incheon, Seoul, Gyeonggi"),
                     },
                     {
