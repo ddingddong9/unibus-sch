@@ -110,7 +110,11 @@ export default function NotificationSender() {
         scheduleTime: "",
       });
 
-      alert(`알림이 발송되었습니다. 백그라운드 푸시 ${push.sent}/${push.attempted}건 전송 완료`);
+      if (push.attempted === 0) {
+        alert("알림 공지는 생성됐지만, 아직 백그라운드 푸시를 받을 기기가 없습니다. 사용자 앱의 설정 > 알림에서 권한을 허용해야 구독이 등록됩니다.");
+      } else {
+        alert(`알림이 발송되었습니다. 백그라운드 푸시 ${push.sent}/${push.attempted}건 전송 완료`);
+      }
     } catch (error: any) {
       alert(error.message || "알림 전송에 실패했습니다.");
     } finally {
