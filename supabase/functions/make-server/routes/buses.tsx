@@ -8,6 +8,11 @@ const buses = new Hono();
 
 const toClientBusType = (type: string) => type === 'shuttle' ? 'campus' : type === 'commute' ? 'commuter' : type;
 const toDbBusType = (type: string) => type === 'campus' ? 'shuttle' : type === 'commuter' || type === 'direct' ? 'commute' : type;
+const createBusId = (type: string) => {
+  const prefix = toDbBusType(type) === 'shuttle' ? 'SH' : 'CM';
+  const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
+  return `${prefix}-${suffix}`;
+};
 
 // Get all buses - JOIN으로 노선 정보 포함
 buses.get("/", async (c) => {
@@ -155,16 +160,23 @@ buses.get("/locations/latest", async (c) => {
 buses.post("/", requireAdmin, async (c) => {
   try {
     const { name, type, capacity, licensePlate, routeId } = await c.req.json();
+    const busName = typeof name === 'string' ? name.trim() : '';
 
-    if (!name || !type) {
+    if (!busName || !type) {
       return c.json({ success: false, error: "Missing required fields: name, type" }, 400);
+    }
+
+    const dbType = toDbBusType(type);
+    if (!['shuttle', 'commute'].includes(dbType)) {
+      return c.json({ success: false, error: "Invalid bus type" }, 400);
     }
 
     const { data: bus, error: insertError } = await db
       .from('buses')
       .insert({
-        name,
-        type: toDbBusType(type),
+        id: createBusId(type),
+        name: busName,
+        type: dbType,
         capacity: capacity || 45,
         license_plate: licensePlate || null,
         current_route_id: routeId || null,

@@ -7,7 +7,7 @@ export default function BottomNav() {
   const location = useLocation();
   const { t } = useLanguage();
 
-  const isActive = (path: string) => location.pathname === path;
+  const isActive = (path: string) => location.pathname === path || (path === "/campus-shuttle" && location.pathname === "/shuttle");
 
   return (
     <div className="fixed backdrop-blur-[12px] bg-[rgba(255,255,255,0.95)] bottom-0 content-stretch flex items-center justify-center left-1/2 -translate-x-1/2 pt-[13px] px-[24px] w-full max-w-[430px] border-t border-[#e2e8f0] z-50 pb-safe-nav">
@@ -29,7 +29,7 @@ export default function BottomNav() {
           </div>
         </button>
 
-        {/* 순환버스 */}
+        {/* 셔틀버스 */}
         <button
           onClick={() => navigate("/campus-shuttle")}
           className="flex flex-col gap-[4px] items-center relative"
@@ -41,7 +41,7 @@ export default function BottomNav() {
           </div>
           <div className={`flex flex-col font-['Public_Sans'] ${isActive("/campus-shuttle") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
             <p className="leading-[16.5px]" style={{ color: isActive("/campus-shuttle") ? "#1E3A8A" : "#94A3B8" }}>
-              {t("순환버스", "Shuttle")}
+              {t("셔틀버스", "Shuttle")}
             </p>
           </div>
         </button>

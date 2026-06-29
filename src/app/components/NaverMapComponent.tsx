@@ -62,7 +62,7 @@ const USER_MARKER_CONTENT = () => `
 `;
 
 // [변경] RAF 보간 상수
-const INTERP_MS = 600; // 500ms 업데이트 주기에 맞춘 보간 시간
+const INTERP_MS = 520; // 500ms demo updates with a tiny overlap for continuous motion
 
 // [변경] cubic ease-in-out (요청 스펙과 동일)
 const easeInOut = (t: number) =>
@@ -135,14 +135,13 @@ export default function NaverMapComponent({
 
     if (route.length > 1) {
       const searchFrom: number = marker.__routeIdx ?? 0;
-      const searchEnd = Math.min(searchFrom + Math.ceil(route.length * 0.5) + 10, route.length - 1);
 
       // snap-to-segment: 목적지를 경로 선분 위로 스냅
       let bestDist = Infinity;
       let bestIdx = searchFrom;
       let bestSnap = { x: toLng, y: toLat };
 
-      for (let i = searchFrom; i < searchEnd; i++) {
+      for (let i = 0; i < route.length - 1; i++) {
         const [aLng, aLat] = route[i];
         const [bLng, bLat] = route[i + 1] ?? route[i];
         const snap = snapToSegment(toLng, toLat, aLng, aLat, bLng, bLat);
@@ -153,9 +152,23 @@ export default function NaverMapComponent({
         }
       }
 
-      if (bestIdx > searchFrom) {
+      if (bestIdx !== searchFrom) {
+        const forwardSteps = (bestIdx - searchFrom + route.length) % route.length;
+        const backwardSteps = (searchFrom - bestIdx + route.length) % route.length;
+        const routeWaypoints = forwardSteps <= backwardSteps
+          ? [
+              ...route.slice(searchFrom, bestIdx).map(([lng, lat]) => ({ lat, lng })),
+              ...(bestIdx < searchFrom ? route.slice(searchFrom).map(([lng, lat]) => ({ lat, lng })) : []),
+              ...(bestIdx < searchFrom ? route.slice(0, bestIdx).map(([lng, lat]) => ({ lat, lng })) : []),
+            ]
+          : route
+              .slice(bestIdx + 1, searchFrom + 1)
+              .reverse()
+              .map(([lng, lat]) => ({ lat, lng }));
+
         waypoints = [
-          ...route.slice(searchFrom, bestIdx).map(([lng, lat]) => ({ lat, lng })),
+          { lat: fromLat, lng: fromLng },
+          ...routeWaypoints,
           { lat: bestSnap.y, lng: bestSnap.x },
         ];
         marker.__routeIdx = bestIdx;

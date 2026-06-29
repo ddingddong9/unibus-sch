@@ -3,6 +3,7 @@ import { useNavigate } from "react-router";
 import { Bell, Bus, FileText, Users, Activity, RefreshCw, Play, Square } from "lucide-react";
 import AdminLayout from "./AdminLayout";
 import { api } from "../services/api";
+import { createRouteTrack, distanceMeters, headingAtDistance, sampleTrack, type RouteTrack } from "../utils/routeMotion";
 
 interface DashboardStats {
   totalNotices: number;
@@ -54,23 +55,21 @@ const INCHEON_ROUTE = interpolateRoute([
   { lat: 37.456000, lng: 126.705000 },
 ], 10);
 
-function calcBearing(from: { lat: number; lng: number }, to: { lat: number; lng: number }) {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLng = toRad(to.lng - from.lng);
-  const rlat1 = toRad(from.lat), rlat2 = toRad(to.lat);
-  const y = Math.sin(dLng) * Math.cos(rlat2);
-  const x = Math.cos(rlat1) * Math.sin(rlat2) - Math.sin(rlat1) * Math.cos(rlat2) * Math.cos(dLng);
-  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
-}
-
 interface SimBus {
   busId: string;
   name: string;
   type: "campus" | "commuter";
-  route: { lat: number; lng: number }[];
+  track: RouteTrack;
   label: string;
-  idx: number;
+  progressMeters: number;
   dir: 1 | -1;
+  speedMetersPerSecond: number;
+  pingPong: boolean;
+}
+
+function isClosedPath(path: { lat: number; lng: number }[]) {
+  if (path.length < 3) return false;
+  return distanceMeters(path[0], path[path.length - 1]) < 80;
 }
 
 export default function AdminDashboard() {
@@ -84,6 +83,8 @@ export default function AdminDashboard() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const simIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const simBusesRef = useRef<SimBus[]>([]);
+  const simLastTickRef = useRef<number | null>(null);
+  const simBusyRef = useRef(false);
 
   const fetchData = async (silent = false) => {
     if (!silent) setLoading(true);
@@ -128,14 +129,37 @@ export default function AdminDashboard() {
     const result: SimBus[] = [];
 
     campusBuses.forEach((b, i) => {
-      const startIdx = Math.floor((CAMPUS_ROUTE.length / Math.max(campusBuses.length, 1)) * i);
-      result.push({ busId: b.id, name: b.name, type: "campus", route: CAMPUS_ROUTE, label: "캠퍼스 순환", idx: startIdx, dir: 1 });
+      const track = createRouteTrack(CAMPUS_ROUTE, 5);
+      const progressMeters = track.lengthMeters > 0
+        ? (track.lengthMeters / Math.max(campusBuses.length, 1)) * i
+        : 0;
+      result.push({
+        busId: b.id,
+        name: b.name,
+        type: "campus",
+        track,
+        label: "캠퍼스 순환",
+        progressMeters,
+        dir: 1,
+        speedMetersPerSecond: 6,
+        pingPong: !isClosedPath(CAMPUS_ROUTE),
+      });
     });
 
     commuterBuses.forEach((b, i) => {
       const route = i % 2 === 0 ? SEOUL_ROUTE : INCHEON_ROUTE;
       const label = i % 2 === 0 ? "서울행" : "인천행";
-      result.push({ busId: b.id, name: b.name, type: "commuter", route, label, idx: 0, dir: 1 });
+      result.push({
+        busId: b.id,
+        name: b.name,
+        type: "commuter",
+        track: createRouteTrack(route, 12),
+        label,
+        progressMeters: 0,
+        dir: 1,
+        speedMetersPerSecond: 18,
+        pingPong: true,
+      });
     });
 
     return result;
@@ -148,30 +172,56 @@ export default function AdminDashboard() {
     simBusesRef.current = simBuses;
     await Promise.allSettled(simBuses.map((b) => api.updateBus(b.busId, { status: "active" })));
     setSimRunning(true);
+    simLastTickRef.current = null;
 
     simIntervalRef.current = setInterval(async () => {
+      if (simBusyRef.current) return;
+      simBusyRef.current = true;
+      const now = performance.now();
+      const elapsedSeconds = simLastTickRef.current ? Math.min((now - simLastTickRef.current) / 1000, 1) : 0.5;
+      simLastTickRef.current = now;
+
       const updated = simBusesRef.current.map((b) => {
-        let next = b.idx + b.dir;
         let dir = b.dir;
-        if (b.type === "campus") {
-          if (next >= b.route.length) next = 0;
+        const trackLength = b.track.lengthMeters;
+        let progressMeters = b.progressMeters + b.speedMetersPerSecond * elapsedSeconds * dir;
+
+        if (trackLength <= 0) return b;
+
+        if (!b.pingPong) {
+          progressMeters = ((progressMeters % trackLength) + trackLength) % trackLength;
         } else {
-          if (next >= b.route.length) { next = b.route.length - 2; dir = -1; }
-          else if (next < 0) { next = 1; dir = 1; }
+          if (progressMeters >= trackLength) {
+            progressMeters = trackLength - (progressMeters - trackLength);
+            dir = -1;
+          } else if (progressMeters <= 0) {
+            progressMeters = Math.abs(progressMeters);
+            dir = 1;
+          }
         }
-        return { ...b, idx: next, dir };
+        return { ...b, progressMeters, dir };
       });
       simBusesRef.current = updated;
 
-      await Promise.allSettled(
-        updated.map((b) => {
-          const pos = b.route[b.idx];
-          const nextPos = b.route[(b.idx + 1) % b.route.length] ?? pos;
-          const heading = calcBearing(pos, nextPos);
-          return api.updateBusLocation(b.busId, { lat: pos.lat, lng: pos.lng, speed: 40, heading });
-        })
-      );
-    }, 2000);
+      try {
+        await Promise.allSettled(
+          updated.map((b) => {
+            const pos = sampleTrack(b.track, b.progressMeters);
+            const heading = b.dir === 1
+              ? headingAtDistance(b.track, b.progressMeters)
+              : (headingAtDistance(b.track, Math.max(b.progressMeters - 12, 0)) + 180) % 360;
+            return api.updateBusLocation(b.busId, {
+              lat: pos.lat,
+              lng: pos.lng,
+              speed: Math.round(b.speedMetersPerSecond * 3.6),
+              heading,
+            });
+          })
+        );
+      } finally {
+        simBusyRef.current = false;
+      }
+    }, 500);
   };
 
   const stopSimulation = async () => {

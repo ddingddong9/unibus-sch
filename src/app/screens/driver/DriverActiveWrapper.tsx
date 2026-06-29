@@ -1,11 +1,26 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { api } from "../../services/api";
+import {
+  getBusTypeLabel,
+  getRouteDirectionLabel,
+  getRouteKindLabel,
+  getRouteSchedulePreview,
+  type DriverRoute,
+} from "../../utils/driverRouteDisplay";
+
+interface ActiveBus {
+  id: string;
+  name: string;
+  type?: string;
+  capacity?: number;
+  currentRoute?: DriverRoute | null;
+}
 
 export default function DriverActiveWrapper() {
   const navigate = useNavigate();
   const location = useLocation();
-  const bus = location.state?.bus;
+  const [bus, setBus] = useState<ActiveBus | null>(location.state?.bus || null);
 
   const [gpsStatus, setGpsStatus] = useState<"acquiring" | "active" | "error">("acquiring");
   const [coords, setCoords] = useState<{ lat: number; lng: number; speed: number } | null>(null);
@@ -21,8 +36,26 @@ export default function DriverActiveWrapper() {
 
   // 버스 없이 접근 시 홈으로
   useEffect(() => {
-    if (!bus) navigate("/driver", { replace: true });
-  }, [bus]);
+    if (bus) return;
+    let mounted = true;
+
+    api.getDriverStatus()
+      .then(({ activeBus }) => {
+        if (!mounted) return;
+        if (activeBus) {
+          setBus(activeBus);
+        } else {
+          navigate("/driver", { replace: true });
+        }
+      })
+      .catch(() => {
+        if (mounted) navigate("/driver", { replace: true });
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, [bus, navigate]);
 
   // GPS watchPosition 시작
   useEffect(() => {
@@ -103,6 +136,10 @@ export default function DriverActiveWrapper() {
 
   if (!bus) return null;
 
+  const routeKind = getRouteKindLabel(bus);
+  const routeSchedule = getRouteSchedulePreview(bus.currentRoute);
+  const routeColor = bus.currentRoute?.color || "#1e3b8a";
+
   return (
     <div className="min-h-screen bg-[#f6f6f8] flex flex-col items-center">
       <div className="w-full max-w-[430px] min-h-screen flex flex-col bg-white">
@@ -116,11 +153,44 @@ export default function DriverActiveWrapper() {
             </span>
           </div>
           <h1 className="text-white text-2xl font-black tracking-tight">{bus.name}</h1>
-          <p className="text-white/60 text-sm mt-1">{bus.id}</p>
+          <p className="text-white/60 text-sm mt-1">{bus.id} · {getBusTypeLabel(bus)}</p>
+        </div>
+
+        {/* 운행 노선 */}
+        <div className={`mx-5 mt-5 rounded-2xl p-5 border ${
+          bus.currentRoute ? "bg-[#f8fafc] border-[#e2e8f0]" : "bg-amber-50 border-amber-200"
+        }`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <p className={`text-xs font-black mb-1 ${
+                bus.currentRoute ? "text-[#1e3b8a]" : "text-amber-700"
+              }`}>
+                {routeKind}
+              </p>
+              <p className={`text-lg font-black leading-6 truncate ${
+                bus.currentRoute ? "text-[#0f172a]" : "text-amber-800"
+              }`}>
+                {bus.currentRoute?.name || "운행 노선이 지정되지 않았습니다"}
+              </p>
+              <p className={`text-xs leading-relaxed mt-2 ${
+                bus.currentRoute ? "text-[#64748b]" : "text-amber-700"
+              }`}>
+                {bus.currentRoute
+                  ? [getRouteDirectionLabel(bus.currentRoute), routeSchedule].filter(Boolean).join(" · ")
+                  : "관리자 버스 관리에서 이 버스의 운행 노선을 지정해야 사용자 지도에서 정확히 분류됩니다."}
+              </p>
+            </div>
+            <div
+              className="w-12 h-12 rounded-2xl flex items-center justify-center shrink-0"
+              style={{ backgroundColor: `${routeColor}1A` }}
+            >
+              <span className="w-5 h-5 rounded-full" style={{ backgroundColor: bus.currentRoute ? routeColor : "#f59e0b" }} />
+            </div>
+          </div>
         </div>
 
         {/* 경과 시간 */}
-        <div className="mx-5 mt-5 bg-[#f8fafc] rounded-2xl p-5 flex items-center justify-between border border-[#e2e8f0]">
+        <div className="mx-5 mt-4 bg-[#f8fafc] rounded-2xl p-5 flex items-center justify-between border border-[#e2e8f0]">
           <div>
             <p className="text-gray-400 text-xs font-medium mb-1">운행 경과 시간</p>
             <p className="text-[#0f172a] text-3xl font-black tracking-tight">{formatTime(elapsed)}</p>

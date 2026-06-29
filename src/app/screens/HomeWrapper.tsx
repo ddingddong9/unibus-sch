@@ -223,7 +223,7 @@ export default function HomeWrapper() {
                             </svg>
                           </div>
                           <div className="flex flex-col font-['Public_Sans'] font-medium justify-center leading-[0] text-[#1e3a8a] text-[11px]">
-                            <p className="leading-[14px]">{t("캠퍼스 셔틀", "Campus Shuttle")}</p>
+                            <p className="leading-[14px]">{t("셔틀버스", "Shuttle")}</p>
                           </div>
                         </div>
                       </motion.button>
@@ -327,8 +327,8 @@ export default function HomeWrapper() {
                       path: "/campus-shuttle",
                       icon: svgPaths.p2d903e00,
                       viewBox: "0 0 25.6667 21",
-                      title: t("캠퍼스 셔틀", "Campus Shuttle"),
-                      sub: t("교내 순환버스", "Intra-campus circulation"),
+                      title: t("셔틀버스", "Shuttle"),
+                      sub: t("학내순환 · 신창역 셔틀", "Campus loop · Sinchang shuttle"),
                     },
                     {
                       path: "/commuter-bus",

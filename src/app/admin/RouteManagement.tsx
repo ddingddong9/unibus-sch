@@ -230,16 +230,16 @@ export default function RouteManagement() {
           </div>
         )}
 
-        {/* Campus Routes */}
+        {/* Shuttle Routes */}
         {!loading && (
           <>
             <div className="mb-8">
               <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px] mb-4">
-                캠퍼스 셔틀 ({campusRoutes.length})
+                셔틀버스 ({campusRoutes.length})
               </h2>
               {campusRoutes.length === 0 ? (
                 <p className="text-[#94a3b8] font-['Public_Sans'] text-[14px] py-4">
-                  캠퍼스 셔틀 노선이 없습니다.
+                  셔틀버스 노선이 없습니다.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -319,7 +319,7 @@ export default function RouteManagement() {
                     }
                     className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
                   >
-                    <option value="campus">캠퍼스 셔틀</option>
+                    <option value="campus">셔틀버스 (학내순환/신창역)</option>
                     <option value="commuter">통학 버스</option>
                   </select>
                 </div>
@@ -329,14 +329,14 @@ export default function RouteManagement() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
-                    지역 (통학버스용)
+                    지역/분류
                   </label>
                   <input
                     type="text"
                     value={formData.region}
                     onChange={(e) => setFormData({ ...formData, region: e.target.value })}
                     className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
-                    placeholder="예: 인천, 서울, 경기"
+                    placeholder="예: 신창역, 인천, 서울"
                   />
                 </div>
                 <div>
@@ -357,14 +357,14 @@ export default function RouteManagement() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
-                    소요 시간
+                    소요 시간 / 출발 기준
                   </label>
                   <input
                     type="text"
                     value={formData.duration}
                     onChange={(e) => setFormData({ ...formData, duration: e.target.value })}
                     className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
-                    placeholder="예: 50분"
+                    placeholder="예: 10분 전 출발, 50분"
                   />
                 </div>
                 <div>
@@ -404,21 +404,21 @@ export default function RouteManagement() {
                   value={formData.stops}
                   onChange={(e) => setFormData({ ...formData, stops: e.target.value })}
                   className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
-                  placeholder="예: 천안역, 쌍용동, 순천향대 정문"
+                  placeholder="예: 후문, 신창역 또는 신창역, 후문, 향3, 향1"
                 />
               </div>
 
               {/* 운행 시간 */}
               <div>
                 <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
-                  운행 시간 (쉼표로 구분)
+                  운행/지하철 시간 (쉼표로 구분)
                 </label>
                 <input
                   type="text"
                   value={formData.schedule}
                   onChange={(e) => setFormData({ ...formData, schedule: e.target.value })}
                   className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
-                  placeholder="예: 07:00, 08:00, 09:00"
+                  placeholder="예: 08:20, 09:20, 10:20"
                 />
               </div>
 
@@ -432,7 +432,7 @@ export default function RouteManagement() {
                   value={formData.description}
                   onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                   className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
-                  placeholder="노선에 대한 추가 설명"
+                  placeholder="예: 후문 종착, 학내순환 연결, 지하철 출발 10분 전 후문 출발"
                 />
               </div>
 
@@ -587,7 +587,7 @@ function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: Route
             <div className="flex items-center gap-2 mb-2">
               <Clock className="w-4 h-4 text-[#64748b]" />
               <h4 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px]">
-                운행 시간
+                운행/지하철 시간
               </h4>
             </div>
             <div className="flex flex-wrap gap-2">
