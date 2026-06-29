@@ -20,6 +20,7 @@ export interface AuthToken {
 
 export interface KakaoLoginRequest {
   kakaoId: string;
+  accessToken: string;
   email?: string;
   name?: string;
   profileImage?: string;

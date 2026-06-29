@@ -74,7 +74,13 @@ export default function LoginWrapper() {
     setLoading(true);
     try {
       const kakaoUser = await kakaoService.login();
-      const result = await api.kakaoLogin(kakaoUser.kakaoId, kakaoUser.email, kakaoUser.name, kakaoUser.profileImage);
+      const result = await api.kakaoLogin(
+        kakaoUser.kakaoId,
+        kakaoUser.accessToken,
+        kakaoUser.email,
+        kakaoUser.name,
+        kakaoUser.profileImage,
+      );
       login(result.token, result.user);
       navigate("/home");
     } catch {

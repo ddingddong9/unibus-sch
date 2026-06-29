@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Bus, RefreshCw, Plus, Trash2, Square, AlertTriangle, CheckCircle2, Clock, UserCheck, Power } from "lucide-react";
+import { Bus, RefreshCw, Plus, Trash2, Square, AlertTriangle, CheckCircle2, Clock, UserCheck, Power, Pencil, Check, X } from "lucide-react";
 import AdminLayout from "./AdminLayout";
 import { api } from "../services/api";
 
@@ -62,6 +62,8 @@ export default function BusManagement() {
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [forceStopConfirm, setForceStopConfirm] = useState<string | null>(null);
   const [busActionLoading, setBusActionLoading] = useState<string | null>(null);
+  const [editingBusId, setEditingBusId] = useState<string | null>(null);
+  const [editingBusName, setEditingBusName] = useState("");
 
   // 테스트 시뮬레이션
   const [testBusType, setTestBusType] = useState<"campus" | "direct">("campus");
@@ -183,6 +185,41 @@ export default function BusManagement() {
       await fetchBuses();
     } catch (err: any) {
       alert(`상태 변경 실패: ${err.message}`);
+    } finally {
+      setBusActionLoading(null);
+    }
+  };
+
+  const startEditingBusName = (bus: any) => {
+    setEditingBusId(bus.id);
+    setEditingBusName(bus.name || "");
+    setDeleteConfirm(null);
+    setForceStopConfirm(null);
+  };
+
+  const cancelEditingBusName = () => {
+    setEditingBusId(null);
+    setEditingBusName("");
+  };
+
+  const handleRenameBus = async (bus: any) => {
+    const nextName = editingBusName.trim();
+    if (!nextName) {
+      alert("버스 이름을 입력해주세요.");
+      return;
+    }
+    if (nextName === bus.name) {
+      cancelEditingBusName();
+      return;
+    }
+
+    setBusActionLoading(bus.id);
+    try {
+      await api.updateBus(bus.id, { name: nextName });
+      cancelEditingBusName();
+      await fetchBuses();
+    } catch (err: any) {
+      alert(`이름 수정 실패: ${err.message}`);
     } finally {
       setBusActionLoading(null);
     }
@@ -347,6 +384,7 @@ export default function BusManagement() {
                   const isActive = bus.status === "active";
                   const isRunning = Boolean(bus.isRunning);
                   const lastPing = bus.lastLocationAt || bus.updatedAt;
+                  const isEditingName = editingBusId === bus.id;
                   return (
                     <div
                       key={bus.id}
@@ -360,7 +398,53 @@ export default function BusManagement() {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[15px] truncate">{bus.name}</span>
+                          {isEditingName ? (
+                            <div className="flex items-center gap-1.5 min-w-[220px] max-w-full">
+                              <input
+                                type="text"
+                                value={editingBusName}
+                                onChange={(e) => setEditingBusName(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") handleRenameBus(bus);
+                                  if (e.key === "Escape") cancelEditingBusName();
+                                }}
+                                disabled={busActionLoading === bus.id}
+                                autoFocus
+                                className="h-[34px] w-[220px] max-w-full px-2.5 bg-white border border-[#1e3b8a] rounded-lg font-['Public_Sans'] text-[14px] font-semibold text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#1e3b8a]/15 disabled:opacity-50"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleRenameBus(bus)}
+                                disabled={busActionLoading === bus.id}
+                                className="p-2 text-green-700 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
+                                title="저장"
+                              >
+                                <Check className="w-4 h-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={cancelEditingBusName}
+                                disabled={busActionLoading === bus.id}
+                                className="p-2 text-[#64748b] hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+                                title="취소"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[15px] truncate">{bus.name}</span>
+                              <button
+                                type="button"
+                                onClick={() => startEditingBusName(bus)}
+                                disabled={busActionLoading === bus.id}
+                                className="p-1.5 text-[#94a3b8] hover:text-[#1e3b8a] hover:bg-[#1e3b8a]/5 rounded-lg transition-colors disabled:opacity-50"
+                                title="버스 이름 수정"
+                              >
+                                <Pencil className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
                           <span className={`shrink-0 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
                             isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
                           }`}>

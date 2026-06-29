@@ -8,8 +8,12 @@ import {
   SignupRequest, 
   KakaoLoginRequest,
 } from "../types/index.tsx";
+import { createSessionToken, deleteTokenRecord, hashSessionToken } from "../security/tokens.ts";
 
 const auth = new Hono();
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const MIN_PASSWORD_LENGTH = 8;
+const MAX_PASSWORD_LENGTH = 72;
 
 // Sign up
 auth.post("/signup", async (c) => {
@@ -20,11 +24,25 @@ auth.post("/signup", async (c) => {
       return c.json({ success: false, error: "Missing required fields" }, 400);
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
+
+    if (!EMAIL_PATTERN.test(normalizedEmail)) {
+      return c.json({ success: false, error: "Invalid email format" }, 400);
+    }
+
+    if (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
+      return c.json({
+        success: false,
+        error: `Password must be between ${MIN_PASSWORD_LENGTH} and ${MAX_PASSWORD_LENGTH} characters`,
+      }, 400);
+    }
+
     // 이메일 중복 체크 (관계형 DB)
     const { data: existingUser } = await db
       .from('users')
       .select('id')
-      .eq('email', email)
+      .eq('email', normalizedEmail)
       .single();
     
     if (existingUser) {
@@ -38,9 +56,9 @@ auth.post("/signup", async (c) => {
     const { data: user, error: insertError } = await db
       .from('users')
       .insert({
-        email,
+        email: normalizedEmail,
         password_hash: passwordHash,
-        name,
+        name: trimmedName,
         student_id: studentId || null,
         role: 'user',
         provider: 'local',
@@ -53,7 +71,7 @@ auth.post("/signup", async (c) => {
       return c.json({ success: false, error: "Failed to create user" }, 500);
     }
 
-    console.log("✅ User signed up:", { id: user.id, email, name });
+    console.log("✅ User signed up:", { id: user.id, email: normalizedEmail, name: trimmedName });
 
     return c.json({ 
       success: true, 
@@ -69,7 +87,7 @@ auth.post("/signup", async (c) => {
     });
   } catch (error: any) {
     console.error("❌ Signup error:", error);
-    return c.json({ success: false, error: "Signup failed: " + error.message }, 500);
+    return c.json({ success: false, error: "Signup failed" }, 500);
   }
 });
 
@@ -109,7 +127,8 @@ auth.post("/login", async (c) => {
     }
 
     // 토큰 생성 (관계형 DB)
-    const token = crypto.randomUUID();
+    const token = createSessionToken();
+    const tokenHash = await hashSessionToken(token);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30); // 30일 후 만료
 
@@ -117,7 +136,7 @@ auth.post("/login", async (c) => {
       .from('auth_tokens')
       .insert({
         user_id: user.id,
-        token,
+        token: tokenHash,
         expires_at: expiresAt.toISOString(),
       });
 
@@ -141,17 +160,39 @@ auth.post("/login", async (c) => {
     });
   } catch (error: any) {
     console.error("❌ Login error:", error);
-    return c.json({ success: false, error: "Login failed: " + error.message }, 500);
+    return c.json({ success: false, error: "Login failed" }, 500);
   }
 });
 
 // Kakao OAuth login
 auth.post("/kakao", async (c) => {
   try {
-    const { kakaoId, email, name, profileImage }: KakaoLoginRequest = await c.req.json();
+    const { accessToken }: KakaoLoginRequest = await c.req.json();
+
+    if (!accessToken) {
+      return c.json({ success: false, error: "Missing Kakao access token" }, 400);
+    }
+
+    const kakaoResponse = await fetch("https://kapi.kakao.com/v2/user/me", {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+
+    if (!kakaoResponse.ok) {
+      return c.json({ success: false, error: "Invalid Kakao token" }, 401);
+    }
+
+    const kakaoProfile = await kakaoResponse.json();
+    const kakaoId = String(kakaoProfile.id || "");
+    const kakaoAccount = kakaoProfile.kakao_account || {};
+    const profile = kakaoAccount.profile || {};
+    const email = kakaoAccount.email || undefined;
+    const name = profile.nickname || "Kakao User";
+    const profileImage = profile.profile_image_url || null;
 
     if (!kakaoId) {
-      return c.json({ success: false, error: "Missing kakaoId" }, 400);
+      return c.json({ success: false, error: "Invalid Kakao profile" }, 401);
     }
 
     // 카카오 ID로 사용자 조회 (관계형 DB)
@@ -170,10 +211,10 @@ auth.post("/kakao", async (c) => {
         .from('users')
         .insert({
           email: email || `kakao_${kakaoId}@kakao.local`,
-          name: name || "Kakao User",
+          name,
           provider: 'kakao',
           provider_id: kakaoId,
-          profile_image: profileImage || null,
+          profile_image: profileImage,
           role: 'user',
         })
         .select('id, email, name, profile_image, student_id, role, provider')
@@ -185,13 +226,14 @@ auth.post("/kakao", async (c) => {
       }
 
       user = newUser;
-      console.log("✅ Created new kakao user:", { userId: user.id, kakaoId, email });
+      console.log("✅ Created new kakao user:", { userId: user.id, kakaoId });
     } else {
       console.log("✅ Existing kakao user logged in:", { userId: user.id, kakaoId });
     }
 
     // 토큰 생성
-    const token = crypto.randomUUID();
+    const token = createSessionToken();
+    const tokenHash = await hashSessionToken(token);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 30); // 30일 후 만료
 
@@ -199,7 +241,7 @@ auth.post("/kakao", async (c) => {
       .from('auth_tokens')
       .insert({
         user_id: user.id,
-        token,
+        token: tokenHash,
         expires_at: expiresAt.toISOString(),
       });
 
@@ -223,7 +265,7 @@ auth.post("/kakao", async (c) => {
     });
   } catch (error: any) {
     console.error("❌ Kakao login error:", error);
-    return c.json({ success: false, error: "Kakao login failed: " + error.message }, 500);
+    return c.json({ success: false, error: "Kakao login failed" }, 500);
   }
 });
 
@@ -233,11 +275,7 @@ auth.post("/logout", async (c) => {
     const token = c.req.header('X-Auth-Token');
     
     if (token) {
-      // 토큰 삭제 (관계형 DB)
-      await db
-        .from('auth_tokens')
-        .delete()
-        .eq('token', token);
+      await deleteTokenRecord(token);
     }
 
     console.log("✅ User logged out");
@@ -245,7 +283,7 @@ auth.post("/logout", async (c) => {
     return c.json({ success: true, message: "Logged out successfully" });
   } catch (error: any) {
     console.error("❌ Logout error:", error);
-    return c.json({ success: false, error: "Logout failed: " + error.message }, 500);
+    return c.json({ success: false, error: "Logout failed" }, 500);
   }
 });
 
