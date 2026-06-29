@@ -12,6 +12,7 @@ import {
   requestNotificationPermission,
   setNotificationEnabled,
 } from "../utils/notificationPreferences";
+import { disablePushSubscription, ensurePushSubscription, isPushSupported } from "../utils/pushNotifications";
 
 const sectionVariants = {
   hidden: { opacity: 0 },
@@ -42,11 +43,12 @@ export default function SettingsWrapper() {
     if (notifications) {
       setNotifications(false);
       setNotificationEnabled(false);
+      await disablePushSubscription();
       return;
     }
 
-    if (!isBrowserNotificationSupported()) {
-      alert("이 브라우저에서는 알림을 지원하지 않습니다.");
+    if (!isBrowserNotificationSupported() || !isPushSupported()) {
+      alert("이 브라우저에서는 백그라운드 푸시 알림을 지원하지 않습니다.");
       return;
     }
 
@@ -57,8 +59,15 @@ export default function SettingsWrapper() {
     setNotificationPermission(permission);
 
     if (permission === "granted") {
-      setNotifications(true);
-      setNotificationEnabled(true);
+      try {
+        await ensurePushSubscription();
+        setNotifications(true);
+        setNotificationEnabled(true);
+      } catch (error: any) {
+        setNotifications(false);
+        setNotificationEnabled(false);
+        alert(error.message || "푸시 알림 등록에 실패했습니다.");
+      }
       return;
     }
 

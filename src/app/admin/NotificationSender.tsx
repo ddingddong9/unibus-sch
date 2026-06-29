@@ -83,12 +83,12 @@ export default function NotificationSender() {
     const target = targetMap[formData.target] || targetMap.all;
     setSending(true);
     try {
-      const notice = await api.createNotice({
+      const result = await api.sendNotification({
         title: formData.title.trim(),
-        content: formData.message.trim(),
-        category: target.category,
-        priority: target.category === "system" ? "high" : "medium",
+        message: formData.message.trim(),
+        target: formData.target,
       });
+      const { notice, push } = result;
 
       const newNotification: SentNotification = {
         id: Date.now(),
@@ -110,7 +110,7 @@ export default function NotificationSender() {
         scheduleTime: "",
       });
 
-      alert("알림이 공지사항으로 발송되었습니다. 접속 중인 사용자는 실시간으로 수신합니다.");
+      alert(`알림이 발송되었습니다. 백그라운드 푸시 ${push.sent}/${push.attempted}건 전송 완료`);
     } catch (error: any) {
       alert(error.message || "알림 전송에 실패했습니다.");
     } finally {
