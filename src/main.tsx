@@ -6,7 +6,10 @@ import App from './app/App.tsx'
 // 새 서비스워커가 활성화되면 페이지를 자동 새로고침해서
 // 항상 최신 빌드(CSS/JS)를 사용하도록 보장
 if ('serviceWorker' in navigator) {
+  let refreshing = false
   navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return
+    refreshing = true
     window.location.reload()
   })
 }

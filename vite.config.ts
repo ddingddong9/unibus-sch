@@ -136,4 +136,22 @@ export default defineConfig({
   optimizeDeps: {
     include: ['framer-motion'],
   },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return;
+          if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/react-router') || id.includes('/scheduler/')) {
+            return 'react-vendor';
+          }
+          if (id.includes('/framer-motion/')) {
+            return 'motion-vendor';
+          }
+          if (id.includes('/@supabase/')) {
+            return 'supabase';
+          }
+        },
+      },
+    },
+  },
 })

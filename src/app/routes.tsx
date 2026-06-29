@@ -28,7 +28,7 @@ const NotificationSender = lazy(() => import("./admin/NotificationSender"));
 const UserManagement = lazy(() => import("./admin/UserManagement"));
 
 export const router = createBrowserRouter([
-  // ── 모바일 앱 라우트 (AnimatedMobileLayout이 AnimatePresence 유지) ──
+  // ── 모바일 앱 라우트 ──
   {
     element: <AnimatedMobileLayout />,
     children: [
