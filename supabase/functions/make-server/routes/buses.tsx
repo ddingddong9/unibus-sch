@@ -293,7 +293,13 @@ buses.put("/:id", requireAdmin, async (c) => {
 
     // snake_case로 변환
     const dbUpdates: any = {};
-    if (updates.name) dbUpdates.name = updates.name;
+    if (updates.name !== undefined) {
+      const name = String(updates.name).trim();
+      if (!name) {
+        return c.json({ success: false, error: "Bus name is required" }, 400);
+      }
+      dbUpdates.name = name;
+    }
     if (updates.type) dbUpdates.type = toDbBusType(updates.type);
     if (updates.capacity) dbUpdates.capacity = updates.capacity;
     if (updates.licensePlate) dbUpdates.license_plate = updates.licensePlate;
