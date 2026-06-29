@@ -3,6 +3,7 @@ import { RouterProvider } from "react-router-dom";
 import { router } from "./routes";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { AuthProvider } from "./contexts/AuthContext";
+import NotificationManager from "./components/NotificationManager";
 
 function AppLoadingFallback() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
   return (
     <AuthProvider>
       <LanguageProvider>
+        <NotificationManager />
         <Suspense fallback={<AppLoadingFallback />}>
           <RouterProvider router={router} />
         </Suspense>

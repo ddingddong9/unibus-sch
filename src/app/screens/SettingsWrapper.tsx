@@ -5,6 +5,13 @@ import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
 import { SettingsSkeleton } from "../components/SkeletonLoaders";
+import {
+  getNotificationPermission,
+  isBrowserNotificationSupported,
+  isNotificationEnabled,
+  requestNotificationPermission,
+  setNotificationEnabled,
+} from "../utils/notificationPreferences";
 
 const sectionVariants = {
   hidden: { opacity: 0 },
@@ -19,7 +26,8 @@ export default function SettingsWrapper() {
   const navigate = useNavigate();
   const { language, setLanguage, t } = useLanguage();
   const { logout, user, isAdmin, isLoading } = useAuth();
-  const [notifications, setNotifications] = useState(true);
+  const [notifications, setNotifications] = useState(() => isNotificationEnabled());
+  const [notificationPermission, setNotificationPermission] = useState(() => getNotificationPermission());
   const [location, setLocation] = useState(true);
   const [darkMode, setDarkMode] = useState(false);
 
@@ -27,6 +35,37 @@ export default function SettingsWrapper() {
     if (confirm(t("로그아웃 하시겠습니까?", "Are you sure you want to logout?"))) {
       await logout();
       navigate("/login");
+    }
+  };
+
+  const handleToggleNotifications = async () => {
+    if (notifications) {
+      setNotifications(false);
+      setNotificationEnabled(false);
+      return;
+    }
+
+    if (!isBrowserNotificationSupported()) {
+      alert("이 브라우저에서는 알림을 지원하지 않습니다.");
+      return;
+    }
+
+    const permission = notificationPermission === "granted"
+      ? "granted"
+      : await requestNotificationPermission();
+
+    setNotificationPermission(permission);
+
+    if (permission === "granted") {
+      setNotifications(true);
+      setNotificationEnabled(true);
+      return;
+    }
+
+    setNotifications(false);
+    setNotificationEnabled(false);
+    if (permission === "denied") {
+      alert("브라우저에서 알림 권한이 차단되어 있습니다. 브라우저 사이트 설정에서 알림을 허용해 주세요.");
     }
   };
 
@@ -140,12 +179,14 @@ export default function SettingsWrapper() {
                     {t("알림", "Notifications")}
                   </p>
                   <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[12px] leading-[16px]">
-                    {t("버스 도착 알림 받기", "Receive bus arrival alerts")}
+                    {notificationPermission === "denied"
+                      ? t("브라우저에서 알림 권한이 차단되어 있습니다", "Notifications are blocked in this browser")
+                      : t("운행 변경 및 공지 알림 받기", "Receive route and notice alerts")}
                   </p>
                 </div>
               </div>
               <button
-                onClick={() => setNotifications(!notifications)}
+                onClick={handleToggleNotifications}
                 className={`relative w-[52px] h-[28px] rounded-full transition-colors ${
                   notifications ? "bg-[#1e3a8a]" : "bg-[#cbd5e1]"
                 }`}
