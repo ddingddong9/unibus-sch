@@ -49,6 +49,11 @@ export default function CommuterBusWrapper() {
   }, []);
 
   useEffect(() => {
+    if (routes.length === 0) {
+      setRouteBusMap({});
+      return;
+    }
+
     const DEST: Record<string, { lat: number; lng: number }> = {
       "서울": { lat: 37.497, lng: 127.047 },
       "인천": { lat: 37.456, lng: 126.705 },
@@ -61,6 +66,7 @@ export default function CommuterBusWrapper() {
     };
 
     const fetchLive = async () => {
+      if (document.hidden) return;
       try {
         const [buses, locations] = await Promise.all([api.getBuses(), api.getBusLocations()]);
         const commuterBuses = buses.filter((b: any) => b.type === "commuter" && b.status === "active");
@@ -86,9 +92,17 @@ export default function CommuterBusWrapper() {
         // 실패 시 조용히 무시
       }
     };
+    const handleVisibilityChange = () => {
+      if (!document.hidden) fetchLive();
+    };
+
     fetchLive();
-    liveIntervalRef.current = setInterval(fetchLive, 5000);
-    return () => { if (liveIntervalRef.current) clearInterval(liveIntervalRef.current); };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    liveIntervalRef.current = setInterval(fetchLive, 15000);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
+    };
   }, [routes]);
 
   // 유니크 지역 목록 (region 필드 기반)

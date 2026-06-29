@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, Navigate } from "react-router";
 import { motion } from "framer-motion";
 import svgPaths from "../../imports/svg-9blebrmjt8";
@@ -33,11 +33,6 @@ export default function LoginWrapper() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // iOS Safari 팝업 허용을 위해 컴포넌트 마운트 시 SDK 미리 로드
-  useEffect(() => {
-    kakaoService.init().catch(() => {});
-  }, []);
 
   if (!isLoading && isAuthenticated) {
     return <Navigate to="/home" replace />;
