@@ -52,20 +52,18 @@ export default function SignUpWrapper() {
     setLoading(true);
     try {
       // Fixed: Pass object instead of individual parameters
-      const result = await api.signup({
+      await api.signup({
         email: formData.email,
         password: formData.password,
         name: formData.name,
         studentId: formData.studentId || undefined
       });
-      console.log("Signup successful:", result);
       
       // Auto login after signup — AuthContext에 반영
       const loginResult = await api.login(formData.email, formData.password);
       login(loginResult.token, loginResult.user);
       navigate("/home");
-    } catch (err: any) {
-      console.error("Signup error:", err);
+    } catch {
       setErrors({ 
         email: t("회원가입에 실패했습니다. 이미 존재하는 이메일일 수 있습니다.", "Signup failed. Email may already exist.")
       });

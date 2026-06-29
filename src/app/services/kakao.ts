@@ -6,6 +6,8 @@ declare global {
   }
 }
 
+const isDev = import.meta.env.DEV;
+
 export class KakaoLoginService {
   private static instance: KakaoLoginService;
   private initialized = false;
@@ -33,7 +35,7 @@ export class KakaoLoginService {
         if (window.Kakao) {
           if (!window.Kakao.isInitialized()) {
             window.Kakao.init(this.APP_KEY);
-            console.log('Kakao SDK initialized:', window.Kakao.isInitialized());
+            if (isDev) console.log('Kakao SDK initialized:', window.Kakao.isInitialized());
           }
           this.initialized = true;
           resolve();
@@ -102,7 +104,7 @@ export class KakaoLoginService {
   logout(): void {
     if (this.initialized && window.Kakao.Auth.getAccessToken()) {
       window.Kakao.Auth.logout(() => {
-        console.log('Kakao logout success');
+        if (isDev) console.log('Kakao logout success');
       });
     }
   }

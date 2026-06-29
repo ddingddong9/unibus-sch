@@ -9,6 +9,7 @@ import type {
 
 const SUPABASE_URL = supabaseUrl;
 const API_BASE_URL = `${SUPABASE_URL}/functions/v1/make-server`;
+const isDev = import.meta.env.DEV;
 
 class ApiClient {
   private token: string | null = null;
@@ -46,7 +47,7 @@ class ApiClient {
     }
 
     const url = `${API_BASE_URL}${endpoint}`;
-    console.log(`[API] ${options.method || 'GET'} ${url}`);
+    if (isDev) console.log(`[API] ${options.method || 'GET'} ${url}`);
 
     try {
       const response = await fetch(url, {
@@ -57,22 +58,26 @@ class ApiClient {
       // Handle non-JSON responses
       const contentType = response.headers.get('content-type');
       if (!contentType || !contentType.includes('application/json')) {
-        console.error('[API] Non-JSON response received:', {
-          status: response.status,
-          statusText: response.statusText,
-          contentType
-        });
+        if (isDev) {
+          console.error('[API] Non-JSON response received:', {
+            status: response.status,
+            statusText: response.statusText,
+            contentType
+          });
+        }
         throw new Error(`Server returned ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
 
       if (!response.ok) {
-        console.error('[API] Request failed:', {
-          endpoint,
-          status: response.status,
-          error: data.error || data.message
-        });
+        if (isDev) {
+          console.error('[API] Request failed:', {
+            endpoint,
+            status: response.status,
+            error: data.error || data.message
+          });
+        }
 
         if (response.status === 401) {
           this.setToken(null);
@@ -83,13 +88,15 @@ class ApiClient {
         throw new Error(data.error || data.message || `HTTP ${response.status}`);
       }
 
-      console.log(`[API] Success:`, { endpoint, success: data.success });
+      if (isDev) console.log(`[API] Success:`, { endpoint, success: data.success });
       return data;
     } catch (error) {
-      console.error('[API] Request failed:', {
-        endpoint,
-        error: error instanceof Error ? error.message : String(error)
-      });
+      if (isDev) {
+        console.error('[API] Request failed:', {
+          endpoint,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
       throw error;
     }
   }
