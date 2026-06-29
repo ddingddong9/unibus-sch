@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Bus, Play, Square, RotateCcw, MonitorPlay, MapPin, AlertTriangle } from "lucide-react";
 import AdminLayout from "./AdminLayout";
 import { api } from "../services/api";
+import { createRouteTrack, distanceMeters, headingAtDistance, sampleTrack, type RouteTrack } from "../utils/routeMotion";
 
 type DemoKind = "campus" | "commuter";
 
@@ -15,9 +16,11 @@ interface DemoBusPlan {
   name: string;
   kind: DemoKind;
   label: string;
-  path: Point[];
-  index: number;
-  stepSize: number;
+  track: RouteTrack;
+  progressMeters: number;
+  speedMetersPerSecond: number;
+  direction: 1 | -1;
+  pingPong: boolean;
   routeId: string | null;
   original: {
     type: string;
@@ -51,32 +54,14 @@ const COMMUTER_TO_ASAN: Point[] = [
   { lat: 36.769014, lng: 126.927978 },
 ];
 
-function interpolatePath(points: Point[], stepsPerSegment: number) {
-  return points.flatMap((from, i) => {
-    const to = points[i + 1];
-    if (!to) return [];
-    return Array.from({ length: stepsPerSegment }, (_, step) => {
-      const t = step / stepsPerSegment;
-      return {
-        lat: from.lat + (to.lat - from.lat) * t,
-        lng: from.lng + (to.lng - from.lng) * t,
-      };
-    });
-  });
-}
-
 function pathFromNaver(path: [number, number][] | undefined, fallback: Point[]) {
   if (!path || path.length < 2) return fallback;
   return path.map(([lng, lat]) => ({ lat, lng }));
 }
 
-function heading(from: Point, to: Point) {
-  const y = Math.sin((to.lng - from.lng) * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180);
-  const x =
-    Math.cos(from.lat * Math.PI / 180) * Math.sin(to.lat * Math.PI / 180) -
-    Math.sin(from.lat * Math.PI / 180) * Math.cos(to.lat * Math.PI / 180) *
-    Math.cos((to.lng - from.lng) * Math.PI / 180);
-  return Math.round((Math.atan2(y, x) * 180 / Math.PI + 360) % 360);
+function isClosedPath(path: Point[]) {
+  if (path.length < 3) return false;
+  return distanceMeters(path[0], path[path.length - 1]) < 80;
 }
 
 export default function BusDemo() {
@@ -88,11 +73,12 @@ export default function BusDemo() {
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const plansRef = useRef<DemoBusPlan[]>([]);
   const busyRef = useRef(false);
+  const lastTickRef = useRef<number | null>(null);
 
-  const campusPath = useMemo(() => interpolatePath(CAMPUS_STOPS, 18), []);
+  const campusPath = useMemo(() => CAMPUS_STOPS, []);
   const commuterPaths = useMemo(() => [
-    interpolatePath(COMMUTER_TO_CHEONAN, 28),
-    interpolatePath(COMMUTER_TO_ASAN, 28),
+    COMMUTER_TO_CHEONAN,
+    COMMUTER_TO_ASAN,
   ], []);
 
   useEffect(() => {
@@ -104,20 +90,46 @@ export default function BusDemo() {
   const tick = async () => {
     if (busyRef.current) return;
     busyRef.current = true;
+    const now = performance.now();
+    const elapsedSeconds = lastTickRef.current ? Math.min((now - lastTickRef.current) / 1000, 1) : 0.5;
+    lastTickRef.current = now;
+
     const nextPlans = plansRef.current.map((plan) => {
-      const nextIndex = (plan.index + plan.stepSize) % plan.path.length;
-      return { ...plan, index: nextIndex };
+      const trackLength = plan.track.lengthMeters;
+      if (trackLength <= 0) return plan;
+
+      let progressMeters = plan.progressMeters + plan.speedMetersPerSecond * elapsedSeconds * plan.direction;
+      let direction = plan.direction;
+
+      if (plan.pingPong) {
+        if (progressMeters >= trackLength) {
+          progressMeters = trackLength - (progressMeters - trackLength);
+          direction = -1;
+        } else if (progressMeters <= 0) {
+          progressMeters = Math.abs(progressMeters);
+          direction = 1;
+        }
+      } else {
+        progressMeters = ((progressMeters % trackLength) + trackLength) % trackLength;
+      }
+
+      return { ...plan, progressMeters, direction };
     });
 
     try {
       await Promise.all(nextPlans.map((plan) => {
-        const point = plan.path[plan.index];
-        const nextPoint = plan.path[(plan.index + 1) % plan.path.length];
+        const point = sampleTrack(plan.track, plan.progressMeters);
+        const headingDistance = plan.direction === 1
+          ? plan.progressMeters
+          : Math.max(plan.progressMeters - 12, 0);
+        const heading = plan.direction === 1
+          ? headingAtDistance(plan.track, headingDistance)
+          : (headingAtDistance(plan.track, headingDistance) + 180) % 360;
         return api.updateBusLocation(plan.busId, {
           lat: point.lat,
           lng: point.lng,
-          speed: plan.kind === "campus" ? 18 : 54,
-          heading: heading(point, nextPoint),
+          speed: Math.round(plan.speedMetersPerSecond * 3.6),
+          heading,
         });
       }));
       plansRef.current = nextPlans;
@@ -161,15 +173,22 @@ export default function BusDemo() {
         const kind: DemoKind = index < 3 ? "campus" : "commuter";
         const route = kind === "commuter" ? commuterRoutes[(index - 3) % Math.max(commuterRoutes.length, 1)] : null;
         const basePath = kind === "campus" ? campusRoadPath : commuterRoadPaths[(index - 3) % commuterRoadPaths.length];
-        const offsetPath = basePath.map((point, pointIndex) => basePath[(pointIndex + index * 12) % basePath.length]);
+        const track = createRouteTrack(basePath, kind === "campus" ? 4 : 10);
+        const similarKindCount = kind === "campus" ? 3 : 2;
+        const similarKindIndex = kind === "campus" ? index : index - 3;
+        const progressMeters = track.lengthMeters > 0
+          ? (track.lengthMeters / similarKindCount) * similarKindIndex
+          : 0;
         return {
           busId: bus.id,
           name: bus.name,
           kind,
           label: kind === "campus" ? `학내순환 ${index + 1}` : `통학버스 ${index - 2}`,
-          path: offsetPath,
-          index: 0,
-          stepSize: kind === "campus" ? 1 : 2,
+          track,
+          progressMeters,
+          speedMetersPerSecond: kind === "campus" ? 6.5 : 15,
+          direction: 1,
+          pingPong: kind === "commuter" || !isClosedPath(basePath),
           routeId: route?.id ?? null,
           original: {
             type: bus.type,
@@ -190,10 +209,11 @@ export default function BusDemo() {
 
       plansRef.current = nextPlans;
       setPlans(nextPlans);
+      lastTickRef.current = null;
       await tick();
-      intervalRef.current = setInterval(tick, 1200);
+      intervalRef.current = setInterval(tick, 500);
       setRunning(true);
-      setStatus("데모 운행 중입니다. 이 관리자 화면을 열어둔 상태에서 사용자 화면을 확인하세요.");
+      setStatus("데모 운행 중입니다. 버스 위치는 경로 폴리라인 위에서 거리 기반으로 부드럽게 갱신됩니다.");
     } catch (err: any) {
       setError(err.message || "데모 시작에 실패했습니다.");
     } finally {
@@ -295,7 +315,9 @@ export default function BusDemo() {
             <div className="space-y-3 mb-6">
               {(plans.length > 0 ? plans : Array.from({ length: 5 })).map((plan: any, index) => {
                 const kind: DemoKind = plan?.kind ?? (index < 3 ? "campus" : "commuter");
-                const progress = plan?.path?.length ? Math.round((plan.index / plan.path.length) * 100) : 0;
+                const progress = plan?.track?.lengthMeters
+                  ? Math.round((plan.progressMeters / plan.track.lengthMeters) * 100)
+                  : 0;
                 return (
                   <div key={plan?.busId ?? index} className="rounded-xl border border-gray-100 p-4">
                     <div className="flex items-center justify-between gap-4 mb-3">
