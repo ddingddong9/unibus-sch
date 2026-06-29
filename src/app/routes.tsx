@@ -51,6 +51,7 @@ export const router = createBrowserRouter([
         children: [
           { path: "/home",            element: <HomeWrapper /> },
           { path: "/campus-shuttle",  element: <CampusShuttleWrapper /> },
+          { path: "/shuttle",         element: <CampusShuttleWrapper /> },
           { path: "/commuter-bus",    element: <CommuterBusWrapper /> },
           { path: "/qr-scanner",     element: <QrScannerWrapper /> },
           { path: "/notice",         element: <NoticeWrapper /> },
