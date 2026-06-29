@@ -2,6 +2,13 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { api } from "../../services/api";
+import {
+  getBusTypeLabel,
+  getRouteDirectionLabel,
+  getRouteKindLabel,
+  getRouteSchedulePreview,
+  type DriverRoute,
+} from "../../utils/driverRouteDisplay";
 
 interface Bus {
   id: string;
@@ -13,6 +20,7 @@ interface Bus {
   assigned_driver_id?: string | null;
   is_assigned_to_me?: boolean;
   is_shared?: boolean;
+  currentRoute?: DriverRoute | null;
 }
 
 export default function DriverHomeWrapper() {
@@ -45,7 +53,7 @@ export default function DriverHomeWrapper() {
         navigate("/driver/active", { state: { bus: activeBus }, replace: true });
       }
     });
-  }, []);
+  }, [navigate]);
 
   const handleStart = async (bus: Bus) => {
     if (bus.is_running && bus.current_driver_id !== user?.id) return;
@@ -115,7 +123,10 @@ export default function DriverHomeWrapper() {
             buses.map((bus) => {
               const isMine = bus.current_driver_id === user?.id;
               const isOtherDriver = bus.is_running && !isMine;
-              const typeLabel = bus.type === 'campus' ? '셔틀' : '통학';
+              const typeLabel = getBusTypeLabel(bus);
+              const routeKind = getRouteKindLabel(bus);
+              const routeSchedule = getRouteSchedulePreview(bus.currentRoute);
+              const routeColor = bus.currentRoute?.color || "#1e3b8a";
 
               return (
                 <button
@@ -153,6 +164,33 @@ export default function DriverHomeWrapper() {
                       </span>
                     </div>
                     <p className="text-gray-400 text-xs">{bus.id} · 정원 {bus.capacity}명</p>
+                    <div className={`mt-3 rounded-xl border px-3 py-2 ${
+                      bus.currentRoute ? "border-[#e2e8f0] bg-[#f8fafc]" : "border-amber-200 bg-amber-50"
+                    }`}>
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span
+                          className="h-2.5 w-2.5 rounded-full shrink-0"
+                          style={{ backgroundColor: bus.currentRoute ? routeColor : "#f59e0b" }}
+                        />
+                        <span className={`text-[11px] font-black shrink-0 ${
+                          bus.currentRoute ? "text-[#1e3b8a]" : "text-amber-700"
+                        }`}>
+                          {routeKind}
+                        </span>
+                        <span className={`text-[11px] font-semibold truncate ${
+                          bus.currentRoute ? "text-[#0f172a]" : "text-amber-700"
+                        }`}>
+                          {bus.currentRoute?.name || "노선 미지정"}
+                        </span>
+                      </div>
+                      <p className={`mt-1 text-[11px] leading-[16px] ${
+                        bus.currentRoute ? "text-[#64748b]" : "text-amber-700"
+                      }`}>
+                        {bus.currentRoute
+                          ? [getRouteDirectionLabel(bus.currentRoute), routeSchedule].filter(Boolean).join(" · ")
+                          : "관리자 버스 관리에서 운행 노선을 배정하면 사용자 지도와 기사 화면이 함께 연동됩니다."}
+                      </p>
+                    </div>
                     {isOtherDriver && (
                       <p className="text-orange-500 text-xs font-semibold mt-1">다른 기사 운행 중</p>
                     )}

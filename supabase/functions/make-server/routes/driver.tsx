@@ -7,6 +7,49 @@ import { requireDriver } from "../middleware/auth.tsx";
 const driver = new Hono();
 
 const toClientBusType = (type: string) => type === 'shuttle' ? 'campus' : type === 'commute' ? 'commuter' : type;
+const toClientRouteType = toClientBusType;
+
+const formatRoute = (route: any) => route ? {
+  id: route.id,
+  name: route.name,
+  type: toClientRouteType(route.type),
+  color: route.color,
+  description: route.description,
+  region: route.region,
+  schedule: route.schedule,
+  duration: route.duration,
+  fare: route.fare,
+} : null;
+
+const attachCurrentRoutes = async (buses: any[] = [], driverId: string) => {
+  const routeIds = [...new Set(buses.map((bus) => bus.current_route_id).filter(Boolean))];
+  const routeMap = new Map<string, any>();
+
+  if (routeIds.length > 0) {
+    const { data: routes, error } = await db
+      .from('routes')
+      .select('id, name, type, color, description, region, schedule, duration, fare')
+      .in('id', routeIds);
+
+    if (!error) {
+      (routes || []).forEach((route) => routeMap.set(route.id, route));
+    }
+  }
+
+  return buses.map((bus) => ({
+    id: bus.id,
+    name: bus.name,
+    type: toClientBusType(bus.type),
+    capacity: bus.capacity,
+    status: bus.status,
+    is_running: bus.is_running,
+    current_driver_id: bus.current_driver_id,
+    assigned_driver_id: bus.assigned_driver_id,
+    is_assigned_to_me: bus.assigned_driver_id === driverId,
+    is_shared: !bus.assigned_driver_id,
+    currentRoute: formatRoute(routeMap.get(bus.current_route_id)),
+  }));
+};
 
 // 운행 가능한 버스 목록 조회
 driver.get("/buses", requireDriver, async (c) => {
@@ -14,7 +57,7 @@ driver.get("/buses", requireDriver, async (c) => {
     const driverId = c.get('userId');
     const { data: buses, error } = await db
       .from('buses')
-      .select('id, name, type, capacity, status, is_running, current_driver_id, assigned_driver_id')
+      .select('id, name, type, capacity, status, is_running, current_driver_id, assigned_driver_id, current_route_id')
       .eq('status', 'active')
       .or(`assigned_driver_id.is.null,assigned_driver_id.eq.${driverId}`)
       .order('id');
@@ -23,18 +66,7 @@ driver.get("/buses", requireDriver, async (c) => {
       return c.json({ success: false, error: "Failed to fetch buses" }, 500);
     }
 
-    const formattedBuses = buses?.map(bus => ({
-      id: bus.id,
-      name: bus.name,
-      type: toClientBusType(bus.type),
-      capacity: bus.capacity,
-      status: bus.status,
-      is_running: bus.is_running,
-      current_driver_id: bus.current_driver_id,
-      assigned_driver_id: bus.assigned_driver_id,
-      is_assigned_to_me: bus.assigned_driver_id === driverId,
-      is_shared: !bus.assigned_driver_id,
-    })) || [];
+    const formattedBuses = await attachCurrentRoutes(buses || [], driverId);
 
     return c.json({ success: true, data: formattedBuses });
   } catch (error: any) {
@@ -182,23 +214,12 @@ driver.get("/status", requireDriver, async (c) => {
 
     const { data: bus } = await db
       .from('buses')
-      .select('id, name, type, capacity, status, is_running, current_driver_id, assigned_driver_id')
+      .select('id, name, type, capacity, status, is_running, current_driver_id, assigned_driver_id, current_route_id')
       .eq('current_driver_id', driverId)
       .eq('is_running', true)
       .single();
 
-    const activeBus = bus ? {
-      id: bus.id,
-      name: bus.name,
-      type: toClientBusType(bus.type),
-      capacity: bus.capacity,
-      status: bus.status,
-      is_running: bus.is_running,
-      current_driver_id: bus.current_driver_id,
-      assigned_driver_id: bus.assigned_driver_id,
-      is_assigned_to_me: bus.assigned_driver_id === driverId,
-      is_shared: !bus.assigned_driver_id,
-    } : null;
+    const activeBus = bus ? (await attachCurrentRoutes([bus], driverId))[0] : null;
 
     return c.json({ success: true, data: { activeBus } });
   } catch (error: any) {
