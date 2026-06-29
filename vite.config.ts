@@ -99,6 +99,7 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
+        importScripts: ['push-handler.js'],
         // 캐싱 전략: API 요청은 network-first, 정적 파일은 cache-first
         runtimeCaching: [
           {

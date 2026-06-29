@@ -229,6 +229,39 @@ class ApiClient {
     throw new Error(data.error || '이미지 업로드 실패');
   }
 
+  // ============ NOTIFICATION ENDPOINTS ============
+
+  async getVapidPublicKey(): Promise<string> {
+    const response = await this.request<ApiResponse<{ publicKey: string }>>('/notifications/vapid-public-key');
+    if (response.success && response.data?.publicKey) return response.data.publicKey;
+    throw new Error(response.error || 'Failed to fetch push public key');
+  }
+
+  async subscribePush(subscription: PushSubscriptionJSON): Promise<void> {
+    const response = await this.request<ApiResponse>('/notifications/subscribe', {
+      method: 'POST',
+      body: JSON.stringify({ subscription }),
+    });
+    if (!response.success) throw new Error(response.error || 'Failed to subscribe push');
+  }
+
+  async unsubscribePush(endpoint: string): Promise<void> {
+    const response = await this.request<ApiResponse>('/notifications/unsubscribe', {
+      method: 'POST',
+      body: JSON.stringify({ endpoint }),
+    });
+    if (!response.success) throw new Error(response.error || 'Failed to unsubscribe push');
+  }
+
+  async sendNotification(data: { title: string; message: string; target: string }): Promise<{ notice: Notice; push: { attempted: number; sent: number; failed: number } }> {
+    const response = await this.request<ApiResponse<{ notice: Notice; push: { attempted: number; sent: number; failed: number } }>>('/notifications/send', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to send notification');
+  }
+
   // ============ ROUTE ENDPOINTS ============
 
   async getRoutes(): Promise<BusRoute[]> {
