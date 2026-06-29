@@ -6,6 +6,7 @@ import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
 import type { Notice } from "../types";
 import { NoticeSkeleton } from "../components/SkeletonLoaders";
+import { clearUnreadNoticeCount, setLastNoticeSeenAt } from "../utils/notificationPreferences";
 
 const listContainer = {
   hidden: { opacity: 0 },
@@ -28,6 +29,7 @@ export default function NoticeWrapper() {
 
   useEffect(() => {
     loadNotices();
+    clearUnreadNoticeCount();
   }, []);
 
   const loadNotices = async () => {
@@ -36,6 +38,7 @@ export default function NoticeWrapper() {
       setError(null);
       const data = await api.getNotices();
       setNotices(data);
+      if (data[0]?.createdAt) setLastNoticeSeenAt(data[0].createdAt);
     } catch (err) {
       console.error("Failed to load notices:", err);
       setError(err instanceof Error ? err.message : "공지사항을 불러오지 못했습니다");

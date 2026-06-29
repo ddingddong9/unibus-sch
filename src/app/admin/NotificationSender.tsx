@@ -1,6 +1,7 @@
-import { useState } from "react";
-import { Send, Clock, CheckCircle, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Send, Clock, CheckCircle, Users, RefreshCw } from "lucide-react";
 import AdminLayout from "./AdminLayout";
+import { api } from "../services/api";
 
 interface SentNotification {
   id: number;
@@ -11,33 +12,18 @@ interface SentNotification {
   recipientCount: number;
 }
 
+const targetMap: Record<string, { label: string; category: "general" | "route" | "system" }> = {
+  all: { label: "전체 사용자", category: "general" },
+  campus: { label: "셔틀버스 이용자", category: "route" },
+  commuter: { label: "통학버스 이용자", category: "route" },
+  system: { label: "시스템 공지 대상", category: "system" },
+};
+
 export default function NotificationSender() {
-  const [sentNotifications, setSentNotifications] = useState<SentNotification[]>([
-    {
-      id: 1,
-      title: "버스 지연 안내",
-      message: "캠퍼스 순환 A 노선이 10분 지연됩니다.",
-      target: "전체",
-      sentAt: "2024-03-14 09:30",
-      recipientCount: 3482,
-    },
-    {
-      id: 2,
-      title: "신규 노선 개설",
-      message: "천안역 직행 노선이 오늘부터 운행됩니다.",
-      target: "통학버스 이용자",
-      sentAt: "2024-03-14 07:00",
-      recipientCount: 856,
-    },
-    {
-      id: 3,
-      title: "정기점검 안내",
-      message: "이번 주 토요일 시스템 정기점검이 예정되어 있습니다.",
-      target: "전체",
-      sentAt: "2024-03-13 14:20",
-      recipientCount: 3482,
-    },
-  ]);
+  const [sentNotifications, setSentNotifications] = useState<SentNotification[]>([]);
+  const [userCounts, setUserCounts] = useState({ all: 0, campus: 0, commuter: 0, system: 0 });
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [sending, setSending] = useState(false);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -48,40 +34,88 @@ export default function NotificationSender() {
     scheduleTime: "",
   });
 
-  const handleSend = () => {
+  const loadNotificationContext = async () => {
+    try {
+      setLoadingHistory(true);
+      const [notices, users] = await Promise.all([api.getNotices(), api.getUsers()]);
+      const activeUsers = users.filter((user: any) => user.role === "user");
+      const drivers = users.filter((user: any) => user.role === "driver");
+
+      setUserCounts({
+        all: users.length,
+        campus: activeUsers.length + drivers.length,
+        commuter: activeUsers.length,
+        system: users.length,
+      });
+
+      setSentNotifications(
+        notices.slice(0, 8).map((notice, index) => ({
+          id: Number(new Date(notice.createdAt).getTime()) || index,
+          title: notice.title,
+          message: notice.content,
+          target: notice.category === "system" ? "시스템" : notice.category === "route" ? "운행정보" : "전체",
+          sentAt: new Date(notice.createdAt).toLocaleString("ko-KR"),
+          recipientCount: users.length,
+        }))
+      );
+    } catch (error) {
+      console.error("Failed to load notification context:", error);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
+
+  useEffect(() => {
+    loadNotificationContext();
+  }, []);
+
+  const handleSend = async () => {
     if (!formData.title.trim() || !formData.message.trim()) {
       alert("제목과 메시지를 입력해주세요.");
       return;
     }
 
-    const targetMap: { [key: string]: string } = {
-      all: "전체",
-      campus: "캠퍼스 셔틀 이용자",
-      commuter: "통학버스 이용자",
-    };
+    if (!formData.scheduleNow) {
+      alert("예약 전송은 아직 지원하지 않습니다. 지금은 즉시 전송으로 보내주세요.");
+      return;
+    }
 
-    const newNotification: SentNotification = {
-      id: Date.now(),
-      title: formData.title,
-      message: formData.message,
-      target: targetMap[formData.target],
-      sentAt: new Date().toLocaleString("ko-KR"),
-      recipientCount: formData.target === "all" ? 3482 : formData.target === "campus" ? 2156 : 856,
-    };
+    const target = targetMap[formData.target] || targetMap.all;
+    setSending(true);
+    try {
+      const notice = await api.createNotice({
+        title: formData.title.trim(),
+        content: formData.message.trim(),
+        category: target.category,
+        priority: target.category === "system" ? "high" : "medium",
+      });
 
-    setSentNotifications([newNotification, ...sentNotifications]);
-    
-    // Reset form
-    setFormData({
-      title: "",
-      message: "",
-      target: "all",
-      scheduleNow: true,
-      scheduleDate: "",
-      scheduleTime: "",
-    });
+      const newNotification: SentNotification = {
+        id: Date.now(),
+        title: notice.title,
+        message: notice.content,
+        target: target.label,
+        sentAt: new Date(notice.createdAt).toLocaleString("ko-KR"),
+        recipientCount: userCounts[formData.target as keyof typeof userCounts] || userCounts.all,
+      };
 
-    alert("알림이 성공적으로 전송되었습니다!");
+      setSentNotifications([newNotification, ...sentNotifications]);
+
+      setFormData({
+        title: "",
+        message: "",
+        target: "all",
+        scheduleNow: true,
+        scheduleDate: "",
+        scheduleTime: "",
+      });
+
+      alert("알림이 공지사항으로 발송되었습니다. 접속 중인 사용자는 실시간으로 수신합니다.");
+    } catch (error: any) {
+      alert(error.message || "알림 전송에 실패했습니다.");
+    } finally {
+      setSending(false);
+    }
   };
 
   const templates = [
@@ -100,7 +134,7 @@ export default function NotificationSender() {
             알림 전송
           </h1>
           <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">
-            사용자에게 푸시 알림을 전송하세요
+            공지사항 기반 실시간 알림을 전송하세요
           </p>
         </div>
 
@@ -147,9 +181,10 @@ export default function NotificationSender() {
                   onChange={(e) => setFormData({ ...formData, target: e.target.value })}
                   className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
                 >
-                  <option value="all">전체 사용자 (3,482명)</option>
-                  <option value="campus">캠퍼스 셔틀 이용자 (2,156명)</option>
-                  <option value="commuter">통학버스 이용자 (856명)</option>
+                  <option value="all">전체 사용자 ({userCounts.all.toLocaleString()}명)</option>
+                  <option value="campus">셔틀버스 이용자 ({userCounts.campus.toLocaleString()}명)</option>
+                  <option value="commuter">통학버스 이용자 ({userCounts.commuter.toLocaleString()}명)</option>
+                  <option value="system">시스템 공지 대상 ({userCounts.system.toLocaleString()}명)</option>
                 </select>
               </div>
 
@@ -198,10 +233,11 @@ export default function NotificationSender() {
 
               <button
                 onClick={handleSend}
-                className="w-full h-[52px] bg-[#1e3b8a] text-white font-['Public_Sans'] font-bold text-[16px] rounded-lg shadow-sm hover:bg-[#1e3b8a]/90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-6"
+                disabled={sending}
+                className="w-full h-[52px] bg-[#1e3b8a] text-white font-['Public_Sans'] font-bold text-[16px] rounded-lg shadow-sm hover:bg-[#1e3b8a]/90 active:scale-[0.99] transition-all flex items-center justify-center gap-2 mt-6 disabled:opacity-60"
               >
-                <Send className="w-5 h-5" />
-                {formData.scheduleNow ? "전송하기" : "예약하기"}
+                {sending ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" />}
+                {sending ? "전송 중..." : formData.scheduleNow ? "전송하기" : "예약하기"}
               </button>
             </div>
           </div>
@@ -217,19 +253,19 @@ export default function NotificationSender() {
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-['Public_Sans'] text-[#64748b] text-[13px]">전체 사용자</span>
-                    <span className="font-['Public_Sans'] text-[#0f172a] text-[18px] font-bold">3,482</span>
+                    <span className="font-['Public_Sans'] text-[#0f172a] text-[18px] font-bold">{userCounts.all.toLocaleString()}</span>
                   </div>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-['Public_Sans'] text-[#64748b] text-[13px]">캠퍼스 셔틀</span>
-                    <span className="font-['Public_Sans'] text-[#0f172a] text-[18px] font-bold">2,156</span>
+                    <span className="font-['Public_Sans'] text-[#64748b] text-[13px]">셔틀버스</span>
+                    <span className="font-['Public_Sans'] text-[#0f172a] text-[18px] font-bold">{userCounts.campus.toLocaleString()}</span>
                   </div>
                 </div>
                 <div className="p-4 bg-gray-50 rounded-lg">
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-['Public_Sans'] text-[#64748b] text-[13px]">통학 버스</span>
-                    <span className="font-['Public_Sans'] text-[#0f172a] text-[18px] font-bold">856</span>
+                    <span className="font-['Public_Sans'] text-[#0f172a] text-[18px] font-bold">{userCounts.commuter.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
@@ -241,7 +277,7 @@ export default function NotificationSender() {
               </h3>
               <div className="text-center">
                 <div className="font-['Public_Sans'] text-[#0f172a] text-[42px] font-bold mb-1">
-                  843
+                  {sentNotifications.length.toLocaleString()}
                 </div>
                 <div className="font-['Public_Sans'] text-[#64748b] text-[14px]">
                   총 알림 전송
@@ -280,7 +316,15 @@ export default function NotificationSender() {
             전송 내역
           </h2>
           <div className="space-y-4">
-            {sentNotifications.map((notification) => (
+            {loadingHistory ? (
+              <div className="py-10 text-center text-[#94a3b8] font-['Public_Sans'] text-[14px]">
+                전송 내역 불러오는 중...
+              </div>
+            ) : sentNotifications.length === 0 ? (
+              <div className="py-10 text-center text-[#94a3b8] font-['Public_Sans'] text-[14px]">
+                아직 전송한 알림이 없습니다.
+              </div>
+            ) : sentNotifications.map((notification) => (
               <div key={notification.id} className="p-5 bg-gray-50 rounded-lg border border-gray-200 hover:border-gray-300 transition-colors">
                 <div className="flex items-start justify-between mb-3">
                   <h3 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] flex-1">
