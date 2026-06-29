@@ -1,28 +1,10 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate, Navigate } from "react-router";
-import { motion } from "framer-motion";
 import svgPaths from "../../imports/svg-9blebrmjt8";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
 import { api } from "../services/api";
 import { kakaoService } from "../services/kakao";
-
-const container = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.08, delayChildren: 0.05 },
-  },
-};
-
-const item = {
-  hidden: { opacity: 0, y: 18 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { type: "spring" as const, stiffness: 380, damping: 28 },
-  },
-};
 
 export default function LoginWrapper() {
   const navigate = useNavigate();
@@ -33,11 +15,6 @@ export default function LoginWrapper() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
-
-  // iOS Safari 팝업 허용을 위해 컴포넌트 마운트 시 SDK 미리 로드
-  useEffect(() => {
-    kakaoService.init().catch(() => {});
-  }, []);
 
   if (!isLoading && isAuthenticated) {
     return <Navigate to="/home" replace />;
@@ -108,16 +85,11 @@ export default function LoginWrapper() {
       </div>
 
       {/* Main Content */}
-      <motion.div
-        className="relative shrink-0 w-full"
-        variants={container}
-        initial="hidden"
-        animate="visible"
-      >
+      <div className="relative shrink-0 w-full animate-[routeFade_180ms_ease-out]">
         <div className="content-stretch flex flex-col items-start justify-between pb-[32px] pt-[40px] px-[24px] relative w-full">
 
           {/* Logo + Title */}
-          <motion.div variants={item} className="content-stretch flex flex-col items-start pb-[40px] relative shrink-0 w-full">
+          <div className="onboard-reveal content-stretch flex flex-col items-start pb-[40px] relative shrink-0 w-full">
             <div className="relative shrink-0 w-full">
               <div className="content-stretch flex gap-[8px] items-center mb-4">
                 <div className="bg-[#1e3b8a] content-stretch flex items-center justify-center relative rounded-[8px] shrink-0 size-[40px]">
@@ -140,23 +112,19 @@ export default function LoginWrapper() {
                 <p className="leading-[24px]">{t("순천향대학교 셔틀버스 계정으로 로그인하세요", "Log in to your SCH University shuttle account")}</p>
               </div>
             </div>
-          </motion.div>
+          </div>
 
           {/* Error */}
           {error && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg w-full"
-            >
+            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg w-full animate-[routeLift_160ms_ease-out]">
               <p className="text-red-600 text-sm">{error}</p>
-            </motion.div>
+            </div>
           )}
 
           {/* Form Fields */}
           <div className="content-stretch flex flex-col gap-[24px] items-start relative shrink-0 w-full">
             {/* Email */}
-            <motion.div variants={item} className="content-stretch flex flex-col items-start relative shrink-0 w-full">
+            <div className="onboard-reveal content-stretch flex flex-col items-start relative shrink-0 w-full [animation-delay:80ms]">
               <div className="content-stretch flex flex-col items-start pb-[8px] relative shrink-0 w-full">
                 <div className="flex flex-col font-['Public_Sans'] font-semibold justify-center leading-[0] not-italic relative shrink-0 text-[#0f172a] text-[14px] w-full">
                   <p className="leading-[21px]">{t("이메일", "Email")}</p>
@@ -172,10 +140,10 @@ export default function LoginWrapper() {
                   className="w-full h-[56px] px-4 bg-white border border-[#cbd5e1] rounded-[8px] font-['Public_Sans'] text-[16px] text-[#0f172a] placeholder:text-[#94a3b8] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20 transition-all"
                 />
               </div>
-            </motion.div>
+            </div>
 
             {/* Password */}
-            <motion.div variants={item} className="content-stretch flex flex-col items-start relative shrink-0 w-full">
+            <div className="onboard-reveal content-stretch flex flex-col items-start relative shrink-0 w-full [animation-delay:120ms]">
               <div className="content-stretch flex items-center justify-between pb-[8px] relative shrink-0 w-full">
                 <div className="flex flex-col font-['Public_Sans'] font-semibold justify-center leading-[0] not-italic relative shrink-0 text-[#0f172a] text-[14px]">
                   <p className="leading-[21px]">{t("비밀번호", "Password")}</p>
@@ -208,15 +176,14 @@ export default function LoginWrapper() {
                   </svg>
                 </button>
               </div>
-            </motion.div>
+            </div>
           </div>
 
           {/* Login Button */}
-          <motion.div variants={item} className="content-stretch flex flex-col items-start pt-[40px] relative shrink-0 w-full">
-            <motion.button
+          <div className="onboard-reveal content-stretch flex flex-col items-start pt-[40px] relative shrink-0 w-full [animation-delay:160ms]">
+            <button
               onClick={handleLogin}
-              whileTap={{ scale: 0.97 }}
-              className="bg-[#1e3b8a] content-stretch flex gap-[8px] h-[56px] items-center justify-center relative rounded-[12px] shrink-0 w-full shadow-[0px_10px_15px_-3px_rgba(30,59,138,0.2),0px_4px_6px_-4px_rgba(30,59,138,0.2)] hover:bg-[#1e3b8a]/90 transition-colors"
+              className="bg-[#1e3b8a] content-stretch flex gap-[8px] h-[56px] items-center justify-center relative rounded-[12px] shrink-0 w-full shadow-[0px_10px_15px_-3px_rgba(30,59,138,0.2),0px_4px_6px_-4px_rgba(30,59,138,0.2)] hover:bg-[#1e3b8a]/90 transition-colors active:scale-[0.97]"
             >
               <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] relative shrink-0 text-[16px] text-center text-white">
                 <p className="leading-[24px]">{loading ? t("로그인 중...", "Logging in...") : t("로그인", "Login")}</p>
@@ -228,11 +195,11 @@ export default function LoginWrapper() {
                   </svg>
                 </div>
               )}
-            </motion.button>
-          </motion.div>
+            </button>
+          </div>
 
           {/* Social Login */}
-          <motion.div variants={item} className="content-stretch flex flex-col items-start pt-[32px] relative shrink-0 w-full">
+          <div className="onboard-reveal content-stretch flex flex-col items-start pt-[32px] relative shrink-0 w-full [animation-delay:200ms]">
             <div className="content-stretch flex flex-col gap-[16px] items-start relative shrink-0 w-full">
               <div className="content-stretch flex items-center py-[16px] relative shrink-0 w-full">
                 <div className="flex-[1_0_0] h-px min-h-px min-w-px relative border-t border-[#e2e8f0]" />
@@ -244,11 +211,10 @@ export default function LoginWrapper() {
                 <div className="flex-[1_0_0] h-px min-h-px min-w-px relative border-t border-[#e2e8f0]" />
               </div>
 
-              <motion.button
+              <button
                 onClick={handleKakaoLogin}
                 disabled={loading}
-                whileTap={{ scale: 0.96 }}
-                className="bg-[#FEE500] flex gap-[8px] h-[56px] items-center justify-center w-full rounded-[12px] hover:bg-[#FDD835] transition-colors disabled:opacity-50 shadow-[0px_4px_12px_-2px_rgba(254,229,0,0.4)]"
+                className="bg-[#FEE500] flex gap-[8px] h-[56px] items-center justify-center w-full rounded-[12px] hover:bg-[#FDD835] transition-colors disabled:opacity-50 shadow-[0px_4px_12px_-2px_rgba(254,229,0,0.4)] active:scale-[0.96]"
               >
                 <svg className="w-[20px] h-[20px]" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
                   <path d="M9 0C4.02944 0 0 3.35942 0 7.50208C0 9.97392 1.43686 12.1633 3.64018 13.4946L2.71277 17.2161C2.64485 17.4831 2.93553 17.6989 3.16895 17.5449L7.48731 14.7652C7.98476 14.8471 8.48895 14.8947 9 14.8947C13.9706 14.8947 18 11.5353 18 7.50208C18 3.35942 13.9706 0 9 0Z" fill="#381E1F"/>
@@ -256,12 +222,12 @@ export default function LoginWrapper() {
                 <div className="font-['Public_Sans'] font-bold text-[16px] text-[#381E1F]">
                   {t("카카오로 로그인", "Continue with Kakao")}
                 </div>
-              </motion.button>
+              </button>
             </div>
-          </motion.div>
+          </div>
 
           {/* Sign Up Link */}
-          <motion.div variants={item} className="content-stretch flex flex-col items-start pt-[40px] relative shrink-0 w-full">
+          <div className="onboard-reveal content-stretch flex flex-col items-start pt-[40px] relative shrink-0 w-full [animation-delay:240ms]">
             <div className="content-stretch flex gap-[4px] items-center justify-center relative w-full">
               <div className="flex flex-col font-['Public_Sans'] font-normal justify-center leading-[0] relative shrink-0 text-[#475569] text-[14px] text-center">
                 <p className="leading-[20px]">{t("계정이 없으신가요?", "Don't have an account?")}</p>
@@ -273,10 +239,10 @@ export default function LoginWrapper() {
                 <p className="leading-[20px]">{t("회원가입", "Sign Up")}</p>
               </button>
             </div>
-          </motion.div>
+          </div>
 
         </div>
-      </motion.div>
+      </div>
     </div>
   );
 }

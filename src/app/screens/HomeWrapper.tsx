@@ -1,10 +1,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router";
-import { motion, AnimatePresence } from "framer-motion";
 import svgPaths from "../../imports/svg-odbnwpa57u";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
-import { HomeSkeleton } from "../components/SkeletonLoaders";
 import { api } from "../services/api";
 
 // 학내 순환 정류장 목록
@@ -35,37 +33,11 @@ function getArrivalMinutes(stopLat: number, stopLng: number, buses: { lat: numbe
   return Math.max(1, Math.round(minDist / 0.25));
 }
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 20 },
-  visible: (delay: number = 0) => ({
-    opacity: 1,
-    y: 0,
-    transition: { type: "spring" as const, stiffness: 350, damping: 28, delay },
-  }),
-};
-
-const staggerList = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: { staggerChildren: 0.07, delayChildren: 0.2 },
-  },
-};
-
-const listItem = {
-  hidden: { opacity: 0, x: -12 },
-  visible: {
-    opacity: 1,
-    x: 0,
-    transition: { type: "spring" as const, stiffness: 380, damping: 28 },
-  },
-};
-
 export default function HomeWrapper() {
   const navigate = useNavigate();
   const { t } = useLanguage();
   const [nearestStop, setNearestStop] = useState<string>("--");
-  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
   const [activeBuses, setActiveBuses] = useState<{ lat: number; lng: number }[]>([]);
 
@@ -91,6 +63,7 @@ export default function HomeWrapper() {
 
   // 활성 버스 위치 fetch
   const fetchBuses = useCallback(async () => {
+    setIsRefreshing(true);
     try {
       const [allBuses, locations] = await Promise.all([
         api.getBuses(),
@@ -106,7 +79,7 @@ export default function HomeWrapper() {
     } catch {
       // 실패 시 유지
     } finally {
-      setLoading(false);
+      setIsRefreshing(false);
     }
   }, []);
 
@@ -152,37 +125,14 @@ export default function HomeWrapper() {
           </div>
         </div>
 
-        {/* ── Skeleton / Content switch ─────────────────────── */}
-        <AnimatePresence mode="wait" initial={false}>
-          {loading ? (
-            <motion.div
-              key="home-skeleton"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-              className="w-full"
-            >
-              <HomeSkeleton />
-            </motion.div>
-          ) : (
-            <motion.div
-              key="home-content"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.22 }}
-              className="w-full"
-            >
+        {/* ── Content ─────────────────────── */}
+        <div
+          key="home-content"
+          className="w-full animate-[routeFade_180ms_ease-out]"
+        >
 
               {/* Favorite Routes */}
-              <motion.div
-                className="relative shrink-0 w-full"
-                initial="hidden"
-                animate="visible"
-                variants={fadeUp}
-                custom={0.05}
-              >
+              <div className="relative shrink-0 w-full animate-[routeLift_220ms_ease-out]">
                 <div className="content-stretch flex flex-col gap-[12px] items-start px-[24px] py-[16px] relative w-full">
                   <div className="content-stretch flex items-center justify-between relative shrink-0 w-full">
                     <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] relative shrink-0 text-[#0f172a] text-[18px]">
@@ -197,15 +147,11 @@ export default function HomeWrapper() {
                     {[
                       { title: t("정문", "Main Gate"), sub: t("신창역", "Sinchang Stn.") },
                       { title: t("기숙사", "Dormitory"), sub: t("시내", "City Center") },
-                    ].map((route, i) => (
-                      <motion.button
+                    ].map((route) => (
+                      <button
                         key={route.title}
                         onClick={() => navigate("/campus-shuttle")}
-                        initial={{ opacity: 0, x: 20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ type: "spring", stiffness: 380, damping: 28, delay: 0.1 + i * 0.08 }}
-                        whileTap={{ scale: 0.95 }}
-                        className="bg-white flex flex-col gap-[8px] min-w-[120px] p-[16px] rounded-[12px] border-2 border-[#e2e8f0] hover:border-[#1e3a8a] transition-all"
+                        className="bg-white flex flex-col gap-[8px] min-w-[120px] p-[16px] rounded-[12px] border-2 border-[#e2e8f0] hover:border-[#1e3a8a] transition-all active:scale-95"
                       >
                         <div className="flex flex-col items-start gap-[4px]">
                           <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[#0f172a] text-[14px]">
@@ -226,24 +172,17 @@ export default function HomeWrapper() {
                             <p className="leading-[14px]">{t("셔틀버스", "Shuttle")}</p>
                           </div>
                         </div>
-                      </motion.button>
+                      </button>
                     ))}
                   </div>
                 </div>
-              </motion.div>
+              </div>
 
               {/* Nearest Stop Card */}
-              <motion.div
-                className="relative shrink-0 w-full"
-                initial="hidden"
-                animate="visible"
-                variants={fadeUp}
-                custom={0.15}
-              >
+              <div className="relative shrink-0 w-full animate-[routeLift_240ms_ease-out]">
                 <div className="content-stretch flex flex-col items-start px-[24px] py-[16px] relative w-full">
-                  <motion.div
-                    whileTap={{ scale: 0.98 }}
-                    className="bg-[#1e3a8a] relative rounded-[16px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] shrink-0 w-full overflow-hidden cursor-pointer"
+                  <div
+                    className="bg-[#1e3a8a] relative rounded-[16px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] shrink-0 w-full overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
                     onClick={() => navigate("/campus-shuttle")}
                   >
                     <div className="content-stretch flex flex-col items-start p-[24px] relative w-full">
@@ -272,7 +211,7 @@ export default function HomeWrapper() {
                               <p className="leading-[20px]">{t("운행 현황", "Service Status")}</p>
                             </div>
                             <div className="flex items-center gap-2 mt-1">
-                              {loading ? (
+                              {isRefreshing && activeBuses.length === 0 ? (
                                 <span className="font-['Public_Sans'] font-bold text-[16px] text-white/70">{t("확인 중...", "Checking...")}</span>
                               ) : busActive ? (
                                 <>
@@ -310,17 +249,12 @@ export default function HomeWrapper() {
                         </div>
                       </div>
                     </div>
-                  </motion.div>
+                  </div>
                 </div>
-              </motion.div>
+              </div>
 
               {/* Quick Actions – stagger */}
-              <motion.div
-                className="relative shrink-0 w-full"
-                variants={staggerList}
-                initial="hidden"
-                animate="visible"
-              >
+              <div className="relative shrink-0 w-full animate-[routeLift_260ms_ease-out]">
                 <div className="content-stretch flex flex-col gap-[16px] items-start px-[24px] py-[16px] relative w-full">
                   {[
                     {
@@ -346,12 +280,10 @@ export default function HomeWrapper() {
                       extra: "mb-[32px]",
                     },
                   ].map((action) => (
-                    <motion.button
+                    <button
                       key={action.path + action.title}
-                      variants={listItem}
-                      whileTap={{ scale: 0.98 }}
                       onClick={() => navigate(action.path)}
-                      className={`bg-white content-stretch flex items-center justify-between p-[21px] relative rounded-[16px] shrink-0 w-full border border-[#e2e8f0] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] hover:shadow-md transition-all ${action.extra ?? ""}`}
+                      className={`bg-white content-stretch flex items-center justify-between p-[21px] relative rounded-[16px] shrink-0 w-full border border-[#e2e8f0] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] hover:shadow-md transition-all active:scale-[0.98] ${action.extra ?? ""}`}
                     >
                       <div className="flex gap-[16px] items-center">
                         <div className="bg-[#1e3a8a] content-stretch flex items-center justify-center relative rounded-[12px] shrink-0 size-[48px]">
@@ -375,28 +307,21 @@ export default function HomeWrapper() {
                           <path d={svgPaths.p28c84800} fill="#94A3B8" />
                         </svg>
                       </div>
-                    </motion.button>
+                    </button>
                   ))}
                 </div>
-              </motion.div>
+              </div>
 
               {/* Live Tracking */}
-              <motion.div
-                className="relative shrink-0 w-full mb-4"
-                initial="hidden"
-                animate="visible"
-                variants={fadeUp}
-                custom={0.4}
-              >
+              <div className="relative shrink-0 w-full mb-4 animate-[routeLift_280ms_ease-out]">
                 <div className="content-stretch flex flex-col gap-[12px] items-start px-[24px] py-[16px] relative w-full">
                   <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[#0f172a] text-[18px] w-full">
                     <p className="leading-[28px]">{t("실시간 추적", "Live Tracking")}</p>
                   </div>
 
-                  <motion.button
+                  <button
                     onClick={() => navigate("/campus-shuttle")}
-                    whileTap={{ scale: 0.98 }}
-                    className="bg-[#f1f5f9] content-stretch flex flex-col h-[128px] items-start justify-center overflow-clip relative rounded-[16px] shrink-0 w-full shadow-[inset_0px_2px_4px_0px_rgba(0,0,0,0.05)] hover:bg-[#e2e8f0] transition-all"
+                    className="bg-[#f1f5f9] content-stretch flex flex-col h-[128px] items-start justify-center overflow-clip relative rounded-[16px] shrink-0 w-full shadow-[inset_0px_2px_4px_0px_rgba(0,0,0,0.05)] hover:bg-[#e2e8f0] transition-all active:scale-[0.98]"
                   >
                     <div className="flex-[1_0_0] min-h-px min-w-px opacity-60 relative w-full">
                       <div className="absolute inset-0 overflow-hidden">
@@ -417,14 +342,11 @@ export default function HomeWrapper() {
                         <p className="leading-[15px]">{t("캠퍼스 지도 실시간", "LIVE CAMPUS MAP")}</p>
                       </div>
                     </div>
-                  </motion.button>
+                  </button>
                 </div>
-              </motion.div>
-
-            </motion.div>
-          )}
-        </AnimatePresence>
-        {/* ── End skeleton / content ────────────────────────── */}
+              </div>
+        </div>
+        {/* ── End content ────────────────────────── */}
 
       </div>
 
