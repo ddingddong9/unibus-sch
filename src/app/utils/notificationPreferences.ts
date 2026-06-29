@@ -12,7 +12,7 @@ export function getNotificationPermission(): NotificationPermission | "unsupport
 }
 
 export function isNotificationEnabled() {
-  return localStorage.getItem(NOTIFICATION_ENABLED_KEY) !== "false";
+  return localStorage.getItem(NOTIFICATION_ENABLED_KEY) === "true";
 }
 
 export function setNotificationEnabled(enabled: boolean) {

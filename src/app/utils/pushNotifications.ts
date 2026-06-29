@@ -13,6 +13,17 @@ export function isPushSupported() {
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
 }
 
+function waitForServiceWorkerReady() {
+  return Promise.race([
+    navigator.serviceWorker.ready,
+    new Promise<never>((_, reject) => {
+      window.setTimeout(() => {
+        reject(new Error("서비스워커가 아직 준비되지 않았습니다. 배포된 주소에서 새로고침 후 다시 시도해 주세요."));
+      }, 7000);
+    }),
+  ]);
+}
+
 async function getVapidPublicKey() {
   try {
     const key = await api.getVapidPublicKey();
@@ -27,7 +38,7 @@ export async function ensurePushSubscription() {
     throw new Error("이 브라우저에서는 백그라운드 푸시 알림을 지원하지 않습니다.");
   }
 
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await waitForServiceWorkerReady();
   const publicKey = await getVapidPublicKey();
   let subscription = await registration.pushManager.getSubscription();
 
@@ -45,7 +56,7 @@ export async function ensurePushSubscription() {
 export async function disablePushSubscription() {
   if (!isPushSupported()) return;
 
-  const registration = await navigator.serviceWorker.ready;
+  const registration = await waitForServiceWorkerReady();
   const subscription = await registration.pushManager.getSubscription();
 
   if (!subscription) return;
