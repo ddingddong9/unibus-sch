@@ -29,6 +29,22 @@ const getShapePoints = async (routeId: string) => {
   return data || [];
 };
 
+const replaceRouteDetails = async (
+  routeId: string,
+  options: {
+    replaceStops?: boolean;
+    stops?: any[];
+    replaceShapePoints?: boolean;
+    shapePoints?: any[];
+  },
+) => db.rpc('replace_route_details', {
+  p_route_id: routeId,
+  p_replace_stops: Boolean(options.replaceStops),
+  p_stops: options.stops ?? [],
+  p_replace_shape_points: Boolean(options.replaceShapePoints),
+  p_shape_points: options.shapePoints ?? [],
+});
+
 const buildDirectionsPoints = (stops: any[], shapePoints: any[]) => {
   const points: Array<{ id: string; name: string; order: number; lat: number; lng: number; hidden?: boolean }> = [];
   const shapesByStop = new Map<number, any[]>();
@@ -344,48 +360,18 @@ routes.post("/", requireAdmin, async (c) => {
       return c.json({ success: false, error: "Failed to create route" }, 500);
     }
 
-    // 정류장 추가
-    if (stops && stops.length > 0) {
-      const stopsData = stops.map((stop: any, index: number) => ({
-        route_id: route.id,
-        stop_name: stop.name,
-        stop_order: stop.order || index + 1,
-        latitude: stop.lat ?? null,
-        longitude: stop.lng ?? null,
-        arrival_time: stop.arrivalTime || null,
-      }));
+    if (stops !== undefined || shapePoints !== undefined) {
+      const { error: detailError } = await replaceRouteDetails(route.id, {
+        replaceStops: stops !== undefined,
+        stops,
+        replaceShapePoints: shapePoints !== undefined,
+        shapePoints,
+      });
 
-      const { error: stopsError } = await db
-        .from('route_stops')
-        .insert(stopsData);
-
-      if (stopsError) {
-        console.error("❌ Stops creation error:", stopsError);
-        return c.json({ success: false, error: "정류장 추가 실패: " + stopsError.message }, 500);
-      }
-    }
-
-    if (shapePoints && shapePoints.length > 0) {
-      const shapePointsData = shapePoints
-        .filter((point: any) => point.lat != null && point.lng != null)
-        .map((point: any, index: number) => ({
-          route_id: route.id,
-          name: point.name || '경로 보정점',
-          after_stop_order: point.afterStopOrder || point.after_stop_order || 1,
-          point_order: point.order || point.pointOrder || index + 1,
-          latitude: point.lat,
-          longitude: point.lng,
-        }));
-
-      if (shapePointsData.length > 0) {
-        const { error: shapeInsertError } = await db
-          .from('route_shape_points')
-          .insert(shapePointsData);
-
-        if (shapeInsertError) {
-          console.error("❌ Shape points creation error:", shapeInsertError);
-          return c.json({ success: false, error: "경로 보정점 추가 실패: " + shapeInsertError.message }, 500);
-        }
+      if (detailError) {
+        console.error("❌ Route detail creation error:", detailError);
+        await db.from('routes').delete().eq('id', route.id);
+        return c.json({ success: false, error: "노선 상세 저장 실패: " + detailError.message }, 500);
       }
     }
 
@@ -470,60 +456,17 @@ routes.put("/:id", requireAdmin, async (c) => {
       updatedRoute = data;
     }
 
-    // 정류장 업데이트 (있는 경우)
-    if (stops && stops.length > 0) {
-      // 기존 정류장 삭제
-      await db
-        .from('route_stops')
-        .delete()
-        .eq('route_id', id);
+    if (stops !== undefined || shapePoints !== undefined) {
+      const { error: detailError } = await replaceRouteDetails(id, {
+        replaceStops: stops !== undefined,
+        stops,
+        replaceShapePoints: shapePoints !== undefined,
+        shapePoints,
+      });
 
-      // 새 정류장 추가
-      const stopsData = stops.map((stop: any, index: number) => ({
-        route_id: id,
-        stop_name: stop.name,
-        stop_order: stop.order || index + 1,
-        latitude: stop.lat ?? null,
-        longitude: stop.lng ?? null,
-        arrival_time: stop.arrivalTime || null,
-      }));
-
-      const { error: stopsInsertError } = await db
-        .from('route_stops')
-        .insert(stopsData);
-
-      if (stopsInsertError) {
-        console.error("❌ Stops update error:", stopsInsertError);
-        return c.json({ success: false, error: "정류장 저장 실패: " + stopsInsertError.message }, 500);
-      }
-    }
-
-    if (shapePoints !== undefined) {
-      await db
-        .from('route_shape_points')
-        .delete()
-        .eq('route_id', id);
-
-      const shapePointsData = (shapePoints || [])
-        .filter((point: any) => point.lat != null && point.lng != null)
-        .map((point: any, index: number) => ({
-          route_id: id,
-          name: point.name || '경로 보정점',
-          after_stop_order: point.afterStopOrder || point.after_stop_order || 1,
-          point_order: point.order || point.pointOrder || index + 1,
-          latitude: point.lat,
-          longitude: point.lng,
-        }));
-
-      if (shapePointsData.length > 0) {
-        const { error: shapeInsertError } = await db
-          .from('route_shape_points')
-          .insert(shapePointsData);
-
-        if (shapeInsertError) {
-          console.error("❌ Shape points update error:", shapeInsertError);
-          return c.json({ success: false, error: "경로 보정점 저장 실패: " + shapeInsertError.message }, 500);
-        }
+      if (detailError) {
+        console.error("❌ Route detail update error:", detailError);
+        return c.json({ success: false, error: "노선 상세 저장 실패: " + detailError.message }, 500);
       }
     }
 

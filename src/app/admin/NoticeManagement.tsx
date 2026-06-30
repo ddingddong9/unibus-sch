@@ -111,6 +111,7 @@ export default function NoticeManagement() {
     general: "일반",
     route: "운행정보",
     system: "시스템",
+    lost: "분실물",
   };
 
   return (

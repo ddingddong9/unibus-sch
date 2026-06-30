@@ -7,6 +7,29 @@ import type {
   SignupRequest
 } from '../types';
 
+type RouteStopInput = {
+  id?: string;
+  name: string;
+  order: number;
+  lat?: number | null;
+  lng?: number | null;
+  arrivalTime?: string | null;
+};
+
+type RouteShapePointInput = {
+  id?: string;
+  name?: string | null;
+  afterStopOrder: number;
+  order: number;
+  lat: number;
+  lng: number;
+};
+
+type RouteMutationPayload = Omit<Partial<BusRoute>, 'stops'> & {
+  stops?: RouteStopInput[];
+  shapePoints?: RouteShapePointInput[];
+};
+
 const SUPABASE_URL = supabaseUrl;
 const API_BASE_URL = `${SUPABASE_URL}/functions/v1/make-server`;
 const isDev = import.meta.env.DEV;
@@ -36,11 +59,15 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {}
   ): Promise<T> {
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Content-Type': 'application/json',
       'Authorization': `Bearer ${publicAnonKey}`,
-      ...options.headers,
     };
+
+    const optionHeaders = new Headers(options.headers);
+    optionHeaders.forEach((value, key) => {
+      headers[key] = value;
+    });
 
     if (this.token) {
       headers['X-Auth-Token'] = this.token;
@@ -210,7 +237,7 @@ class ApiClient {
     const form = new FormData();
     form.append('file', file);
 
-    const headers: HeadersInit = {
+    const headers: Record<string, string> = {
       'Authorization': `Bearer ${publicAnonKey}`,
     };
 
@@ -312,7 +339,7 @@ class ApiClient {
     throw new Error(response.error || 'Failed to preview route path');
   }
 
-  async createRoute(route: Partial<BusRoute>): Promise<BusRoute> {
+  async createRoute(route: RouteMutationPayload): Promise<BusRoute> {
     const response = await this.request<ApiResponse<BusRoute>>('/routes', {
       method: 'POST',
       body: JSON.stringify(route),
@@ -323,7 +350,7 @@ class ApiClient {
     throw new Error(response.error || 'Failed to create route');
   }
 
-  async updateRoute(id: string, updates: Partial<BusRoute>): Promise<BusRoute> {
+  async updateRoute(id: string, updates: RouteMutationPayload): Promise<BusRoute> {
     const response = await this.request<ApiResponse<BusRoute>>(`/routes/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),

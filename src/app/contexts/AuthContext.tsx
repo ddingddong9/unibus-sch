@@ -1,6 +1,6 @@
 // Authentication Context
 
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { api } from '../services/api';
 import type { User } from '../types';
 

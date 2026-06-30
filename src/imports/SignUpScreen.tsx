@@ -5,7 +5,7 @@ type InputBackgroundImageProps = {
   additionalClassNames?: string;
 };
 
-function InputBackgroundImage({ children, text, additionalClassNames = "" }: React.PropsWithChildren<InputBackgroundImageProps>) {
+function InputBackgroundImage({ text, additionalClassNames = "" }: InputBackgroundImageProps) {
   return (
     <div className="h-[56px] relative rounded-[8px] shrink-0 w-full">
       <div className="overflow-clip rounded-[inherit] size-full">

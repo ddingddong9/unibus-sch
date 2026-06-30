@@ -100,11 +100,13 @@ auth.post("/login", async (c) => {
       return c.json({ success: false, error: "Missing email or password" }, 400);
     }
 
+    const normalizedEmail = email.trim().toLowerCase();
+
     // 사용자 조회 (관계형 DB)
     const { data: user, error } = await db
       .from('users')
       .select('id, email, password_hash, name, student_id, role, provider')
-      .eq('email', email)
+      .eq('email', normalizedEmail)
       .single();
 
     if (error || !user) {
@@ -145,7 +147,7 @@ auth.post("/login", async (c) => {
       return c.json({ success: false, error: "Failed to create token" }, 500);
     }
 
-    console.log("✅ User logged in:", { email, userId: user.id });
+    console.log("✅ User logged in:", { email: normalizedEmail, userId: user.id });
 
     return c.json({ 
       success: true, 

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 interface NaverMapProps {
   center?: { lat: number; lng: number };
@@ -15,6 +15,7 @@ interface NaverMapProps {
   fitBoundsKey?: number;
   routePath?: [number, number][]; // [[lng, lat], ...] from Naver Directions API
   onBusClick?: (busId: string) => void;
+  onLocateRequest?: () => void;
   clientId?: string;
 }
 
@@ -22,11 +23,20 @@ declare global {
   interface Window { naver: any; }
 }
 
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[char] || char);
+
 // 지도 앱에서 익숙한 핀형 차량 마커. 핀 끝이 실제 좌표를 가리키고, 작은 화살표만 진행 방향을 표시한다.
 const BUS_MARKER_CONTENT = (label: string, rotation = 0) => `
   <div style="width:92px;height:66px;display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 4px 8px rgba(15,23,42,0.28));">
     <div style="max-width:88px;margin-bottom:4px;background:white;color:#0f172a;border:1px solid rgba(15,23,42,0.12);box-shadow:0 2px 5px rgba(15,23,42,0.12);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:sans-serif;">
-      ${label}
+      ${escapeHtml(label)}
     </div>
     <div style="position:relative;width:38px;height:42px;">
       <div style="position:absolute;left:50%;top:-6px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid #ef4444;transform:translateX(-50%) rotate(${rotation}deg);transform-origin:50% 22px;transition:transform 0.25s ease;"></div>
@@ -47,7 +57,7 @@ const BUS_MARKER_CONTENT = (label: string, rotation = 0) => `
 const STOP_MARKER_CONTENT = (name: string, _type: 'start' | 'end' | 'middle' = 'middle') => `
   <div style="width:128px;height:58px;display:flex;flex-direction:column;align-items:center;cursor:default;filter:drop-shadow(0 3px 8px rgba(0,0,0,0.3));">
     <div style="max-width:122px;background:#1e3a8a;color:white;padding:4px 10px;border-radius:6px;font-size:11px;font-weight:800;line-height:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:sans-serif;letter-spacing:0;">
-      ${name}
+      ${escapeHtml(name)}
     </div>
     <div style="width:2.5px;height:10px;background:#1e3a8a;"></div>
     <div style="width:20px;height:20px;border-radius:50%;background:#1e3a8a;border:3px solid white;box-shadow:0 2px 6px rgba(30,58,138,0.5);box-sizing:border-box;"></div>
@@ -78,6 +88,7 @@ export default function NaverMapComponent({
   fitBoundsKey = 0,
   routePath = [],
   onBusClick,
+  onLocateRequest,
   clientId = import.meta.env.VITE_NAVER_CLIENT_ID || "YOUR_NAVER_CLIENT_ID",
 }: NaverMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -98,9 +109,13 @@ export default function NaverMapComponent({
   userLocationRef.current = userLocation;
   const routePathRef = useRef(routePath);
   routePathRef.current = routePath;
+  const onLocateRequestRef = useRef(onLocateRequest);
+  onLocateRequestRef.current = onLocateRequest;
+  const initialCenterRef = useRef(center);
+  const initialZoomRef = useRef(zoom);
 
   // ── snap-to-segment: GPS 좌표를 경로 선분 위 최근접 점으로 스냅 ──
-  const snapToSegment = (
+  const snapToSegment = useCallback((
     px: number, py: number,
     ax: number, ay: number,
     bx: number, by: number
@@ -113,10 +128,10 @@ export default function NaverMapComponent({
     const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / lenSq));
     const cx = ax + t * dx, cy = ay + t * dy;
     return { x: cx, y: cy, t, dist: (px - cx) ** 2 + (py - cy) ** 2 };
-  };
+  }, []);
 
   // ── [변경] RAF 기반 마커 보간 ──
-  const animateMarker = (
+  const animateMarker = useCallback((
     marker: any,
     fromLat: number, fromLng: number, fromHeading: number,
     toLat: number, toLng: number, toHeading: number
@@ -223,9 +238,9 @@ export default function NaverMapComponent({
     };
 
     marker.__animRafId = requestAnimationFrame(tick);
-  };
+  }, [snapToSegment]);
 
-  const updateBusMarkers = () => {
+  const updateBusMarkers = useCallback(() => {
     if (!mapInstance.current || !window.naver) return;
 
     const currentBuses = busesRef.current;
@@ -286,9 +301,9 @@ export default function NaverMapComponent({
       try { m.setMap(null); } catch (_) {}
     });
     busMarkersRef.current = newMarkers;
-  };
+  }, [animateMarker]);
 
-  const updateStopMarkers = () => {
+  const updateStopMarkers = useCallback(() => {
     if (!mapInstance.current || !window.naver) return;
     stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
     stopMarkersRef.current = [];
@@ -308,9 +323,9 @@ export default function NaverMapComponent({
         stopMarkersRef.current.push(marker);
       } catch (e) { console.error("정류장 마커 오류:", e); }
     });
-  };
+  }, []);
 
-  const updateUserMarker = (loc: { lat: number; lng: number } | null) => {
+  const updateUserMarker = useCallback((loc: { lat: number; lng: number } | null) => {
     if (!mapInstance.current || !window.naver) return;
     if (userMarkerRef.current) {
       try { userMarkerRef.current.setMap(null); } catch (_) {}
@@ -329,9 +344,9 @@ export default function NaverMapComponent({
         zIndex: 30,
       });
     } catch (e) { console.error("사용자 마커 오류:", e); }
-  };
+  }, []);
 
-  const updatePolyline = (path: [number, number][]) => {
+  const updatePolyline = useCallback((path: [number, number][]) => {
     if (!mapInstance.current || !window.naver) return;
     if (polylineRef.current) {
       try { polylineRef.current.setMap(null); } catch (_) {}
@@ -350,7 +365,23 @@ export default function NaverMapComponent({
         zIndex: 5,
       });
     } catch (e) { console.error("폴리라인 오류:", e); }
-  };
+  }, []);
+
+  const updateBusMarkersRef = useRef(updateBusMarkers);
+  const updateStopMarkersRef = useRef(updateStopMarkers);
+  const updatePolylineRef = useRef(updatePolyline);
+
+  useEffect(() => {
+    updateBusMarkersRef.current = updateBusMarkers;
+  }, [updateBusMarkers]);
+
+  useEffect(() => {
+    updateStopMarkersRef.current = updateStopMarkers;
+  }, [updateStopMarkers]);
+
+  useEffect(() => {
+    updatePolylineRef.current = updatePolyline;
+  }, [updatePolyline]);
 
   // 지도 초기화
   useEffect(() => {
@@ -358,8 +389,8 @@ export default function NaverMapComponent({
       if (!mapRef.current || mapInstance.current) return;
       try {
         mapInstance.current = new window.naver.maps.Map(mapRef.current, {
-          center: new window.naver.maps.LatLng(center.lat, center.lng),
-          zoom,
+          center: new window.naver.maps.LatLng(initialCenterRef.current.lat, initialCenterRef.current.lng),
+          zoom: initialZoomRef.current,
           zoomControl: false,
           mapTypeControl: false,
           scaleControl: false,
@@ -367,23 +398,31 @@ export default function NaverMapComponent({
           mapDataControl: false,
         });
         window.naver.maps.Event.addListener(mapInstance.current, 'idle', () => {
-          updateBusMarkers();
-          updateStopMarkers();
-          if (routePathRef.current?.length) updatePolyline(routePathRef.current);
+          updateBusMarkersRef.current();
+          updateStopMarkersRef.current();
+          if (routePathRef.current?.length) updatePolylineRef.current(routePathRef.current);
         });
       } catch (e) { console.error("네이버 지도 초기화 오류:", e); }
     };
 
-    if (window.naver?.maps) { initializeMap(); return; }
-    if (scriptLoadedRef.current) return;
-    scriptLoadedRef.current = true;
+    if (window.naver?.maps) {
+      initializeMap();
+    } else if (!scriptLoadedRef.current) {
+      scriptLoadedRef.current = true;
 
-    const script = document.createElement("script");
-    script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
-    script.async = true;
-    script.onload = () => { if (window.naver?.maps) initializeMap(); };
-    script.onerror = () => console.error("네이버 지도 API 로드 실패. Client ID를 확인하세요.");
-    document.head.appendChild(script);
+      const existingScript = document.querySelector<HTMLScriptElement>("script[data-naver-map-sdk='true']");
+      if (existingScript) {
+        existingScript.addEventListener("load", initializeMap, { once: true });
+      } else {
+        const script = document.createElement("script");
+        script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
+        script.async = true;
+        script.dataset.naverMapSdk = "true";
+        script.onload = () => { if (window.naver?.maps) initializeMap(); };
+        script.onerror = () => console.error("네이버 지도 API 로드 실패. Client ID를 확인하세요.");
+        document.head.appendChild(script);
+      }
+    }
 
     // [변경] cleanup: 모든 RAF 취소
     return () => {
@@ -397,16 +436,22 @@ export default function NaverMapComponent({
       stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
       if (polylineRef.current) { try { polylineRef.current.setMap(null); } catch (_) {} }
     };
-  }, []);
+  }, [clientId]);
 
-  useEffect(() => { updateBusMarkers(); }, [buses]);
-  useEffect(() => { updateStopMarkers(); }, [stops]);
-  useEffect(() => { updateUserMarker(userLocation ?? null); }, [userLocation]);
+  useEffect(() => {
+    if (!mapInstance.current || !window.naver) return;
+    mapInstance.current.setCenter(new window.naver.maps.LatLng(center.lat, center.lng));
+    mapInstance.current.setZoom(zoom);
+  }, [center.lat, center.lng, zoom]);
+
+  useEffect(() => { updateBusMarkers(); }, [buses, updateBusMarkers]);
+  useEffect(() => { updateStopMarkers(); }, [stops, updateStopMarkers]);
+  useEffect(() => { updateUserMarker(userLocation ?? null); }, [userLocation, updateUserMarker]);
   useEffect(() => {
     updatePolyline(routePath);
     // 경로 로드 후 정류장 마커를 경로 위에 스냅해서 다시 그림
     updateStopMarkers();
-  }, [routePath]);
+  }, [routePath, updatePolyline, updateStopMarkers]);
 
   useEffect(() => {
     if (!focusLocation || !mapInstance.current || !window.naver) return;
@@ -429,6 +474,9 @@ export default function NaverMapComponent({
   const handleZoomOut = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() - 1); };
   const handleLocate  = () => {
     if (!mapInstance.current || !window.naver) return;
+    if (!userLocationRef.current) {
+      onLocateRequestRef.current?.();
+    }
     const loc = userLocationRef.current ?? center;
     mapInstance.current.setCenter(new window.naver.maps.LatLng(loc.lat, loc.lng));
     mapInstance.current.setZoom(18);
