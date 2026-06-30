@@ -574,16 +574,16 @@ export default function CampusShuttleWrapper() {
                 )}
               </div>
 
-              <div className="w-full rounded-[16px] bg-[#f8fafc] px-4 py-3">
-                <div className="flex items-center gap-2 text-[#64748b]">
-                  <Clock className="h-4 w-4" />
-                  <p className="font-['Public_Sans'] text-[12px] font-semibold">
-                    {mode === "station"
-                      ? "출발 시간과 정류장 위치는 관리자 노선 관리에서 수정한 값과 연동됩니다."
-                      : "지도와 정류장은 관리자에서 저장한 학내순환 경로를 사용합니다."}
-                  </p>
+              {mode === "station" && (
+                <div className="w-full rounded-[16px] bg-[#f8fafc] px-4 py-3">
+                  <div className="flex items-center gap-2 text-[#64748b]">
+                    <Clock className="h-4 w-4" />
+                    <p className="font-['Public_Sans'] text-[12px] font-semibold">
+                      출발 시간과 정류장 위치는 관리자 노선 관리에서 수정한 값과 연동됩니다.
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           </div>
         </div>
