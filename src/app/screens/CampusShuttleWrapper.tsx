@@ -149,9 +149,11 @@ export default function CampusShuttleWrapper() {
   const [allBuses, setAllBuses] = useState<any[]>([]);
   const [locationsByBus, setLocationsByBus] = useState<Map<string, any>>(new Map());
   const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationEnabled, setLocationEnabled] = useState(false);
   const [focusLocation, setFocusLocation] = useState<FocusLocation | null>(null);
   const [fitBoundsKey, setFitBoundsKey] = useState(0);
   const [locationError, setLocationError] = useState<string | null>(null);
+  const [pageVisible, setPageVisible] = useState(() => typeof document === "undefined" || !document.hidden);
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [campusStops, setCampusStops] = useState<ShuttleStop[]>(CAMPUS_STOPS);
   const [stationStops, setStationStops] = useState<ShuttleStop[]>([]);
@@ -190,6 +192,15 @@ export default function CampusShuttleWrapper() {
       }
     };
     fetchRoutes();
+  }, []);
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      setPageVisible(!document.hidden);
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
   }, []);
 
   useEffect(() => {
@@ -238,6 +249,7 @@ export default function CampusShuttleWrapper() {
   }, []);
 
   useEffect(() => {
+    if (!pageVisible) return;
     fetchInitial();
     const channel = supabase
       .channel(`shuttle-tracking-${Date.now()}`)
@@ -270,17 +282,40 @@ export default function CampusShuttleWrapper() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [fetchInitial]);
+  }, [fetchInitial, pageVisible]);
+
+  const enableUserLocation = useCallback(() => {
+    if (!navigator.geolocation) {
+      setLocationError("이 브라우저에서는 현재 위치를 사용할 수 없습니다");
+      return;
+    }
+
+    setLocationEnabled(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        const nextLocation = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setUserLocation(nextLocation);
+        setFocusLocation({ ...nextLocation, zoom: 18, key: Date.now() });
+        setLocationError(null);
+      },
+      () => setLocationError("현재 위치 권한을 허용하면 내 위치를 지도에서 볼 수 있습니다"),
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 8000 }
+    );
+  }, []);
 
   useEffect(() => {
+    if (!locationEnabled) return;
     if (!navigator.geolocation) return;
     const watchId = navigator.geolocation.watchPosition(
-      (pos) => setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      (err) => console.warn("위치 권한 없음:", err.message),
+      (pos) => {
+        setUserLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationError(null);
+      },
+      () => setLocationError("현재 위치 권한을 허용하면 내 위치를 지도에서 볼 수 있습니다"),
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 8000 }
     );
     return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
+  }, [locationEnabled]);
 
   const visibleBuses = useMemo<BusMarker[]>(() => {
     return allBuses
@@ -365,6 +400,7 @@ export default function CampusShuttleWrapper() {
             fitBoundsKey={fitBoundsKey}
             routePath={routePath}
             onBusClick={handleBusClick}
+            onLocateRequest={enableUserLocation}
           />
         </div>
 
@@ -430,7 +466,7 @@ export default function CampusShuttleWrapper() {
                   </p>
                   <p className="font-['Public_Sans'] text-[#64748b] text-[12px] leading-[18px]">
                     {mode === "station"
-                      ? "관리자 노선 관리의 신창역 셔틀 정류장과 경로를 사용합니다"
+                      ? "신창역과 후문을 오가는 셔틀입니다"
                       : "교내 정류장을 순환하는 셔틀입니다"}
                   </p>
                 </div>

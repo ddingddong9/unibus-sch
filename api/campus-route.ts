@@ -1,4 +1,13 @@
-import type { VercelRequest, VercelResponse } from "@vercel/node";
+type VercelRequest = {
+  method?: string;
+};
+
+type VercelResponse = {
+  setHeader(name: string, value: string): void;
+  status(code: number): VercelResponse;
+  end(): void;
+  json(body: unknown): void;
+};
 
 const STOPS = [
   { id: "rear-gate", name: "후문",   lat: 36.772760, lng: 126.933816 },
