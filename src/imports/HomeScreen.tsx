@@ -28,18 +28,6 @@ function Section({ children }: React.PropsWithChildren<{}>) {
     </div>
   );
 }
-type Container2Props = {
-  additionalClassNames?: string;
-};
-
-function Container2({ children, additionalClassNames = "" }: React.PropsWithChildren<Container2Props>) {
-  return (
-    <div className={clsx("relative shrink-0", additionalClassNames)}>
-      <div className="bg-clip-padding border-0 border-[transparent] border-solid content-stretch flex flex-col items-start relative w-full">{children}</div>
-    </div>
-  );
-}
-
 function Container1({ children }: React.PropsWithChildren<{}>) {
   return (
     <div className="h-[18.667px] relative shrink-0 w-[23.333px]">
@@ -58,22 +46,6 @@ function Container() {
           <path d={svgPaths.p28c84800} fill="var(--fill-0, #94A3B8)" id="Icon" />
         </g>
       </svg>
-    </div>
-  );
-}
-
-function Overlay() {
-  return (
-    <div className="bg-[rgba(30,58,138,0.1)] relative rounded-[8px] shrink-0 size-[40px]">
-      <div className="bg-clip-padding border-0 border-[transparent] border-solid content-stretch flex items-center justify-center relative size-full">
-        <div className="h-[19px] relative shrink-0 w-[20px]">
-          <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 20 19">
-            <g id="Container">
-              <path d={svgPaths.p1f93f980} fill="var(--fill-0, #1E3A8A)" id="Icon" />
-            </g>
-          </svg>
-        </div>
-      </div>
     </div>
   );
 }
@@ -112,54 +84,6 @@ export default function HomeScreen() {
             </div>
           </div>
         </div>
-        <Section>
-          <div className="content-stretch flex items-center justify-between relative shrink-0 w-full" data-name="Container">
-            <div className="content-stretch flex flex-col items-start relative shrink-0" data-name="Heading 2">
-              <div className="flex flex-col font-['Public_Sans:Bold',sans-serif] font-bold h-[28px] justify-center leading-[0] relative shrink-0 text-[#0f172a] text-[18px] w-[134.22px]">
-                <p className="leading-[28px]">Favorite Routes</p>
-              </div>
-            </div>
-            <div className="content-stretch flex flex-col items-center justify-center relative shrink-0" data-name="Button">
-              <div className="flex flex-col font-['Public_Sans:Semi_Bold',sans-serif] h-[20px] justify-center leading-[0] not-italic relative shrink-0 text-[#1e3a8a] text-[14px] text-center w-[26.52px]">
-                <p className="leading-[20px]">Edit</p>
-              </div>
-            </div>
-          </div>
-          <div className="h-[82px] overflow-clip relative shrink-0 w-full" data-name="Container">
-            <div className="absolute bg-white bottom-[8px] content-stretch flex gap-[12px] items-center left-0 min-w-[180px] pl-[17px] pr-[17.69px] py-[17px] rounded-[12px] top-0" data-name="Background+Border+Shadow">
-              <div aria-hidden="true" className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[12px] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]" />
-              <Overlay />
-              <Container2 additionalClassNames="w-[93.31px]">
-                <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="Container">
-                  <div className="flex flex-col font-['Public_Sans:Bold',sans-serif] font-bold h-[20px] justify-center leading-[0] relative shrink-0 text-[#0f172a] text-[14px] w-[67.97px]">
-                    <p className="leading-[20px]">Main Gate</p>
-                  </div>
-                </div>
-                <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="Container">
-                  <div className="flex flex-col font-['Public_Sans:Regular',sans-serif] font-normal h-[15px] justify-center leading-[0] relative shrink-0 text-[#64748b] text-[12px] w-[93.31px]">
-                    <p className="leading-[15px]">To Sinchang Stn.</p>
-                  </div>
-                </div>
-              </Container2>
-            </div>
-            <div className="absolute bg-white bottom-[8px] content-stretch flex gap-[12px] items-center left-[192px] min-w-[180px] pl-[17px] pr-[32.19px] py-[17px] rounded-[12px] top-0" data-name="Background+Border+Shadow">
-              <div aria-hidden="true" className="absolute border border-[#e2e8f0] border-solid inset-0 pointer-events-none rounded-[12px] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)]" />
-              <Overlay />
-              <Container2 additionalClassNames="w-[78.81px]">
-                <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="Container">
-                  <div className="flex flex-col font-['Public_Sans:Bold',sans-serif] font-bold h-[20px] justify-center leading-[0] relative shrink-0 text-[#0f172a] text-[14px] w-[67.66px]">
-                    <p className="leading-[20px]">Dormitory</p>
-                  </div>
-                </div>
-                <div className="content-stretch flex flex-col items-start relative shrink-0 w-full" data-name="Container">
-                  <div className="flex flex-col font-['Public_Sans:Regular',sans-serif] font-normal h-[15px] justify-center leading-[0] relative shrink-0 text-[#64748b] text-[12px] w-[78.81px]">
-                    <p className="leading-[15px]">To City Center</p>
-                  </div>
-                </div>
-              </Container2>
-            </div>
-          </div>
-        </Section>
         <div className="relative shrink-0 w-full" data-name="Section">
           <div className="content-stretch flex flex-col items-start px-[24px] py-[16px] relative w-full">
             <div className="bg-[#1e3a8a] relative rounded-[16px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] shrink-0 w-full" data-name="Background+Shadow">

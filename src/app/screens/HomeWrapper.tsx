@@ -131,55 +131,8 @@ export default function HomeWrapper() {
           className="w-full animate-[routeFade_180ms_ease-out]"
         >
 
-              {/* Favorite Routes */}
-              <div className="relative shrink-0 w-full animate-[routeLift_220ms_ease-out]">
-                <div className="content-stretch flex flex-col gap-[12px] items-start px-[24px] py-[16px] relative w-full">
-                  <div className="content-stretch flex items-center justify-between relative shrink-0 w-full">
-                    <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] relative shrink-0 text-[#0f172a] text-[18px]">
-                      <p className="leading-[28px]">{t("즐겨찾기 경로", "Favorite Routes")}</p>
-                    </div>
-                    <button className="flex flex-col font-['Public_Sans'] font-semibold justify-center leading-[0] relative shrink-0 text-[#1e3a8a] text-[14px] text-center hover:underline">
-                      <p className="leading-[20px]">{t("편집", "Edit")}</p>
-                    </button>
-                  </div>
-
-                  <div className="flex gap-[12px] overflow-x-auto pb-2 w-full scrollbar-hide">
-                    {[
-                      { title: t("정문", "Main Gate"), sub: t("신창역", "Sinchang Stn.") },
-                      { title: t("기숙사", "Dormitory"), sub: t("시내", "City Center") },
-                    ].map((route) => (
-                      <button
-                        key={route.title}
-                        onClick={() => navigate("/campus-shuttle")}
-                        className="bg-white flex flex-col gap-[8px] min-w-[120px] p-[16px] rounded-[12px] border-2 border-[#e2e8f0] hover:border-[#1e3a8a] transition-all active:scale-95"
-                      >
-                        <div className="flex flex-col items-start gap-[4px]">
-                          <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[#0f172a] text-[14px]">
-                            <p className="leading-[20px]">{route.title}</p>
-                          </div>
-                          <div className="flex flex-col font-['Public_Sans'] font-normal justify-center leading-[0] text-[#64748b] text-[12px]">
-                            <p className="leading-[16px]">{route.sub}</p>
-                          </div>
-                        </div>
-                        <div className="h-[1px] w-full bg-[#e2e8f0]" />
-                        <div className="flex items-center gap-[6px]">
-                          <div className="h-[14px] relative shrink-0 w-[15px]">
-                            <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 20 19">
-                              <path d={svgPaths.p1f93f980} fill="#1E3A8A" />
-                            </svg>
-                          </div>
-                          <div className="flex flex-col font-['Public_Sans'] font-medium justify-center leading-[0] text-[#1e3a8a] text-[11px]">
-                            <p className="leading-[14px]">{t("셔틀버스", "Shuttle")}</p>
-                          </div>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
               {/* Nearest Stop Card */}
-              <div className="relative shrink-0 w-full animate-[routeLift_240ms_ease-out]">
+              <div className="relative shrink-0 w-full animate-[routeLift_220ms_ease-out]">
                 <div className="content-stretch flex flex-col items-start px-[24px] py-[16px] relative w-full">
                   <div
                     className="bg-[#1e3a8a] relative rounded-[16px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] shrink-0 w-full overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
