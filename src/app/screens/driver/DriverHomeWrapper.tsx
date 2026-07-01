@@ -74,6 +74,9 @@ export default function DriverHomeWrapper() {
     navigate("/login");
   };
 
+  const assignedCount = buses.filter((bus) => bus.is_assigned_to_me).length;
+  const sharedCount = buses.filter((bus) => bus.is_shared).length;
+
   return (
     <div className="min-h-screen bg-[#f6f6f8] flex flex-col items-center">
       <div className="w-full max-w-[430px] min-h-screen flex flex-col bg-white">
@@ -103,6 +106,28 @@ export default function DriverHomeWrapper() {
             </div>
           )}
 
+          {!loading && buses.length > 0 && (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-2xl border border-indigo-100 bg-indigo-50 px-4 py-3">
+                <p className="text-indigo-500 text-[11px] font-black uppercase tracking-[0.5px]">내 배정</p>
+                <p className="mt-1 text-indigo-900 text-2xl font-black">{assignedCount}</p>
+              </div>
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
+                <p className="text-slate-500 text-[11px] font-black uppercase tracking-[0.5px]">공용 배차</p>
+                <p className="mt-1 text-slate-900 text-2xl font-black">{sharedCount}</p>
+              </div>
+            </div>
+          )}
+
+          {!loading && buses.length > 0 && (
+            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+              <p className="text-amber-900 text-sm font-bold">운행 시작 후 위치 권한을 허용해 주세요</p>
+              <p className="mt-1 text-amber-700 text-xs leading-relaxed">
+                위치 권한이 꺼져 있으면 사용자 화면에 실시간 버스 위치가 표시되지 않습니다.
+              </p>
+            </div>
+          )}
+
           {loading ? (
             <div className="flex-1 flex items-center justify-center">
               <div className="text-center">
@@ -112,10 +137,18 @@ export default function DriverHomeWrapper() {
             </div>
           ) : buses.length === 0 ? (
             <div className="flex-1 flex items-center justify-center px-4">
-              <div className="text-center">
-                <p className="text-gray-500 text-sm font-semibold">운행 가능한 버스가 없습니다</p>
+              <div className="text-center rounded-3xl border border-dashed border-gray-200 bg-gray-50 px-6 py-8">
+                <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-white text-[#1e3b8a] shadow-sm">
+                  <svg className="h-7 w-7" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.8} d="M8 17H5a2 2 0 01-2-2V8a2 2 0 012-2h14a2 2 0 012 2v7a2 2 0 01-2 2h-3m-9 0h10M8 17v2m8-2v2M3 12h18" />
+                  </svg>
+                </div>
+                <p className="text-gray-700 text-base font-black">운행 가능한 버스가 없습니다</p>
                 <p className="text-gray-400 text-xs mt-2 leading-relaxed">
-                  관리자에게 버스 활성화 또는 기사 배정을 요청해 주세요.
+                  활성화된 공용 배차가 없거나 기사님에게 배정된 버스가 없습니다.
+                </p>
+                <p className="text-gray-400 text-xs mt-1 leading-relaxed">
+                  관리자에게 버스 활성화, 노선 배정, 기사 배정을 요청해 주세요.
                 </p>
               </div>
             </div>
@@ -160,7 +193,7 @@ export default function DriverHomeWrapper() {
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full
                         ${bus.is_assigned_to_me ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500"}`}
                       >
-                        {bus.is_assigned_to_me ? '내 배정' : '공용'}
+                        {bus.is_assigned_to_me ? '내 배정' : '공용 배차'}
                       </span>
                     </div>
                     <p className="text-gray-400 text-xs">{bus.id} · 정원 {bus.capacity}명</p>

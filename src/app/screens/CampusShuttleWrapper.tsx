@@ -62,6 +62,7 @@ function getArrivalMinutes(stopLat: number, stopLng: number, buses: BusMarker[])
 }
 
 function hasStationSignal(route: any) {
+  if (route.shuttleVariant && route.shuttleVariant !== "campus_loop") return true;
   const text = [
     route.name,
     route.description,
@@ -78,6 +79,8 @@ function hasRearGateSignal(text = "") {
 }
 
 function routeDirection(route: any): "to-station" | "from-station" {
+  if (route.shuttleVariant === "campus_to_station") return "to-station";
+  if (route.shuttleVariant === "station_to_campus" || route.shuttleVariant === "station_to_campus_loop") return "from-station";
   const stops = route.stops || [];
   const first = stops[0]?.name || "";
   const last = stops[stops.length - 1]?.name || "";
@@ -89,6 +92,8 @@ function routeDirection(route: any): "to-station" | "from-station" {
 }
 
 function continuesCampusLoop(route: any) {
+  if (route.shuttleVariant === "station_to_campus_loop") return true;
+  if (route.shuttleVariant === "station_to_campus" || route.shuttleVariant === "campus_to_station") return false;
   const stops = route.stops || [];
   const rearGateIndex = stops.findIndex((stop: any) => /후문/.test(stop.name || ""));
   return /학내순환|순환|연결/.test(`${route.name || ""} ${route.description || ""}`) || (
@@ -169,6 +174,10 @@ export default function CampusShuttleWrapper() {
   );
   const stationRoutes = useMemo(
     () => campusRoutes.filter(hasStationSignal),
+    [campusRoutes]
+  );
+  const campusLoopRouteIds = useMemo(
+    () => new Set(campusRoutes.filter((route) => !hasStationSignal(route)).map((route) => route.id)),
     [campusRoutes]
   );
   const selectedStationRoute = useMemo(
@@ -323,7 +332,7 @@ export default function CampusShuttleWrapper() {
         if (bus.type !== "campus" || bus.status !== "active") return false;
         const routeId = bus.currentRoute?.id;
         if (mode === "station") return routeId && stationRouteIds.has(routeId);
-        return !routeId || !stationRouteIds.has(routeId);
+        return !routeId || campusLoopRouteIds.has(routeId) || !stationRouteIds.has(routeId);
       })
       .map((bus: any) => {
         const location = locationsByBus.get(bus.id);
@@ -336,7 +345,7 @@ export default function CampusShuttleWrapper() {
         };
       })
       .filter(Boolean) as BusMarker[];
-  }, [allBuses, locationsByBus, mode, stationRouteIds]);
+  }, [allBuses, locationsByBus, mode, campusLoopRouteIds, stationRouteIds]);
 
   const activeStops = mode === "station" ? stationStops : campusStops;
   const mapStops = activeStops.map((stop) => ({

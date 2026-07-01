@@ -30,6 +30,7 @@ export interface BusRoute {
   id: string;
   name: string;
   type: 'campus' | 'commuter';
+  shuttleVariant?: ShuttleVariant | null;
   description?: string | null;
   color?: string;
   region?: string;
@@ -42,6 +43,12 @@ export interface BusRoute {
   createdAt?: string;
   updatedAt: string;
 }
+
+export type ShuttleVariant =
+  | 'campus_loop'
+  | 'campus_to_station'
+  | 'station_to_campus'
+  | 'station_to_campus_loop';
 
 export interface BusStop {
   id: string;

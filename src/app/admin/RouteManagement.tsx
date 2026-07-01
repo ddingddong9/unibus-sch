@@ -7,6 +7,7 @@ interface BusRoute {
   id: string;
   name: string;
   type: "campus" | "commuter";
+  shuttleVariant?: ShuttleVariant | null;
   description?: string | null;
   color?: string;
   region?: string;
@@ -18,10 +19,61 @@ interface BusRoute {
   isActive: boolean;
 }
 
+type ShuttleVariant = "campus_loop" | "campus_to_station" | "station_to_campus" | "station_to_campus_loop";
+
 const DEFAULT_COLORS = [
   "#FFB3C6", "#FFC8A2", "#FDEEA3",
   "#B8F0B8", "#A8D8EA", "#C5A3D5", "#FFCCE7",
 ];
+
+const SHUTTLE_VARIANT_OPTIONS: Array<{ value: ShuttleVariant; label: string; hint: string }> = [
+  { value: "campus_loop", label: "학내순환", hint: "교내 정류장을 순환하는 셔틀" },
+  { value: "campus_to_station", label: "후문 → 신창역", hint: "지하철 출발 전 후문에서 출발" },
+  { value: "station_to_campus", label: "신창역 → 후문", hint: "후문 하차 후 운행 종료" },
+  { value: "station_to_campus_loop", label: "신창역 → 후문 → 학내순환", hint: "후문 도착 뒤 학내순환 연결" },
+];
+
+const getShuttleVariantLabel = (variant?: ShuttleVariant | null) =>
+  SHUTTLE_VARIANT_OPTIONS.find((option) => option.value === variant)?.label || "셔틀버스";
+
+const parseStopNames = (value: string) =>
+  value
+    .split(",")
+    .map((stop) => stop.trim())
+    .filter(Boolean);
+
+const hasStationStop = (names: string[]) => names.some((name) => /신창|순천향대역|순천향대학교역/.test(name));
+
+const validateRouteForm = (formData: {
+  name: string;
+  type: "campus" | "commuter";
+  shuttleVariant: ShuttleVariant;
+  schedule: string;
+  stops: string;
+}) => {
+  const errors: string[] = [];
+  const stopNames = parseStopNames(formData.stops);
+  const normalizedStops = stopNames.map((name) => name.replace(/\s+/g, "").toLowerCase());
+  const duplicateStop = stopNames.find((_, index) => normalizedStops.indexOf(normalizedStops[index]) !== index);
+  const scheduleTokens = formData.schedule
+    .split(/[,\n]/)
+    .map((time) => time.trim())
+    .filter(Boolean);
+  const invalidSchedule = scheduleTokens.find((time) => !/^\d{1,2}:\d{2}$/.test(time));
+
+  if (!formData.name.trim()) errors.push("노선명을 입력해 주세요.");
+  if (stopNames.length < 2) errors.push("정류장은 최소 2개 이상 입력해 주세요.");
+  if (duplicateStop) errors.push(`중복된 정류장이 있습니다: ${duplicateStop}`);
+  if (invalidSchedule) errors.push(`시간 형식은 08:20처럼 입력해 주세요: ${invalidSchedule}`);
+  if (formData.type === "campus" && formData.shuttleVariant !== "campus_loop" && !hasStationStop(stopNames)) {
+    errors.push("신창역 셔틀 유형은 정류장에 신창역 또는 순천향대역이 포함되어야 합니다.");
+  }
+  if (formData.type === "campus" && formData.shuttleVariant === "campus_loop" && hasStationStop(stopNames)) {
+    errors.push("신창역 정류장이 포함된 셔틀은 학내순환이 아닌 신창역 셔틀 유형으로 선택해 주세요.");
+  }
+
+  return { errors, stopNames };
+};
 
 export default function RouteManagement() {
   const [routes, setRoutes] = useState<BusRoute[]>([]);
@@ -32,9 +84,11 @@ export default function RouteManagement() {
   const [editingRoute, setEditingRoute] = useState<BusRoute | null>(null);
   const [mapEditingRoute, setMapEditingRoute] = useState<BusRoute | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     name: "",
     type: "campus" as "campus" | "commuter",
+    shuttleVariant: "campus_loop" as ShuttleVariant,
     description: "",
     color: "#1e3a8a",
     region: "",
@@ -64,9 +118,11 @@ export default function RouteManagement() {
 
   const handleCreate = () => {
     setEditingRoute(null);
+    setFormError(null);
     setFormData({
       name: "",
       type: "campus",
+      shuttleVariant: "campus_loop",
       description: "",
       color: "#1e3a8a",
       region: "",
@@ -81,9 +137,11 @@ export default function RouteManagement() {
 
   const handleEdit = (route: BusRoute) => {
     setEditingRoute(route);
+    setFormError(null);
     setFormData({
       name: route.name,
       type: route.type,
+      shuttleVariant: route.shuttleVariant || "campus_loop",
       description: route.description || "",
       color: route.color || "#1e3a8a",
       region: route.region || "",
@@ -97,18 +155,21 @@ export default function RouteManagement() {
   };
 
   const handleSave = async () => {
-    if (!formData.name.trim()) return;
+    const { errors, stopNames } = validateRouteForm(formData);
+    if (errors.length > 0) {
+      setFormError(errors.join("\n"));
+      return;
+    }
+
+    setFormError(null);
     setSaving(true);
     try {
-      const stopsList = formData.stops
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .map((name, index) => ({ name, order: index + 1 }));
+      const stopsList = stopNames.map((name, index) => ({ name, order: index + 1 }));
 
       const payload = {
         name: formData.name.trim(),
         type: formData.type,
+        shuttleVariant: formData.type === "campus" ? formData.shuttleVariant : null,
         description: formData.description || null,
         color: formData.color,
         region: formData.region || undefined,
@@ -128,7 +189,7 @@ export default function RouteManagement() {
       setShowModal(false);
       await fetchRoutes();
     } catch (e: any) {
-      alert(`저장 실패: ${e.message}`);
+      setFormError(`저장 실패: ${e.message}`);
     } finally {
       setSaving(false);
     }
@@ -325,6 +386,31 @@ export default function RouteManagement() {
                 </div>
               </div>
 
+              {formData.type === "campus" && (
+                <div>
+                  <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
+                    셔틀 운행 방식
+                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {SHUTTLE_VARIANT_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setFormData({ ...formData, shuttleVariant: option.value })}
+                        className={`text-left rounded-xl border px-4 py-3 transition-all ${
+                          formData.shuttleVariant === option.value
+                            ? "border-[#1e3b8a] bg-[#1e3b8a]/5"
+                            : "border-[#e2e8f0] hover:border-[#94a3b8]"
+                        }`}
+                      >
+                        <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[14px]">{option.label}</p>
+                        <p className="mt-1 font-['Public_Sans'] text-[#64748b] text-[12px] leading-[17px]">{option.hint}</p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* 지역 + 요금 */}
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -452,6 +538,16 @@ export default function RouteManagement() {
                   노선 활성화
                 </label>
               </div>
+
+              {formError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                  {formError.split("\n").map((line) => (
+                    <p key={line} className="font-['Public_Sans'] text-red-700 text-[13px] leading-6">
+                      {line}
+                    </p>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="p-6 border-t border-gray-200 flex gap-3 justify-end">
@@ -517,6 +613,11 @@ function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: Route
           {route.region && (
             <span className="inline-block bg-[#f1f5f9] text-[#64748b] px-2 py-0.5 rounded text-[12px] font-medium mb-2">
               {route.region}
+            </span>
+          )}
+          {route.type === "campus" && (
+            <span className="ml-2 inline-block bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[12px] font-semibold mb-2">
+              {getShuttleVariantLabel(route.shuttleVariant)}
             </span>
           )}
           <button
@@ -624,9 +725,18 @@ declare global {
   interface Window { naver: any; }
 }
 
+const escapeHtml = (value: string) =>
+  value.replace(/[&<>"']/g, (char) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "\"": "&quot;",
+    "'": "&#39;",
+  })[char] || char);
+
 const STOP_MARKER = (name: string, index: number) => `
   <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 7px rgba(15,23,42,0.25));cursor:grab;">
-    <div style="background:white;color:#0f172a;border:1px solid rgba(15,23,42,0.12);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;margin-bottom:4px;font-family:sans-serif;">${name}</div>
+    <div style="background:white;color:#0f172a;border:1px solid rgba(15,23,42,0.12);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;white-space:nowrap;margin-bottom:4px;font-family:sans-serif;">${escapeHtml(name)}</div>
     <div style="width:30px;height:30px;border-radius:999px;background:#1e3b8a;border:3px solid white;color:white;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:900;font-family:sans-serif;">${index}</div>
   </div>
 `;
@@ -637,6 +747,35 @@ const SHAPE_MARKER = (index: number) => `
     <div style="width:24px;height:24px;background:#f97316;border:3px solid white;transform:rotate(45deg);border-radius:5px;"></div>
   </div>
 `;
+
+const validateMapDetails = (
+  stops: BusRoute["stops"],
+  shapePoints: NonNullable<BusRoute["shapePoints"]>,
+) => {
+  const errors: string[] = [];
+  const seenOrders = new Set<number>();
+  const duplicateOrder = stops.find((stop) => {
+    if (seenOrders.has(stop.order)) return true;
+    seenOrders.add(stop.order);
+    return false;
+  });
+  const missingStopCoord = stops.find((stop) => stop.lat == null || stop.lng == null);
+  const invalidShapePoint = shapePoints.find((point) =>
+    point.lat == null ||
+    point.lng == null ||
+    !Number.isFinite(Number(point.lat)) ||
+    !Number.isFinite(Number(point.lng)) ||
+    point.afterStopOrder < 1 ||
+    point.order < 1
+  );
+
+  if (stops.length < 2) errors.push("정류장은 최소 2개 이상 필요합니다.");
+  if (duplicateOrder) errors.push(`정류장 순서가 중복되었습니다: ${duplicateOrder.order}`);
+  if (missingStopCoord) errors.push(`좌표가 없는 정류장이 있습니다: ${missingStopCoord.name}`);
+  if (invalidShapePoint) errors.push("좌표 또는 순서가 잘못된 보정점이 있습니다.");
+
+  return errors;
+};
 
 function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
   const mapRef = useRef<HTMLDivElement>(null);
@@ -870,6 +1009,12 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
   };
 
   const handleSave = async () => {
+    const validationErrors = validateMapDetails(stops, shapePoints);
+    if (validationErrors.length > 0) {
+      setMessage(validationErrors.join(" "));
+      return;
+    }
+
     setSaving(true);
     try {
       await api.updateRoute(route.id, {
