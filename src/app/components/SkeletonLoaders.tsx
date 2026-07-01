@@ -51,19 +51,6 @@ export function NoticeSkeleton() {
 export function HomeSkeleton() {
   return (
     <div className="w-full">
-      {/* Favourite Routes section */}
-      <div className="px-[24px] py-[16px]">
-        <div className="flex items-center justify-between mb-3">
-          <Shimmer className="h-[24px] w-[130px]" />
-          <Shimmer className="h-[18px] w-[32px]" />
-        </div>
-        <div className="flex gap-3 overflow-hidden">
-          {[0, 1].map((i) => (
-            <Shimmer key={i} className="min-w-[120px] h-[92px] rounded-[12px] shrink-0" />
-          ))}
-        </div>
-      </div>
-
       {/* Nearest Stop Card */}
       <div className="px-[24px] py-[16px]">
         <div className="h-[148px] w-full bg-[#dbeafe] animate-pulse rounded-[16px]" />
