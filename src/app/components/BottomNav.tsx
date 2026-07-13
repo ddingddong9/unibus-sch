@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { Bell, BusFront, House, MapPinned, UserRound } from "lucide-react";
+import svgPaths from "../../imports/svg-l5s7zp6z8c";
 import { useLanguage } from "../contexts/LanguageContext";
 import { getUnreadNoticeCount } from "../utils/notificationPreferences";
 
@@ -21,41 +21,102 @@ export default function BottomNav() {
     return () => window.removeEventListener("unibus:notification-unread", handleUnread);
   }, []);
 
-  const items = [
-    { path: "/home", label: t("홈", "Home"), icon: House },
-    { path: "/campus-shuttle", label: t("셔틀버스", "Shuttle"), icon: MapPinned },
-    { path: "/commuter-bus", label: t("통학버스", "Commuter"), icon: BusFront },
-    { path: "/notice", label: t("공지", "Notice"), icon: Bell, badge: unreadNotices > 0 },
-    { path: "/settings", label: t("프로필", "Profile"), icon: UserRound },
-  ];
-
   return (
-    <nav className="fixed bottom-0 left-1/2 z-50 w-full max-w-[430px] -translate-x-1/2 border-t border-[#dfe5ec] bg-white/95 px-2 pt-2 backdrop-blur-xl pb-safe-nav" aria-label={t("주요 메뉴", "Main navigation")}>
-      <div className="grid h-[58px] grid-cols-5">
-        {items.map((item) => {
-          const active = isActive(item.path);
-          const Icon = item.icon;
-          return (
-            <button
-              key={item.path}
-              type="button"
-              onClick={() => navigate(item.path)}
-              aria-current={active ? "page" : undefined}
-              aria-label={item.label}
-              className={`relative flex min-w-0 flex-col items-center justify-center gap-1 rounded-lg transition-colors active:bg-[#eef2f7] ${active ? "text-[#1e3a8a]" : "text-[#8390a3]"}`}
-            >
-              {active && <span className="absolute top-[-9px] h-[3px] w-7 rounded-full bg-[#1e3a8a]" />}
-              <span className="relative">
-                <Icon size={21} strokeWidth={active ? 2.5 : 2} />
-                {item.badge && !active && <span className="absolute -right-1 -top-1 size-2 rounded-full bg-[#ef4444] ring-2 ring-white" />}
-              </span>
-              <span className={`max-w-full truncate font-['Public_Sans'] text-[10px] leading-3 ${active ? "font-bold" : "font-medium"}`}>
-                {item.label}
-              </span>
-            </button>
-          );
-        })}
+    <div className="fixed backdrop-blur-[12px] bg-[rgba(255,255,255,0.95)] bottom-0 content-stretch flex items-center justify-center left-1/2 -translate-x-1/2 pt-[13px] px-[24px] w-full max-w-[430px] border-t border-[#e2e8f0] z-50 pb-safe-nav">
+      <div className="flex items-center justify-between w-full">
+        {/* Home */}
+        <button
+          onClick={() => navigate("/home")}
+          className="flex flex-col gap-[4px] items-center relative"
+        >
+          <div className="h-[19.5px] relative shrink-0 w-[17.333px]">
+            <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 17.3333 19.5">
+              <path d={svgPaths.p39defd40} fill={isActive("/home") ? "#1E3A8A" : "#94A3B8"} />
+            </svg>
+          </div>
+          <div className={`flex flex-col font-['Public_Sans'] ${isActive("/home") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
+            <p className="leading-[16.5px]" style={{ color: isActive("/home") ? "#1E3A8A" : "#94A3B8" }}>
+              {t("홈", "Home")}
+            </p>
+          </div>
+        </button>
+
+        {/* 셔틀버스 */}
+        <button
+          onClick={() => navigate("/campus-shuttle")}
+          className="flex flex-col gap-[4px] items-center relative"
+        >
+          <div className="h-[20.583px] relative shrink-0 w-[17.333px]">
+            <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 17.3333 20.5833">
+              <path d={svgPaths.p5662500} fill={isActive("/campus-shuttle") ? "#1E3A8A" : "#94A3B8"} />
+            </svg>
+          </div>
+          <div className={`flex flex-col font-['Public_Sans'] ${isActive("/campus-shuttle") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
+            <p className="leading-[16.5px]" style={{ color: isActive("/campus-shuttle") ? "#1E3A8A" : "#94A3B8" }}>
+              {t("셔틀버스", "Shuttle")}
+            </p>
+          </div>
+        </button>
+
+        {/* 통학버스 */}
+        <button
+          onClick={() => navigate("/commuter-bus")}
+          className="flex flex-col gap-[4px] items-center relative"
+        >
+          <div className="h-[20.583px] relative shrink-0 w-[17.333px]">
+            <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 17.3333 20.5833">
+              <path d={svgPaths.p5662500} fill={isActive("/commuter-bus") ? "#1E3A8A" : "#94A3B8"} />
+            </svg>
+          </div>
+          <div className={`flex flex-col font-['Public_Sans'] ${isActive("/commuter-bus") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
+            <p className="leading-[16.5px]" style={{ color: isActive("/commuter-bus") ? "#1E3A8A" : "#94A3B8" }}>
+              {t("통학버스", "Commuter")}
+            </p>
+          </div>
+        </button>
+
+        {/* Notice */}
+        <button
+          onClick={() => navigate("/notice")}
+          className="flex flex-col gap-[4px] items-center relative"
+        >
+          {unreadNotices > 0 && !isActive("/notice") && (
+            <span className="absolute right-[10px] top-[-3px] z-10 size-[8px] rounded-full bg-[#ef4444] ring-2 ring-white" />
+          )}
+          <div className="h-[21.667px] relative shrink-0 w-[17.333px]">
+            <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 17.3333 21.6667">
+              <path d={svgPaths.p3827a538} fill={isActive("/notice") ? "#1E3A8A" : "#94A3B8"} />
+            </svg>
+          </div>
+          <div className={`flex flex-col font-['Public_Sans'] ${isActive("/notice") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
+            <p className="leading-[16.5px]" style={{ color: isActive("/notice") ? "#1E3A8A" : "#94A3B8" }}>
+              {t("공지", "Notice")}
+            </p>
+          </div>
+        </button>
+
+        {/* Profile */}
+        <button
+          onClick={() => navigate("/settings")}
+          className="flex flex-col gap-[4px] items-center relative"
+        >
+          <div className="relative shrink-0 size-[17.333px]">
+            <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 17.3333 17.3333">
+              <path d={svgPaths.p1c6e17c0} fill={isActive("/settings") ? "#1E3A8A" : "#94A3B8"} />
+            </svg>
+          </div>
+          <div className={`flex flex-col font-['Public_Sans'] ${isActive("/settings") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
+            <p className="leading-[16.5px]" style={{ color: isActive("/settings") ? "#1E3A8A" : "#94A3B8" }}>
+              {t("프로필", "Profile")}
+            </p>
+          </div>
+        </button>
       </div>
-    </nav>
+
+      {/* Bottom Indicator */}
+      <div className="absolute bottom-[6px] left-1/2 -translate-x-1/2">
+        <div className="bg-[#e2e8f0] h-[6px] rounded-[9999px] w-[128px]" />
+      </div>
+    </div>
   );
 }
