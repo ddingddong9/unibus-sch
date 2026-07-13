@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
+import { Monitor, Moon, Sun } from "lucide-react";
+import { useTheme } from "next-themes";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
@@ -27,10 +29,13 @@ export default function SettingsWrapper() {
   const navigate = useNavigate();
   const { language, setLanguage, t } = useLanguage();
   const { logout, user, isAdmin, isLoading } = useAuth();
+  const { theme, setTheme } = useTheme();
   const [notifications, setNotifications] = useState(() => isNotificationEnabled());
   const [notificationPermission, setNotificationPermission] = useState(() => getNotificationPermission());
   const [location, setLocation] = useState(true);
-  const [darkMode, setDarkMode] = useState(false);
+  const [themeReady, setThemeReady] = useState(false);
+
+  useEffect(() => setThemeReady(true), []);
 
   const handleLogout = async () => {
     if (confirm(t("로그아웃 하시겠습니까?", "Are you sure you want to logout?"))) {
@@ -88,7 +93,7 @@ export default function SettingsWrapper() {
               onClick={() => navigate("/home")}
               className="flex items-center justify-center size-[40px] hover:bg-gray-100 rounded-full active:scale-95 transition-all"
             >
-              <svg className="w-3 h-5" fill="none" viewBox="0 0 12 20" stroke="#0F172A" strokeWidth="2">
+              <svg className="w-3 h-5 text-[#0f172a]" fill="none" viewBox="0 0 12 20" stroke="currentColor" strokeWidth="2">
                 <path d="M11 1L1 10L11 19" />
               </svg>
             </button>
@@ -239,7 +244,7 @@ export default function SettingsWrapper() {
               </button>
             </motion.div>
 
-            <motion.div variants={rowVariant} className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">
+            <motion.div variants={rowVariant} className="flex flex-col gap-3 p-4 bg-white border border-[#e2e8f0] rounded-[12px] sm:flex-row sm:items-center sm:justify-between">
               <div className="flex items-center gap-3">
                 <div className="bg-[#64748b]/10 rounded-[8px] size-[40px] flex items-center justify-center">
                   <svg className="w-5 h-5 text-[#64748b]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -251,23 +256,40 @@ export default function SettingsWrapper() {
                     {t("다크 모드", "Dark Mode")}
                   </p>
                   <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[12px] leading-[16px]">
-                    {t("곧 출시 예정", "Coming soon")}
+                    {theme === "dark"
+                      ? t("어두운 화면 사용", "Dark appearance")
+                      : theme === "light"
+                        ? t("밝은 화면 사용", "Light appearance")
+                        : t("기기 설정에 맞춤", "Match device settings")}
                   </p>
                 </div>
               </div>
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                disabled
-                className={`relative w-[52px] h-[28px] rounded-full transition-colors opacity-50 cursor-not-allowed ${
-                  darkMode ? "bg-[#64748b]" : "bg-[#cbd5e1]"
-                }`}
-              >
-                <div
-                  className={`absolute top-[2px] w-[24px] h-[24px] bg-white rounded-full shadow-md transition-transform ${
-                    darkMode ? "translate-x-[26px]" : "translate-x-[2px]"
-                  }`}
-                />
-              </button>
+              <div className="grid w-full grid-cols-3 gap-1 rounded-[8px] bg-[#f1f5f9] p-1 sm:w-[186px]" role="group" aria-label={t("화면 테마", "Appearance theme")}>
+                {([
+                  { value: "system", label: t("시스템", "System"), Icon: Monitor },
+                  { value: "light", label: t("라이트", "Light"), Icon: Sun },
+                  { value: "dark", label: t("다크", "Dark"), Icon: Moon },
+                ] as const).map(({ value, label, Icon }) => {
+                  const selected = themeReady && theme === value;
+                  return (
+                    <button
+                      key={value}
+                      type="button"
+                      onClick={() => setTheme(value)}
+                      aria-pressed={selected}
+                      title={label}
+                      className={`flex min-w-0 items-center justify-center gap-1 rounded-[6px] px-2 py-2 text-[11px] font-bold transition-colors ${
+                        selected
+                          ? "bg-white text-[#1e3a8a] shadow-sm"
+                          : "text-[#64748b] hover:bg-white/80"
+                      }`}
+                    >
+                      <Icon aria-hidden="true" className="h-3.5 w-3.5 shrink-0" />
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </motion.div>
 
             <motion.div variants={rowVariant} className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">

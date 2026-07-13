@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useTheme } from "next-themes";
 import Campus3DScene, {
   campusData,
   type CampusInitialView,
@@ -50,6 +51,7 @@ function projectBusToRoute(point: Point2D, path: Point2D[]) {
 }
 
 export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSelectStop }: Shuttle3DMapProps) {
+  const { resolvedTheme } = useTheme();
   const [followBusId, setFollowBusId] = useState<string | null>(null);
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
   const projectionOrigin = campusData.origin;
@@ -82,35 +84,39 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
   );
   const initialView = useMemo<CampusInitialView | null>(() => {
     if (sceneMode === "campus") {
-      const points = campusData.boundary;
-      const xs = points.map(([x]) => x);
-      const zs = points.map(([, z]) => z);
-      const campusCenter: Point2D = [
-        (Math.min(...xs) + Math.max(...xs)) / 2,
-        (Math.min(...zs) + Math.max(...zs)) / 2,
-      ];
       const rearGate = projectedStops.find((stop) => /후문|김승우/.test(stop.name));
+      const hyang3 = projectedStops.find((stop) => /향3|향설생활관\s*3/.test(stop.name));
+      const mainGate = projectedStops.find((stop) => /정문/.test(stop.name));
       const rearGatePoint = rearGate
         ? projectCoordinate(rearGate.latitude, rearGate.longitude, campusData.origin)
         : projectCoordinate(36.77276, 126.933816, campusData.origin);
+      const hyang3Point = hyang3
+        ? projectCoordinate(hyang3.latitude, hyang3.longitude, campusData.origin)
+        : projectCoordinate(36.768228, 126.935383, campusData.origin);
+      const mainGatePoint = mainGate
+        ? projectCoordinate(mainGate.latitude, mainGate.longitude, campusData.origin)
+        : projectCoordinate(36.769014, 126.927978, campusData.origin);
+      const framingPoints = [rearGatePoint, hyang3Point, mainGatePoint];
+      const xs = framingPoints.map(([x]) => x);
+      const zs = framingPoints.map(([, z]) => z);
       const target: Point2D = [
-        campusCenter[0] + (rearGatePoint[0] - campusCenter[0]) * 0.42 - 70,
-        campusCenter[1] + (rearGatePoint[1] - campusCenter[1]) * 0.42,
+        (Math.min(...xs) + Math.max(...xs)) / 2,
+        (Math.min(...zs) + Math.max(...zs)) / 2,
       ];
       const outwardX = rearGatePoint[0] - target[0];
       const outwardZ = rearGatePoint[1] - target[1];
       const outwardLength = Math.hypot(outwardX, outwardZ) || 1;
       const span = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
-      const distance = Math.max(2_500, span * 3.1);
+      const distance = Math.max(2_650, span * 3.9);
 
       return {
         target,
         distance,
         cameraPosition: [
-          rearGatePoint[0] + (outwardX / outwardLength) * 300,
-          rearGatePoint[1] + (outwardZ / outwardLength) * 300,
+          rearGatePoint[0] + (outwardX / outwardLength) * 440,
+          rearGatePoint[1] + (outwardZ / outwardLength) * 440,
         ],
-        cameraHeight: distance * 0.68,
+        cameraHeight: distance * 0.82,
       };
     }
 
@@ -126,12 +132,12 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
 
       return {
         target,
-        distance: 360,
+        distance: 720,
         cameraPosition: [
-          eastGate[0] + unitX * 115 - unitZ * 42,
-          eastGate[1] + unitZ * 115 + unitX * 42,
+          eastGate[0] + unitX * 260 - unitZ * 80,
+          eastGate[1] + unitZ * 260 + unitX * 80,
         ],
-        cameraHeight: 132,
+        cameraHeight: 260,
       };
     }
 
@@ -167,7 +173,7 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
 
   return (
     <Campus3DScene
-      isNight={false}
+      isNight={resolvedTheme === "dark"}
       isRunning
       autoRotate={false}
       showRoute
