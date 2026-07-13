@@ -1,11 +1,12 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Box, Bus, Clock, Map as MapIcon, MapPin, Route as RouteIcon, Train } from "lucide-react";
+import { Box, Bus, Map as MapIcon, MapPin, Route as RouteIcon, Train } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import NaverMapComponent from "../components/NaverMapComponent";
 import { api } from "../services/api";
 import { supabase } from "../services/supabase";
 import { estimateStopArrivals } from "../utils/shuttleEta";
+import { formatServiceTime, getNextShuttleService, getServiceRuleSummary } from "../utils/shuttleSchedule";
 
 const Shuttle3DMap = lazy(() => import("../components/Shuttle3DMap"));
 
@@ -26,6 +27,8 @@ interface BusMarker {
   label: string;
   speed: number;
   timestamp: string;
+  servicePhase?: string | null;
+  plannedDepartureAt?: string | null;
 }
 
 interface FocusLocation {
@@ -87,37 +90,6 @@ function continuesCampusLoop(route: any) {
   );
 }
 
-function parseTimes(schedule?: string | null) {
-  return (schedule || "")
-    .split(/[,\n]/)
-    .map((time) => time.trim())
-    .filter(Boolean)
-    .filter((time) => /^\d{1,2}:\d{2}$/.test(time));
-}
-
-function parseOffsetMinutes(route: any) {
-  const text = `${route.duration || ""} ${route.description || ""}`;
-  const match = text.match(/(\d{1,2})\s*분/);
-  return match ? Number(match[1]) : 10;
-}
-
-function minusMinutes(time: string, minutes: number) {
-  const [hour, minute] = time.split(":").map(Number);
-  const date = new Date(2000, 0, 1, hour, minute);
-  date.setMinutes(date.getMinutes() - minutes);
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
-function nextTime(times: string[]) {
-  if (times.length === 0) return null;
-  const now = new Date();
-  const current = now.getHours() * 60 + now.getMinutes();
-  return times.find((time) => {
-    const [hour, minute] = time.split(":").map(Number);
-    return hour * 60 + minute >= current;
-  }) || times[0];
-}
-
 function formatRouteStops(stops: any[]): ShuttleStop[] {
   return stops
     .filter((stop: any) => stop.lat != null && stop.lng != null)
@@ -151,6 +123,7 @@ export default function CampusShuttleWrapper() {
   const [stationStops, setStationStops] = useState<ShuttleStop[]>([]);
   const [sheetVisible, setSheetVisible] = useState(true);
   const [dragY, setDragY] = useState(0);
+  const [clockTick, setClockTick] = useState(() => Date.now());
   const isDragging = useRef(false);
   const dragStartY = useRef(0);
   const currentDragY = useRef(0);
@@ -175,6 +148,11 @@ export default function CampusShuttleWrapper() {
     () => new Set(stationRoutes.map((route) => route.id)),
     [stationRoutes]
   );
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockTick(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const fetchRoutes = async () => {
@@ -251,7 +229,7 @@ export default function CampusShuttleWrapper() {
       .channel(`shuttle-tracking-${Date.now()}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "bus_locations" },
+        { event: "*", schema: "public", table: "bus_latest_state" },
         (payload) => {
           const row = payload.new as any;
           setLocationsByBus((previous) => {
@@ -331,6 +309,8 @@ export default function CampusShuttleWrapper() {
           label: bus.name,
           speed: Number(location.speed) || 0,
           timestamp: location.timestamp,
+          servicePhase: bus.activeTrip?.servicePhase,
+          plannedDepartureAt: bus.activeTrip?.plannedDepartureAt,
         };
       })
       .filter(Boolean) as BusMarker[];
@@ -351,9 +331,9 @@ export default function CampusShuttleWrapper() {
       routePath,
       activeStops.map((stop) => ({ id: stop.id, order: stop.order, lat: stop.lat, lng: stop.lng })),
       visibleBuses,
-      { loop: mode === "campus", fallbackSpeedMps: mode === "campus" ? 6.2 : 9.5 },
+      { loop: mode === "campus", fallbackSpeedMps: mode === "campus" ? 6.2 : 9.5, nowMs: clockTick },
     ),
-    [activeStops, mode, routePath, visibleBuses],
+    [activeStops, mode, routePath, visibleBuses, clockTick],
   );
   const stopsWithArrival = useMemo(() => activeStops.map((stop) => ({
     ...stop,
@@ -361,12 +341,14 @@ export default function CampusShuttleWrapper() {
   })), [activeStops, arrivalEstimates]);
 
   const selectedStationDirection = selectedStationRoute ? routeDirection(selectedStationRoute) : "to-station";
-  const selectedStationTimes = selectedStationRoute ? parseTimes(selectedStationRoute.schedule) : [];
-  const selectedStationNextTime = nextTime(selectedStationTimes);
-  const stationOffset = selectedStationRoute ? parseOffsetMinutes(selectedStationRoute) : 10;
-  const stationDeparture = selectedStationNextTime && selectedStationDirection === "to-station"
-    ? minusMinutes(selectedStationNextTime, stationOffset)
-    : selectedStationNextTime;
+  const selectedStationService = selectedStationRoute ? getNextShuttleService(selectedStationRoute, new Date(clockTick)) : null;
+  const stationOffset = selectedStationRoute?.departureOffsetMinutes ?? 10;
+  const stationWait = selectedStationRoute?.boardingWaitMinutes ?? 5;
+  const selectedStationEventTime = selectedStationService
+    ? formatServiceTime(selectedStationService.eventAt, selectedStationService.dayOffset) : null;
+  const stationDeparture = selectedStationService
+    ? formatServiceTime(selectedStationService.departureAt, selectedStationService.dayOffset) : null;
+  const campusLoopRoute = campusRoutes.find((route) => route.shuttleVariant === "campus_loop") || null;
 
   const handleBusClick = useCallback((busId: string) => {
     const bus = visibleBuses.find((item) => item.id === busId);
@@ -512,7 +494,7 @@ export default function CampusShuttleWrapper() {
                   <p className="font-['Public_Sans'] text-[#64748b] text-[12px] leading-[18px]">
                     {mode === "station"
                       ? "신창역과 후문을 오가는 셔틀입니다"
-                      : "교내 정류장을 순환하는 셔틀입니다"}
+                      : campusLoopRoute ? getServiceRuleSummary(campusLoopRoute) : "교내 정류장을 순환하는 셔틀입니다"}
                   </p>
                 </div>
                 <button
@@ -544,7 +526,7 @@ export default function CampusShuttleWrapper() {
                           {selectedStationRoute
                             ? selectedStationDirection === "to-station"
                               ? `지하철 출발 ${stationOffset}분 전 후문 출발`
-                              : continuesCampusLoop(selectedStationRoute) ? "후문 도착 후 학내순환 연결" : "후문 종착"
+                              : `지하철 도착 ${stationWait}분 후 출발 · ${continuesCampusLoop(selectedStationRoute) ? "학내순환 1회" : "후문 종착"}`
                             : "관리자 > 버스 노선 관리에서 신창역 정류장이 포함된 셔틀버스 노선을 만들면 표시됩니다"}
                         </p>
                       </div>
@@ -553,20 +535,20 @@ export default function CampusShuttleWrapper() {
                       <div className="mt-4 grid grid-cols-2 gap-3">
                         <div className="rounded-[14px] bg-white p-3">
                           <p className="font-['Public_Sans'] text-[11px] font-bold uppercase tracking-[0.3px] text-[#94a3b8]">
-                            {selectedStationDirection === "to-station" ? "후문 출발" : "신창역 출발"}
+                            {selectedStationDirection === "to-station" ? "후문 출발" : "지하철 도착"}
                           </p>
                           <p className="mt-1 font-['Public_Sans'] text-[22px] font-black text-[#1e3a8a]">
-                            {stationDeparture || "--:--"}
+                            {(selectedStationDirection === "to-station" ? stationDeparture : selectedStationEventTime) || "--:--"}
                           </p>
                         </div>
                         <div className="rounded-[14px] bg-white p-3">
                           <p className="font-['Public_Sans'] text-[11px] font-bold uppercase tracking-[0.3px] text-[#94a3b8]">
-                            {selectedStationDirection === "to-station" ? "지하철 출발" : "운행 방식"}
+                            {selectedStationDirection === "to-station" ? "지하철 출발" : "신창역 출발"}
                           </p>
                           <p className="mt-1 font-['Public_Sans'] text-[16px] font-black text-[#0f172a] leading-[28px]">
                             {selectedStationDirection === "to-station"
-                              ? selectedStationNextTime || "--:--"
-                              : continuesCampusLoop(selectedStationRoute) ? "순환 연결" : "후문 종착"}
+                              ? selectedStationEventTime || "--:--"
+                              : stationDeparture || "--:--"}
                           </p>
                         </div>
                       </div>
@@ -661,16 +643,6 @@ export default function CampusShuttleWrapper() {
                 )}
               </div>
 
-              {mode === "station" && (
-                <div className="w-full rounded-[16px] bg-[#f8fafc] px-4 py-3">
-                  <div className="flex items-center gap-2 text-[#64748b]">
-                    <Clock className="h-4 w-4" />
-                    <p className="font-['Public_Sans'] text-[12px] font-semibold">
-                      출발 시간과 정류장 위치는 관리자 노선 관리에서 수정한 값과 연동됩니다.
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>

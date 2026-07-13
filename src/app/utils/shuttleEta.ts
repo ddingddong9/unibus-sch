@@ -9,6 +9,8 @@ export interface EtaBus {
   position: RouteCoordinate;
   speed?: number | null;
   timestamp?: string | null;
+  plannedDepartureAt?: string | null;
+  servicePhase?: string | null;
 }
 
 export interface EtaStop extends RouteCoordinate {
@@ -108,10 +110,10 @@ function projectToRoute(point: RouteCoordinate, route: RouteMetric): RouteProjec
   };
 }
 
-function isFresh(timestamp?: string | null) {
+function isFresh(timestamp?: string | null, nowMs = Date.now()) {
   if (!timestamp) return false;
   const updatedAt = new Date(timestamp).getTime();
-  return Number.isFinite(updatedAt) && Date.now() - updatedAt <= LOCATION_STALE_MS;
+  return Number.isFinite(updatedAt) && nowMs - updatedAt <= LOCATION_STALE_MS;
 }
 
 function isClosedRoute(path: [number, number][], route: RouteMetric) {
@@ -125,7 +127,7 @@ export function estimateStopArrivals(
   path: [number, number][],
   stops: EtaStop[],
   buses: EtaBus[],
-  options: { loop?: boolean; fallbackSpeedMps?: number } = {},
+  options: { loop?: boolean; fallbackSpeedMps?: number; nowMs?: number } = {},
 ): Map<string, StopArrivalEstimate> {
   const route = createRouteMetric(path);
   const estimates = new Map<string, StopArrivalEstimate>();
@@ -145,7 +147,7 @@ export function estimateStopArrivals(
   const loop = options.loop ?? isClosedRoute(path, route);
   const projectedBuses = buses.map((bus) => ({
     bus,
-    fresh: isFresh(bus.timestamp),
+    fresh: isFresh(bus.timestamp, options.nowMs),
     projection: projectToRoute(bus.position, route),
   }));
 
@@ -170,7 +172,10 @@ export function estimateStopArrivals(
       const effectiveSpeed = Number.isFinite(reportedSpeed) && reportedSpeed >= 1.4
         ? Math.min(22, Math.max(fallbackSpeed * 0.65, reportedSpeed))
         : fallbackSpeed;
-      const minutes = Math.max(1, Math.ceil((remainingMeters / effectiveSpeed + 20) / 60));
+      const departureWaitSeconds = bus.servicePhase === "waiting_station" && bus.plannedDepartureAt
+        ? Math.max(0, (new Date(bus.plannedDepartureAt).getTime() - (options.nowMs ?? Date.now())) / 1000)
+        : 0;
+      const minutes = Math.max(1, Math.ceil((remainingMeters / effectiveSpeed + departureWaitSeconds + 20) / 60));
       const estimate: StopArrivalEstimate = {
         busId: bus.id,
         busLabel: bus.label,

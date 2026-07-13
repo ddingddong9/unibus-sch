@@ -35,6 +35,11 @@ export interface BusRoute {
   color?: string;
   region?: string;
   schedule?: string;   // 콤마로 구분된 시간 "06:30, 07:30"
+  scheduleBasis?: 'bus_departure' | 'train_departure' | 'train_arrival' | null;
+  intervalMinutes?: number | null;
+  departureOffsetMinutes?: number | null;
+  boardingWaitMinutes?: number | null;
+  continuationRouteId?: string | null;
   duration?: string;   // "50분"
   fare?: string;       // "₩3,500"
   stops: BusStop[];
