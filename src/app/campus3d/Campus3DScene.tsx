@@ -11,7 +11,7 @@ import {
   polygonCenter,
   projectCoordinate,
 } from "./campus-geometry";
-import type { CampusArea, CampusBuilding, CampusData, CampusStop, Point2D } from "./types";
+import type { CampusArea, CampusBuilding, CampusData, CampusRoad, CampusStop, Point2D } from "./types";
 import CampusStructures from "./CampusStructures";
 import TerrainSurface from "./TerrainSurface";
 import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
@@ -153,6 +153,54 @@ function shapeFromPoints(points: Point2D[]) {
   shape.closePath();
   return shape;
 }
+
+type TerrainPoint = [number, number, number];
+
+function drapePathToTerrain(
+  points: Point2D[],
+  clearance: number,
+  maxSegmentLength = 7,
+): TerrainPoint[] {
+  if (points.length === 0) return [];
+  if (points.length === 1) {
+    const [x, z] = points[0];
+    return [[x, getTerrainHeight(x, z) + clearance, z]];
+  }
+
+  const terrainPoints: TerrainPoint[] = [];
+  for (let index = 1; index < points.length; index += 1) {
+    const [fromX, fromZ] = points[index - 1];
+    const [toX, toZ] = points[index];
+    const distance = Math.hypot(toX - fromX, toZ - fromZ);
+    const steps = Math.max(1, Math.ceil(distance / maxSegmentLength));
+
+    for (let step = index === 1 ? 0 : 1; step <= steps; step += 1) {
+      const progress = step / steps;
+      const x = THREE.MathUtils.lerp(fromX, toX, progress);
+      const z = THREE.MathUtils.lerp(fromZ, toZ, progress);
+      terrainPoints.push([x, getTerrainHeight(x, z) + clearance, z]);
+    }
+  }
+  return terrainPoints;
+}
+
+const TerrainRoad = memo(function TerrainRoad({ road, isNight }: { road: CampusRoad; isNight: boolean }) {
+  const pedestrian = ["footway", "path", "steps", "cycleway"].includes(road.kind);
+  const points = useMemo(
+    () => drapePathToTerrain(road.points, pedestrian ? 0.78 : 1.12, pedestrian ? 5 : 7),
+    [pedestrian, road.points],
+  );
+
+  return (
+    <Line
+      points={points}
+      color={pedestrian ? isNight ? "#59665f" : "#d8cfba" : isNight ? "#27323a" : "#5b6265"}
+      lineWidth={pedestrian ? 1.2 : Math.min(road.width, 5.5)}
+      transparent
+      opacity={pedestrian ? 0.72 : 1}
+    />
+  );
+});
 
 const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; isNight: boolean }) {
   const geometry = useMemo(() => {
@@ -581,10 +629,18 @@ function CampusWorld(props: Campus3DSceneProps) {
     })),
     [props.routeStops],
   );
-  const outerRoadLabel = useMemo(
-    () => projectCoordinate(36.774595, 126.932422, campusData.origin),
+  const boundaryPoints = useMemo(
+    () => drapePathToTerrain([...campusData.boundary, campusData.boundary[0]], 0.82, 7),
     [],
   );
+  const outerRoad = useMemo(
+    () => CAMPUS_OUTER_ROAD.map((point) => projectCoordinate(point.latitude, point.longitude, campusData.origin)),
+    [],
+  );
+  const outerRoadSurface = useMemo(() => drapePathToTerrain(outerRoad, 1.18, 6), [outerRoad]);
+  const outerRoadCenter = useMemo(() => drapePathToTerrain(outerRoad, 1.27, 6), [outerRoad]);
+  const routeSurface = useMemo(() => drapePathToTerrain(route, 2.18, 6), [route]);
+  const routeHighlight = useMemo(() => drapePathToTerrain(route, 2.27, 6), [route]);
 
   return (
     <>
@@ -612,42 +668,22 @@ function CampusWorld(props: Campus3DSceneProps) {
       />
       <TerrainSurface isNight={props.isNight} />
       <Line
-        points={[...campusData.boundary, campusData.boundary[0]].map(([x, z]) => [x, getTerrainHeight(x, z) + 0.65, z])}
+        points={boundaryPoints}
         color={props.isNight ? "#6f857b" : "#748276"}
         lineWidth={0.8}
         transparent
         opacity={0.42}
       />
       {campusData.areas.map((area) => <AreaMesh key={area.id} area={area} isNight={props.isNight} />)}
-      <group position={[0, 0.55, 0]}>
-        {campusData.roads.map((road) => {
-          const pedestrian = ["footway", "path", "steps", "cycleway"].includes(road.kind);
-          return (
-            <Line
-              key={road.id}
-              points={road.points.map(([x, z]) => [x, getTerrainHeight(x, z), z])}
-              color={pedestrian ? props.isNight ? "#59665f" : "#d8cfba" : props.isNight ? "#27323a" : "#5b6265"}
-              lineWidth={pedestrian ? 1.2 : Math.min(road.width, 5.5)}
-              transparent
-              opacity={pedestrian ? 0.72 : 1}
-            />
-          );
-        })}
-      </group>
-      <group position={[0, 0.7, 0]}>
+      {campusData.roads.map((road) => <TerrainRoad key={road.id} road={road} isNight={props.isNight} />)}
+      <group>
         <Line
-          points={CAMPUS_OUTER_ROAD.map((point) => {
-            const [x, z] = projectCoordinate(point.latitude, point.longitude, campusData.origin);
-            return [x, getTerrainHeight(x, z), z];
-          })}
+          points={outerRoadSurface}
           color={props.isNight ? "#242f37" : "#555d61"}
           lineWidth={6.5}
         />
         <Line
-          points={CAMPUS_OUTER_ROAD.map((point) => {
-            const [x, z] = projectCoordinate(point.latitude, point.longitude, campusData.origin);
-            return [x, getTerrainHeight(x, z) + 0.08, z];
-          })}
+          points={outerRoadCenter}
           color={props.isNight ? "#aeb7bc" : "#e7eaeb"}
           lineWidth={0.8}
           transparent
@@ -666,14 +702,8 @@ function CampusWorld(props: Campus3DSceneProps) {
       <CampusStructures data={campusData} isNight={props.isNight} />
       {props.showRoute ? (
         <group>
-          <Line points={route.map(([x, z]) => [x, getTerrainHeight(x, z) + 2, z])} color="#f59e0b" lineWidth={5.5} transparent opacity={0.94} />
-          <Line points={route.map(([x, z]) => [x, getTerrainHeight(x, z) + 2.05, z])} color="#fff7d6" lineWidth={1.25} transparent opacity={0.85} />
-          <Html position={[outerRoadLabel[0], getTerrainHeight(outerRoadLabel[0], outerRoadLabel[1]) + 8, outerRoadLabel[1]]} center distanceFactor={430} zIndexRange={[10, 0]}>
-            <div className="pointer-events-none flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/85 bg-white/94 px-2.5 py-1.5 text-[10px] font-extrabold text-[#1e3a8a] shadow-[0_8px_22px_rgba(15,23,42,0.14)] backdrop-blur-xl">
-              <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
-              온천대로 · 외곽 운행
-            </div>
-          </Html>
+          <Line points={routeSurface} color="#f59e0b" lineWidth={5.5} transparent opacity={0.94} />
+          <Line points={routeHighlight} color="#fff7d6" lineWidth={1.25} transparent opacity={0.85} />
           {stopPositions.map((stop, index) => (
             <group key={stop.id} position={[stop.position[0], getTerrainHeight(stop.position[0], stop.position[1]) + 2.2, stop.position[1]]} onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }}>
               <mesh castShadow>
