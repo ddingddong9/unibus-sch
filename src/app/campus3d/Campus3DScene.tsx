@@ -865,6 +865,7 @@ function CampusWorld(props: Campus3DSceneProps) {
         makeDefault
         enableDamping
         dampingFactor={0.075}
+        rotateSpeed={-0.7}
         autoRotate={props.autoRotate}
         autoRotateSpeed={0.45}
         minDistance={70}
