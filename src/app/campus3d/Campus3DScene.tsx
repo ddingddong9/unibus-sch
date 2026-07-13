@@ -744,8 +744,7 @@ function CampusWorld(props: Campus3DSceneProps) {
   );
   const outerRoadSurface = useMemo(() => drapePathToTerrain(outerRoad, 1.18, 6), [outerRoad]);
   const outerRoadCenter = useMemo(() => drapePathToTerrain(outerRoad, 1.27, 6), [outerRoad]);
-  const routeSurface = useMemo(() => drapePathToTerrain(route, 1.5, 6), [route]);
-  const routeHighlight = useMemo(() => drapePathToTerrain(route, 1.58, 6), [route]);
+  const routeSurface = useMemo(() => drapePathToTerrain(route, 2.1, 8), [route]);
 
   return (
     <>
@@ -807,8 +806,13 @@ function CampusWorld(props: Campus3DSceneProps) {
       <CampusStructures data={campusData} isNight={props.isNight} />
       {props.showRoute ? (
         <group>
-          <Line points={routeSurface} color="#f59e0b" lineWidth={3.4} transparent opacity={0.96} />
-          <Line points={routeHighlight} color="#fff7d6" lineWidth={0.75} transparent opacity={0.82} />
+          <Line
+            points={routeSurface}
+            color="#f59e0b"
+            lineWidth={3}
+            depthTest={false}
+            renderOrder={20}
+          />
           {stopPositions.map((stop, index) => (
             <group key={stop.id} position={[stop.position[0], getTerrainHeight(stop.position[0], stop.position[1]) + 2.2, stop.position[1]]} onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }}>
               <mesh castShadow>
