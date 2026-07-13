@@ -384,7 +384,7 @@ function CampusWorld(props: Campus3DSceneProps) {
           onSelect={props.onSelectBuilding}
         />
       ))}
-      <CampusStructures data={campusData} route={route} isNight={props.isNight} />
+      <CampusStructures data={campusData} isNight={props.isNight} />
       {props.showRoute ? (
         <group>
           <Line points={route.map(([x, z]) => [x, getTerrainHeight(x, z) + 2, z])} color="#f59e0b" lineWidth={5.5} transparent opacity={0.94} />

@@ -18,13 +18,14 @@ import {
   X,
 } from "lucide-react";
 import Campus3DScene, { campusData } from "./Campus3DScene";
-import { buildingCategory, CAMPUS_STOPS, projectCoordinate } from "./campus-geometry";
+import { buildingCategory } from "./campus-geometry";
+import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
 import type { CampusBuilding } from "./types";
 import { terrainData } from "./terrain";
 
 const LANDMARKS = [
-  { id: "main-gate", label: "정문 아치", point: projectCoordinate(CAMPUS_STOPS[4].latitude, CAMPUS_STOPS[4].longitude, campusData.origin), height: 16 },
-  { id: "rear-gate", label: "후문 보행 데크", point: projectCoordinate(CAMPUS_STOPS[0].latitude, CAMPUS_STOPS[0].longitude, campusData.origin), height: 16 },
+  { ...CAMPUS_LANDMARKS.westGate, point: getCampusLandmarkPoint(CAMPUS_LANDMARKS.westGate, campusData.origin) },
+  { ...CAMPUS_LANDMARKS.hyangseolEastGate, point: getCampusLandmarkPoint(CAMPUS_LANDMARKS.hyangseolEastGate, campusData.origin) },
 ] as const;
 
 function SceneLoading() {

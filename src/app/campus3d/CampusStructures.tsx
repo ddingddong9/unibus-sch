@@ -1,13 +1,13 @@
 import { memo, useMemo } from "react";
-import { Html, Line } from "@react-three/drei";
+import { Line } from "@react-three/drei";
 import * as THREE from "three";
-import { CAMPUS_STOPS, polygonCenter, projectCoordinate } from "./campus-geometry";
+import { polygonCenter } from "./campus-geometry";
+import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
 import type { CampusArea, CampusData, Point2D } from "./types";
 import { getTerrainHeight } from "./terrain";
 
 interface CampusStructuresProps {
   data: CampusData;
-  route: Point2D[];
   isNight: boolean;
 }
 
@@ -48,146 +48,93 @@ function getAreaMetrics(points: Point2D[]): AreaMetrics {
   };
 }
 
-function routeHeading(route: Point2D[], target: Point2D) {
-  let bestDistance = Number.POSITIVE_INFINITY;
-  let bestHeading = 0;
-  for (let index = 1; index < route.length; index += 1) {
-    const from = route[index - 1];
-    const to = route[index];
-    const dx = to[0] - from[0];
-    const dz = to[1] - from[1];
-    const lengthSquared = dx * dx + dz * dz || 1;
-    const projection = Math.max(0, Math.min(1, ((target[0] - from[0]) * dx + (target[1] - from[1]) * dz) / lengthSquared));
-    const nearestX = from[0] + dx * projection;
-    const nearestZ = from[1] + dz * projection;
-    const distance = (target[0] - nearestX) ** 2 + (target[1] - nearestZ) ** 2;
-    if (distance < bestDistance) {
-      bestDistance = distance;
-      bestHeading = Math.atan2(dx, dz);
-    }
-  }
-  return bestHeading;
-}
-
-const CampusGate = memo(function CampusGate({
+const WestGate = memo(function WestGate({
   position,
   rotation,
-  variant,
   isNight,
 }: {
   position: Point2D;
   rotation: number;
-  variant: "main" | "rear";
   isNight: boolean;
 }) {
-  const isMain = variant === "main";
-  const width = isMain ? 38 : 22;
-  const height = isMain ? 16 : 7.5;
-  const archGeometry = useMemo(() => {
-    if (!isMain) return null;
-    const curve = new THREE.CatmullRomCurve3([
-      new THREE.Vector3(-width / 2, 1, 0),
-      new THREE.Vector3(-width * 0.28, height * 0.76, 0),
-      new THREE.Vector3(0, height, 0),
-      new THREE.Vector3(width * 0.28, height * 0.76, 0),
-      new THREE.Vector3(width / 2, 1, 0),
-    ], false, "centripetal");
-    return new THREE.TubeGeometry(curve, 48, 0.85, 8, false);
-  }, [height, isMain, width]);
-
-  const structureColor = isNight ? "#d8e5f0" : "#f8fafc";
+  const stone = isNight ? "#6f7779" : "#aaa9a2";
+  const paleStone = isNight ? "#879196" : "#c5c4bc";
+  const glass = isNight ? "#67b9cb" : "#9fcbd0";
   return (
-    <group position={[position[0], getTerrainHeight(position[0], position[1]) + 0.5, position[1]]} rotation={[0, rotation, 0]}>
-      {isMain && archGeometry ? (
-        <>
-          <mesh geometry={archGeometry} position={[0, 0, -2.3]} castShadow>
-            <meshStandardMaterial color={structureColor} metalness={0.12} roughness={0.48} />
-          </mesh>
-          <mesh geometry={archGeometry} position={[0, 0, 2.3]} castShadow>
-            <meshStandardMaterial color={structureColor} metalness={0.12} roughness={0.48} />
-          </mesh>
-          <mesh position={[0, height * 0.73, 0]} castShadow>
-            <boxGeometry args={[18, 2.5, 5.6]} />
-            <meshStandardMaterial color={structureColor} roughness={0.42} />
-          </mesh>
-        </>
-      ) : (
-        <>
-          {[-width / 2, width / 2].map((x) => (
-            <group key={x} position={[x, 0, 0]}>
-              <mesh position={[0, height / 2, 0]} castShadow>
-                <boxGeometry args={[3.8, height, 5.2]} />
-                <meshStandardMaterial color={isNight ? "#747b80" : "#b8b5ad"} roughness={0.9} />
-              </mesh>
-              <mesh position={[0, height + 0.35, 0]} castShadow>
-                <boxGeometry args={[4.6, 0.7, 6]} />
-                <meshStandardMaterial color={isNight ? "#c7d1da" : "#e9e7e1"} />
-              </mesh>
-            </group>
-          ))}
-          <mesh position={[0, height - 1, 0]} castShadow>
-            <boxGeometry args={[width - 2.5, 2.3, 2.2]} />
-            <meshStandardMaterial color={isNight ? "#343c43" : "#4b5357"} metalness={0.2} />
-          </mesh>
-          <group position={[width / 2 + 5.5, 0, -6.5]}>
-            <mesh position={[0, 2.2, 0]} castShadow>
-              <boxGeometry args={[7, 4.4, 6]} />
-              <meshStandardMaterial color={structureColor} roughness={0.7} />
-            </mesh>
-            <mesh position={[0, 3, 3.05]}>
-              <planeGeometry args={[5.4, 1.5]} />
-              <meshStandardMaterial color="#5ba8c9" emissive="#2a789c" emissiveIntensity={isNight ? 0.65 : 0.1} />
-            </mesh>
-          </group>
-        </>
-      )}
+    <group position={[position[0], getTerrainHeight(position[0], position[1]) + 0.35, position[1]]} rotation={[0, rotation, 0]}>
+      <mesh position={[-24, 2.25, 0]} castShadow>
+        <boxGeometry args={[17, 4.5, 8]} />
+        <meshStandardMaterial color={paleStone} roughness={0.82} />
+      </mesh>
+      <mesh position={[-15.2, 1.8, 0]} castShadow>
+        <boxGeometry args={[1.2, 3.6, 8]} />
+        <meshStandardMaterial color={glass} metalness={0.16} roughness={0.34} />
+      </mesh>
+      <mesh position={[-38, 1.75, 0]} castShadow>
+        <boxGeometry args={[11, 3.5, 6]} />
+        <meshStandardMaterial color={stone} roughness={0.9} />
+      </mesh>
+      <mesh position={[19, 8.3, 0]} castShadow>
+        <boxGeometry args={[4.5, 16.6, 6]} />
+        <meshStandardMaterial color={stone} roughness={0.88} />
+      </mesh>
+      <mesh position={[10.8, 5.8, 0]} castShadow>
+        <boxGeometry args={[3.2, 11.6, 5]} />
+        <meshStandardMaterial color={stone} roughness={0.88} />
+      </mesh>
+      <mesh position={[30, 2, 0]} castShadow>
+        <boxGeometry args={[17.5, 4, 7]} />
+        <meshStandardMaterial color={paleStone} roughness={0.86} />
+      </mesh>
+      {[16.3, 21.7].map((x) => (
+        <mesh key={x} position={[x, 8.3, -3.04]}>
+          <planeGeometry args={[1.05, 11.8]} />
+          <meshStandardMaterial color={isNight ? "#d8e6e7" : "#e8ece8"} />
+        </mesh>
+      ))}
     </group>
   );
 });
 
-interface BridgePathProps {
+interface SegmentedBeamProps {
   points: [number, number, number][];
-  width?: number;
+  width: number;
+  depth: number;
   isNight: boolean;
 }
 
-const BridgePath = memo(function BridgePath({ points, width = 6.5, isNight }: BridgePathProps) {
+const SegmentedBeam = memo(function SegmentedBeam({ points, width, depth, isNight }: SegmentedBeamProps) {
   const segments = useMemo(() => {
     const curve = new THREE.CatmullRomCurve3(points.map((point) => new THREE.Vector3(...point)), false, "centripetal");
-    const samples = curve.getPoints(28);
+    const samples = curve.getPoints(24);
     return samples.slice(1).map((to, index) => {
       const from = samples[index];
       const midpoint = from.clone().add(to).multiplyScalar(0.5);
+      const direction = to.clone().sub(from);
       return {
         midpoint,
-        length: from.distanceTo(to) + 0.7,
-        angle: Math.atan2(to.x - from.x, to.z - from.z),
+        length: direction.length() + 0.18,
+        quaternion: new THREE.Quaternion().setFromUnitVectors(
+          new THREE.Vector3(0, 0, 1),
+          direction.normalize(),
+        ),
       };
     });
   }, [points]);
-  const railGeometries = useMemo(() => [-width / 2, width / 2].map((offset) => {
-    const railPoints = points.map(([x, y, z]) => new THREE.Vector3(x + offset, y + 1.45, z));
-    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPoints, false, "centripetal"), 48, 0.17, 6, false);
-  }), [points, width]);
 
   return (
     <group>
       {segments.map((segment, index) => (
-        <mesh key={index} position={segment.midpoint} rotation={[0, segment.angle, 0]} castShadow receiveShadow>
-          <boxGeometry args={[width, 0.75, segment.length]} />
-          <meshStandardMaterial color={isNight ? "#dbe8ef" : "#f7f9f8"} metalness={0.12} roughness={0.42} />
-        </mesh>
-      ))}
-      {railGeometries.map((geometry, index) => (
-        <mesh key={index} geometry={geometry} castShadow>
-          <meshStandardMaterial color={isNight ? "#c9dbe5" : "#edf3f3"} metalness={0.34} roughness={0.34} />
+        <mesh key={index} position={segment.midpoint} quaternion={segment.quaternion} castShadow>
+          <boxGeometry args={[width, depth, segment.length]} />
+          <meshStandardMaterial color={isNight ? "#d7e3e8" : "#f5f6f3"} metalness={0.14} roughness={0.38} />
         </mesh>
       ))}
     </group>
   );
 });
 
-const RearGateSkywalk = memo(function RearGateSkywalk({
+const HyangseolEastGate = memo(function HyangseolEastGate({
   position,
   rotation,
   isNight,
@@ -197,45 +144,50 @@ const RearGateSkywalk = memo(function RearGateSkywalk({
   isNight: boolean;
 }) {
   const baseHeight = getTerrainHeight(position[0], position[1]);
-  const paths = useMemo(() => [
-    [[-44, 8, -13], [-24, 8.4, -7], [-7, 8.8, -2], [10, 8.5, 2], [29, 7.8, 8], [47, 7.2, 17]],
-    [[-7, 8.8, -2], [-9, 8.7, 14], [-4, 8.2, 31]],
-    [[8, 8.5, 1], [19, 8, -14], [32, 7.3, -28]],
-  ] as [number, number, number][][], []);
+  const ribOffsets = [-3.2, -1.6, 0, 1.6, 3.2];
 
   return (
     <group position={[position[0], baseHeight, position[1]]} rotation={[0, rotation, 0]}>
-      <mesh position={[0, 4.2, 0]} castShadow>
-        <cylinderGeometry args={[5.4, 6.2, 8.4, 32]} />
-        <meshStandardMaterial color={isNight ? "#dae5eb" : "#f3f5f3"} roughness={0.48} />
+      <mesh position={[27, 5.6, 0]} castShadow>
+        <boxGeometry args={[4.5, 11.2, 18]} />
+        <meshStandardMaterial color={isNight ? "#d6e1e5" : "#f2f3ef"} roughness={0.5} />
       </mesh>
-      <mesh position={[0, 8.45, 0]} castShadow receiveShadow>
-        <cylinderGeometry args={[10.5, 10.5, 0.9, 48]} />
-        <meshStandardMaterial color={isNight ? "#dce9ef" : "#fbfcfb"} metalness={0.12} roughness={0.38} />
+      <mesh position={[-11, 4.7, 0]} castShadow>
+        <boxGeometry args={[4.2, 9.4, 11]} />
+        <meshStandardMaterial color={isNight ? "#d6e1e5" : "#f2f3ef"} roughness={0.5} />
       </mesh>
-      {paths.map((points, index) => <BridgePath key={index} points={points} isNight={isNight} />)}
-      {[
-        [-31, 3.8, -9],
-        [37, 3.5, 12],
-        [-6, 3.8, 23],
-        [25, 3.5, -21],
-      ].map(([x, y, z], index) => (
-        <mesh key={index} position={[x, y, z]} castShadow>
-          <cylinderGeometry args={[0.75, 1.05, y * 2, 10]} />
-          <meshStandardMaterial color={isNight ? "#c8d7df" : "#eef2f0"} roughness={0.55} />
-        </mesh>
+      <mesh position={[-31, 3.8, -18]} castShadow>
+        <boxGeometry args={[4, 7.6, 14]} />
+        <meshStandardMaterial color={isNight ? "#d6e1e5" : "#f2f3ef"} roughness={0.5} />
+      </mesh>
+      {ribOffsets.map((offset) => (
+        <SegmentedBeam
+          key={`main-rib-${offset}`}
+          points={[[27, 10.5, offset], [18, 11.25, offset], [4, 11.6, offset], [-7, 10.7, offset], [-11, 9.5, offset]]}
+          width={0.72}
+          depth={0.68}
+          isNight={isNight}
+        />
       ))}
-      <group position={[47, 0, 18]} rotation={[0, -0.3, 0]}>
-        <mesh position={[0, 6, 0]} castShadow>
-          <boxGeometry args={[3.2, 12, 15]} />
-          <meshStandardMaterial color={isNight ? "#d9e5ea" : "#f5f7f5"} roughness={0.58} />
-        </mesh>
-        <Html position={[1.8, 6.5, 0]} center transform distanceFactor={8}>
-          <div className="whitespace-nowrap text-center text-[12px] font-black leading-tight text-slate-700">
-            SOONCHUNHYANG<br /><span className="text-blue-700">SCH</span>
-          </div>
-        </Html>
-      </group>
+      {[-1.8, 0, 1.8].map((offset) => (
+        <SegmentedBeam
+          key={`side-rib-${offset}`}
+          points={[[-9 + offset, 9.7, 0], [-15 + offset, 9.5, -7], [-23 + offset, 8.9, -13], [-31 + offset, 7.7, -18]]}
+          width={0.68}
+          depth={0.65}
+          isNight={isNight}
+        />
+      ))}
+      <SegmentedBeam
+        points={[[28, 11.4, -4.25], [17, 12.2, -4.25], [2, 12.45, -4.25], [-11, 10.4, -4.25]]}
+        width={1.25}
+        depth={1.55}
+        isNight={isNight}
+      />
+      <mesh position={[27, 5.5, -9.05]}>
+        <planeGeometry args={[2.5, 5.4]} />
+        <meshStandardMaterial color={isNight ? "#67b9cc" : "#287ca0"} emissive="#216d8c" emissiveIntensity={isNight ? 0.45 : 0.04} />
+      </mesh>
     </group>
   );
 });
@@ -387,17 +339,17 @@ const AreaOutline = memo(function AreaOutline({ area, isNight }: { area: CampusA
   );
 });
 
-export default function CampusStructures({ data, route, isNight }: CampusStructuresProps) {
-  const mainGate = projectCoordinate(CAMPUS_STOPS[4].latitude, CAMPUS_STOPS[4].longitude, data.origin);
-  const rearGate = projectCoordinate(CAMPUS_STOPS[0].latitude, CAMPUS_STOPS[0].longitude, data.origin);
+export default function CampusStructures({ data, isNight }: CampusStructuresProps) {
+  const westGate = getCampusLandmarkPoint(CAMPUS_LANDMARKS.westGate, data.origin);
+  const hyangseolEastGate = getCampusLandmarkPoint(CAMPUS_LANDMARKS.hyangseolEastGate, data.origin);
   const fountain = data.areas.find((area) => area.kind === "water");
   const shuttleStation = data.areas.find((area) => area.kind === "bus_station");
   const theater = data.buildings.find((building) => building.name === "야외 공연장");
 
   return (
     <group>
-      <CampusGate position={mainGate} rotation={routeHeading(route, mainGate)} variant="main" isNight={isNight} />
-      <RearGateSkywalk position={rearGate} rotation={routeHeading(route, rearGate)} isNight={isNight} />
+      <WestGate position={westGate} rotation={CAMPUS_LANDMARKS.westGate.rotation} isNight={isNight} />
+      <HyangseolEastGate position={hyangseolEastGate} rotation={CAMPUS_LANDMARKS.hyangseolEastGate.rotation} isNight={isNight} />
       {fountain ? <FountainFeature area={fountain} isNight={isNight} /> : null}
       {shuttleStation ? <ShuttleCanopy area={shuttleStation} isNight={isNight} /> : null}
       {theater ? <OutdoorTheater position={polygonCenter(theater.points)} isNight={isNight} /> : null}
