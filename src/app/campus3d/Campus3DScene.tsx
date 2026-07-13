@@ -10,7 +10,7 @@ import {
   polygonCenter,
   projectCoordinate,
 } from "./campus-geometry";
-import type { CampusArea, CampusBuilding, CampusData, Point2D } from "./types";
+import type { CampusArea, CampusBuilding, CampusData, CampusStop, Point2D } from "./types";
 import CampusStructures from "./CampusStructures";
 import TerrainSurface from "./TerrainSurface";
 import { getTerrainHeight } from "./terrain";
@@ -32,6 +32,13 @@ interface Campus3DSceneProps {
   showRoute: boolean;
   selectedBuildingId: string | null;
   focusTarget: { x: number; z: number; height: number } | null;
+  routePath: Point2D[] | null;
+  routeStops: CampusStop[] | null;
+  followBusId: string | null;
+  simulationSpeed: number;
+  onFollowBus: (busId: string | null) => void;
+  selectedStopId: string | null;
+  onSelectStop: (stop: CampusStop) => void;
   resetVersion: number;
   onSelectBuilding: (building: CampusBuilding | null) => void;
 }
@@ -223,25 +230,57 @@ function sampleRoute(track: RouteTrack, distance: number, position: THREE.Vector
   };
 }
 
-function ShuttleBus({ track, offset, running, label }: { track: RouteTrack; offset: number; running: boolean; label: string }) {
+function ShuttleBus({
+  track,
+  offset,
+  running,
+  label,
+  followed,
+  speedMultiplier,
+  controls,
+  onFollow,
+}: {
+  track: RouteTrack;
+  offset: number;
+  running: boolean;
+  label: string;
+  followed: boolean;
+  speedMultiplier: number;
+  controls: React.RefObject<OrbitControlsImpl | null>;
+  onFollow: (busId: string | null) => void;
+}) {
   const group = useRef<THREE.Group>(null);
+  const camera = useThree((state) => state.camera);
   const distance = useRef(offset);
   const targetQuaternion = useMemo(() => new THREE.Quaternion(), []);
   const targetEuler = useMemo(() => new THREE.Euler(), []);
   const targetPosition = useMemo(() => new THREE.Vector3(), []);
+  const cameraPosition = useMemo(() => new THREE.Vector3(), []);
+  const cameraTarget = useMemo(() => new THREE.Vector3(), []);
 
   useFrame((_, delta) => {
     if (!group.current || track.points.length < 2) return;
-    if (running) distance.current += delta * 10.5;
+    if (running) distance.current += delta * 10.5 * speedMultiplier;
     const sample = sampleRoute(track, distance.current, targetPosition);
     group.current.position.copy(targetPosition);
     targetEuler.set(0, sample.angle, 0);
     targetQuaternion.setFromEuler(targetEuler);
     group.current.quaternion.slerp(targetQuaternion, 1 - Math.exp(-delta * 7));
+    if (followed) {
+      cameraPosition.set(
+        targetPosition.x - Math.sin(sample.angle) * 42 + 18,
+        targetPosition.y + 28,
+        targetPosition.z - Math.cos(sample.angle) * 42 + 18,
+      );
+      cameraTarget.set(targetPosition.x, targetPosition.y + 3, targetPosition.z);
+      camera.position.lerp(cameraPosition, 1 - Math.exp(-delta * 2.4));
+      controls.current?.target.lerp(cameraTarget, 1 - Math.exp(-delta * 3.2));
+      controls.current?.update();
+    }
   });
 
   return (
-    <group ref={group} scale={1.5}>
+    <group ref={group} scale={1.5} onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : label); }}>
       <mesh castShadow position={[0, 1.55, 0]}>
         <boxGeometry args={[3.1, 2.5, 7.4]} />
         <meshStandardMaterial color="#f8fafc" roughness={0.5} metalness={0.08} />
@@ -265,10 +304,10 @@ function ShuttleBus({ track, offset, running, label }: { track: RouteTrack; offs
         </mesh>
       )))}
       <Html position={[0, 6.6, 0]} center distanceFactor={330} zIndexRange={[16, 0]}>
-        <div className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/85 bg-white/95 px-2.5 py-1.5 text-[10px] font-extrabold text-[#1e3a8a] shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+        <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : label); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
           <span className={`h-2 w-2 rounded-full ring-2 ring-white ${running ? "animate-pulse bg-[#22c55e]" : "bg-[#94a3b8]"}`} />
           {label}
-        </div>
+        </button>
       </Html>
     </group>
   );
@@ -319,14 +358,17 @@ function CameraDirector({
 
 function CampusWorld(props: Campus3DSceneProps) {
   const controls = useRef<OrbitControlsImpl>(null);
-  const route = useMemo(() => createCampusRoute(campusData), []);
+  const route = useMemo(
+    () => props.routePath && props.routePath.length > 1 ? props.routePath : createCampusRoute(campusData),
+    [props.routePath],
+  );
   const routeTrack = useMemo(() => createRouteTrack(route), [route]);
   const stopPositions = useMemo(
-    () => CAMPUS_STOPS.map((stop) => ({
+    () => (props.routeStops ?? CAMPUS_STOPS).map((stop) => ({
       ...stop,
       position: projectCoordinate(stop.latitude, stop.longitude, campusData.origin),
     })),
-    [],
+    [props.routeStops],
   );
 
   return (
@@ -345,7 +387,7 @@ function CampusWorld(props: Campus3DSceneProps) {
         position={props.isNight ? [-240, 330, 120] : [280, 480, 180]}
         intensity={props.isNight ? 1.4 : 2.8}
         color={props.isNight ? "#93b8ff" : "#fff2d8"}
-        shadow-mapSize={[2048, 2048]}
+        shadow-mapSize={[1024, 1024]}
         shadow-camera-left={-520}
         shadow-camera-right={520}
         shadow-camera-top={520}
@@ -391,26 +433,26 @@ function CampusWorld(props: Campus3DSceneProps) {
           <Line points={route.map(([x, z]) => [x, getTerrainHeight(x, z) + 2, z])} color="#f59e0b" lineWidth={5.5} transparent opacity={0.94} />
           <Line points={route.map(([x, z]) => [x, getTerrainHeight(x, z) + 2.05, z])} color="#fff7d6" lineWidth={1.25} transparent opacity={0.85} />
           {stopPositions.map((stop, index) => (
-            <group key={stop.id} position={[stop.position[0], getTerrainHeight(stop.position[0], stop.position[1]) + 2.2, stop.position[1]]}>
+            <group key={stop.id} position={[stop.position[0], getTerrainHeight(stop.position[0], stop.position[1]) + 2.2, stop.position[1]]} onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }}>
               <mesh castShadow>
                 <cylinderGeometry args={[3.5, 3.5, 1.5, 24]} />
                 <meshStandardMaterial color="#ffffff" emissive="#f59e0b" emissiveIntensity={0.15} />
               </mesh>
               <mesh position={[0, 0.8, 0]}>
                 <cylinderGeometry args={[2.25, 2.25, 1.7, 24]} />
-                <meshStandardMaterial color="#f59e0b" />
+                <meshStandardMaterial color={props.selectedStopId === stop.id ? "#1e3a8a" : "#f59e0b"} />
               </mesh>
               <Html position={[0, 7, 0]} center zIndexRange={[12, 0]}>
-                <div className="flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/85 bg-white/95 py-1.5 pl-1.5 pr-2.5 text-[10px] font-extrabold text-[#0f172a] shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+                <button type="button" onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl border py-1.5 pl-1.5 pr-2.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl ${props.selectedStopId === stop.id ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#0f172a]"}`}>
                   <span className="grid h-5 w-5 place-items-center rounded-lg bg-[#1e3a8a] text-[9px] font-extrabold text-white">{index + 1}</span>
                   {stop.name}
-                </div>
+                </button>
               </Html>
             </group>
           ))}
-          <ShuttleBus track={routeTrack} offset={0} running={props.isRunning} label="SCH 01" />
-          <ShuttleBus track={routeTrack} offset={routeTrack.total / 3} running={props.isRunning} label="SCH 02" />
-          <ShuttleBus track={routeTrack} offset={(routeTrack.total * 2) / 3} running={props.isRunning} label="SCH 03" />
+          <ShuttleBus track={routeTrack} offset={0} running={props.isRunning} label="SCH 01" followed={props.followBusId === "SCH 01"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
+          <ShuttleBus track={routeTrack} offset={routeTrack.total / 3} running={props.isRunning} label="SCH 02" followed={props.followBusId === "SCH 02"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
+          <ShuttleBus track={routeTrack} offset={(routeTrack.total * 2) / 3} running={props.isRunning} label="SCH 03" followed={props.followBusId === "SCH 03"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
         </group>
       ) : null}
       <OrbitControls
@@ -435,7 +477,8 @@ export default function Campus3DScene(props: Campus3DSceneProps) {
   return (
     <Canvas
       shadows
-      dpr={[1, 1.75]}
+      dpr={[1, 1.5]}
+      performance={{ min: 0.5 }}
       camera={{ position: [560, 900, 720], fov: 42, near: 1, far: 4200 }}
       gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
       onPointerMissed={() => props.onSelectBuilding(null)}

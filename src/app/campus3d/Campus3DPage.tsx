@@ -4,12 +4,14 @@ import {
   BusFront,
   Compass,
   Expand,
+  Gauge,
   Layers3,
   Maximize2,
   Minimize2,
   Moon,
   Pause,
   Play,
+  Presentation,
   Rotate3D,
   RotateCcw,
   Route,
@@ -18,10 +20,11 @@ import {
   X,
 } from "lucide-react";
 import Campus3DScene, { campusData } from "./Campus3DScene";
-import { buildingCategory } from "./campus-geometry";
+import { buildingCategory, projectCoordinate } from "./campus-geometry";
 import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
-import type { CampusBuilding } from "./types";
+import type { CampusBuilding, CampusStop, Point2D } from "./types";
 import { terrainData } from "./terrain";
+import { api } from "../services/api";
 
 const LANDMARKS = [
   { ...CAMPUS_LANDMARKS.westGate, point: getCampusLandmarkPoint(CAMPUS_LANDMARKS.westGate, campusData.origin) },
@@ -86,6 +89,12 @@ export default function Campus3DPage() {
   const [query, setQuery] = useState("");
   const [resetVersion, setResetVersion] = useState(0);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [remoteRoute, setRemoteRoute] = useState<Point2D[] | null>(null);
+  const [remoteStops, setRemoteStops] = useState<CampusStop[] | null>(null);
+  const [followBusId, setFollowBusId] = useState<string | null>(null);
+  const [simulationSpeed, setSimulationSpeed] = useState(1);
+  const [presentationOpen, setPresentationOpen] = useState(false);
+  const [selectedStop, setSelectedStop] = useState<CampusStop | null>(null);
 
   const buildings = useMemo(
     () => [...campusData.buildings].sort((a, b) => a.name.localeCompare(b.name, "ko")),
@@ -96,10 +105,47 @@ export default function Campus3DPage() {
     if (!normalized) return buildings;
     return buildings.filter((building) => building.name.toLocaleLowerCase("ko").includes(normalized));
   }, [buildings, query]);
+  const sceneFocusTarget = useMemo(() => {
+    if (focusTarget) return focusTarget;
+    if (!selectedStop) return null;
+    const [x, z] = projectCoordinate(selectedStop.latitude, selectedStop.longitude, campusData.origin);
+    return { x, z, height: 4, label: selectedStop.name };
+  }, [focusTarget, selectedStop]);
   useEffect(() => {
     const updateFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", updateFullscreen);
     return () => document.removeEventListener("fullscreenchange", updateFullscreen);
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    api.getCampusRoutePath()
+      .then(({ path, stops }) => {
+        if (!active || path.length < 2) return;
+        const projected = path.map(([lng, lat]) => projectCoordinate(lat, lng, campusData.origin));
+        const first = projected[0];
+        const last = projected[projected.length - 1];
+        if (Math.hypot(first[0] - last[0], first[1] - last[1]) > 1) projected.push(first);
+        setRemoteRoute(projected);
+        const validStops = stops
+          .filter((stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lng))
+          .map((stop, index) => ({
+            id: stop.id || `campus-stop-${index}`,
+            name: stop.name,
+            latitude: stop.lat,
+            longitude: stop.lng,
+          }));
+        if (validStops.length > 1) setRemoteStops(validStops);
+      })
+      .catch(() => {
+        if (active) {
+          setRemoteRoute(null);
+          setRemoteStops(null);
+        }
+      });
+    return () => {
+      active = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -117,6 +163,8 @@ export default function Campus3DPage() {
     setSelectedBuilding(null);
     setFocusTarget(null);
     setAutoRotate(false);
+    setFollowBusId(null);
+    setSelectedStop(null);
     setResetVersion((version) => version + 1);
   };
 
@@ -130,6 +178,9 @@ export default function Campus3DPage() {
     setFocusTarget(null);
     setDirectoryOpen(false);
     setAutoRotate(false);
+    setFollowBusId(null);
+    setSelectedStop(null);
+    setPresentationOpen(false);
   };
 
   const selectLandmark = (landmark: (typeof LANDMARKS)[number]) => {
@@ -137,6 +188,9 @@ export default function Campus3DPage() {
     setFocusTarget({ x: landmark.point[0], z: landmark.point[1], height: landmark.height, label: landmark.label });
     setDirectoryOpen(false);
     setAutoRotate(false);
+    setFollowBusId(null);
+    setSelectedStop(null);
+    setPresentationOpen(false);
   };
 
   return (
@@ -148,11 +202,29 @@ export default function Campus3DPage() {
           autoRotate={autoRotate}
           showRoute={showRoute}
           selectedBuildingId={selectedBuilding?.id ?? null}
-          focusTarget={focusTarget}
+          focusTarget={sceneFocusTarget}
+          routePath={remoteRoute}
+          routeStops={remoteStops}
+          followBusId={followBusId}
+          simulationSpeed={simulationSpeed}
+          onFollowBus={setFollowBusId}
           resetVersion={resetVersion}
           onSelectBuilding={(building) => {
             setSelectedBuilding(building);
-            if (building) setFocusTarget(null);
+            if (building) {
+              setFocusTarget(null);
+              setFollowBusId(null);
+              setSelectedStop(null);
+              setPresentationOpen(false);
+            }
+          }}
+          selectedStopId={selectedStop?.id ?? null}
+          onSelectStop={(stop) => {
+            setSelectedStop(stop);
+            setSelectedBuilding(null);
+            setFocusTarget(null);
+            setFollowBusId(null);
+            setPresentationOpen(false);
           }}
         />
       </Suspense>
@@ -309,6 +381,49 @@ export default function Campus3DPage() {
         </aside>
       ) : null}
 
+      {selectedStop && !selectedBuilding && !focusTarget ? (
+        <aside className="absolute bottom-[82px] right-3 z-30 w-[min(280px,calc(100%-24px))] rounded-2xl border border-white/80 bg-white/94 p-4 text-[#0f172a] shadow-[0_14px_38px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:bottom-24 sm:right-5">
+          <span className="inline-block rounded-full bg-[#eef3ff] px-2.5 py-1 text-[9px] font-extrabold text-[#1e3a8a]">학내순환 정류장</span>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-extrabold">{selectedStop.name}</h2>
+              <p className="mt-1 text-[11px] font-medium text-[#64748b]">노선 위 정류장 위치로 이동했습니다</p>
+            </div>
+            <button type="button" aria-label="정류장 정보 닫기" onClick={() => setSelectedStop(null)} className="grid h-9 w-9 shrink-0 place-items-center rounded-xl border border-[#e2e8f0] text-[#64748b] hover:bg-[#f1f5f9] hover:text-[#1e3a8a]">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </aside>
+      ) : null}
+
+      {presentationOpen ? (
+        <section className="absolute bottom-[82px] left-1/2 z-30 w-[min(420px,calc(100%-24px))] -translate-x-1/2 rounded-2xl border border-white/80 bg-white/94 p-3 shadow-[0_14px_38px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:bottom-24">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-xs font-extrabold text-[#0f172a]">발표 운행 제어</p>
+              <p className="text-[10px] font-medium text-[#64748b]">속도와 추적 차량을 선택하세요</p>
+            </div>
+            <div className="flex items-center gap-1 rounded-xl bg-[#f1f5f9] p-1">
+              {[0.5, 1, 2].map((speed) => (
+                <button key={speed} type="button" onClick={() => setSimulationSpeed(speed)} className={`h-8 min-w-10 rounded-lg px-2 text-[10px] font-extrabold ${simulationSpeed === speed ? "bg-[#1e3a8a] text-white" : "text-[#64748b] hover:text-[#1e3a8a]"}`}>
+                  {speed}x
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="mt-3 grid grid-cols-4 gap-1.5">
+            {["SCH 01", "SCH 02", "SCH 03"].map((busId) => (
+              <button key={busId} type="button" onClick={() => setFollowBusId((current) => current === busId ? null : busId)} className={`h-9 rounded-xl border text-[10px] font-extrabold ${followBusId === busId ? "border-[#1e3a8a] bg-[#eef3ff] text-[#1e3a8a]" : "border-[#e2e8f0] bg-white text-[#64748b]"}`}>
+                {busId}
+              </button>
+            ))}
+            <button type="button" onClick={() => setFollowBusId(null)} className="h-9 rounded-xl border border-[#e2e8f0] bg-white text-[10px] font-extrabold text-[#64748b]">
+              전체 보기
+            </button>
+          </div>
+        </section>
+      ) : null}
+
       <div className="absolute bottom-[max(12px,env(safe-area-inset-bottom))] left-1/2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-2xl border border-white/80 bg-white/92 p-1.5 shadow-[0_14px_38px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:bottom-5 sm:gap-1.5">
         <IconButton label="건물 탐색" active={directoryOpen} onClick={() => setDirectoryOpen((open) => !open)}>
           <Layers3 className="h-4.5 w-4.5" aria-hidden="true" />
@@ -320,11 +435,14 @@ export default function Campus3DPage() {
         <IconButton label="셔틀 경로 표시" active={showRoute} onClick={() => setShowRoute((visible) => !visible)}>
           <Route className="h-4.5 w-4.5" aria-hidden="true" />
         </IconButton>
-        <IconButton label="자동 회전" active={autoRotate} onClick={() => setAutoRotate((rotating) => !rotating)}>
+        <IconButton label="자동 회전" active={autoRotate} onClick={() => { setFollowBusId(null); setAutoRotate((rotating) => !rotating); }}>
           <Rotate3D className="h-4.5 w-4.5" aria-hidden="true" />
         </IconButton>
         <IconButton label={isNight ? "주간 모드" : "야간 모드"} active={isNight} onClick={() => setIsNight((night) => !night)}>
           {isNight ? <Sun className="h-4.5 w-4.5" /> : <Moon className="h-4.5 w-4.5" />}
+        </IconButton>
+        <IconButton label="발표 운행 제어" active={presentationOpen} onClick={() => { setSelectedStop(null); setSelectedBuilding(null); setFocusTarget(null); setPresentationOpen((open) => !open); }}>
+          {presentationOpen ? <Gauge className="h-4.5 w-4.5" /> : <Presentation className="h-4.5 w-4.5" />}
         </IconButton>
         <span className="mx-0.5 hidden h-7 w-px bg-[#e2e8f0] sm:block" />
         <div className="hidden sm:block">
