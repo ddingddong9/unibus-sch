@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import { useTheme } from "next-themes";
 import Campus3DScene, {
   campusData,
   type CampusInitialView,
@@ -51,7 +50,6 @@ function projectBusToRoute(point: Point2D, path: Point2D[]) {
 }
 
 export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSelectStop }: Shuttle3DMapProps) {
-  const { resolvedTheme } = useTheme();
   const [followBusId, setFollowBusId] = useState<string | null>(null);
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
   const projectionOrigin = campusData.origin;
@@ -173,7 +171,7 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
 
   return (
     <Campus3DScene
-      isNight={resolvedTheme === "dark"}
+      isNight={false}
       isRunning
       autoRotate={false}
       showRoute
