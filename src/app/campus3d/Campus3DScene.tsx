@@ -166,12 +166,13 @@ const BuildingMesh = memo(function BuildingMesh({
               event.stopPropagation();
               onSelect(building);
             }}
-            className={`whitespace-nowrap border px-2.5 py-1 text-[11px] font-semibold shadow-sm backdrop-blur-md transition-colors ${
+            className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl border px-2.5 py-1.5 text-[11px] font-extrabold shadow-[0_6px_18px_rgba(15,23,42,0.14)] backdrop-blur-xl transition-all ${
               selected
-                ? "border-amber-300 bg-amber-400 text-slate-950"
-                : "border-white/30 bg-slate-950/72 text-white hover:bg-slate-900"
+                ? "border-[#1e3a8a] bg-[#1e3a8a] text-white shadow-[0_8px_22px_rgba(30,58,138,0.26)]"
+                : "border-white/80 bg-white/94 text-[#0f172a] hover:border-[#1e3a8a]/30 hover:text-[#1e3a8a]"
             }`}
           >
+            <span className={`h-1.5 w-1.5 rounded-full ${selected ? "bg-white" : "bg-[#1e3a8a]"}`} />
             {building.name}
           </button>
         </Html>
@@ -264,8 +265,8 @@ function ShuttleBus({ track, offset, running, label }: { track: RouteTrack; offs
         </mesh>
       )))}
       <Html position={[0, 6.6, 0]} center distanceFactor={330} zIndexRange={[16, 0]}>
-        <div className="flex items-center gap-1.5 whitespace-nowrap border border-blue-300/70 bg-blue-600 px-2 py-1 text-[9px] font-black text-white shadow-lg">
-          <span className={`h-1.5 w-1.5 rounded-full ${running ? "animate-pulse bg-emerald-300" : "bg-slate-300"}`} />
+        <div className="flex items-center gap-1.5 whitespace-nowrap rounded-full border border-white/85 bg-white/95 px-2.5 py-1.5 text-[10px] font-extrabold text-[#1e3a8a] shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+          <span className={`h-2 w-2 rounded-full ring-2 ring-white ${running ? "animate-pulse bg-[#22c55e]" : "bg-[#94a3b8]"}`} />
           {label}
         </div>
       </Html>
