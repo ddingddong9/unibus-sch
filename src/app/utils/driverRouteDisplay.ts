@@ -7,8 +7,35 @@ export interface DriverRoute {
   description?: string | null;
   region?: string | null;
   schedule?: string | null;
+  scheduleBasis?: 'bus_departure' | 'train_departure' | 'train_arrival' | null;
+  intervalMinutes?: number | null;
+  departureOffsetMinutes?: number | null;
+  boardingWaitMinutes?: number | null;
+  continuationRouteId?: string | null;
   duration?: string | null;
   fare?: string | null;
+  stops?: Array<{
+    id: string;
+    name: string;
+    order: number;
+    lat: number | null;
+    lng: number | null;
+    arrivalTime?: string | null;
+  }>;
+}
+
+export interface DriverActiveTrip {
+  id: string;
+  routeId?: string | null;
+  status: "active" | "completed" | "cancelled";
+  currentStopOrder: number;
+  startedAt: string;
+  updatedAt?: string;
+  originRouteId?: string | null;
+  servicePhase?: 'in_service' | 'waiting_station' | 'to_station' | 'to_campus' | 'campus_loop' | 'return_to_parking';
+  scheduledEventAt?: string | null;
+  plannedDepartureAt?: string | null;
+  oneLoopOnly?: boolean;
 }
 
 export interface DriverRouteBus {
@@ -45,12 +72,12 @@ export function getRouteKindLabel(bus: DriverRouteBus) {
 export function getRouteDirectionLabel(route?: DriverRoute | null) {
   if (!route) return "노선 미지정";
   if (route.shuttleVariant === "campus_to_station") {
-    const offset = `${route.duration || ""} ${route.description || ""}`.match(/(\d{1,2})\s*분/)?.[1] || "10";
+    const offset = route.departureOffsetMinutes ?? 10;
     return `지하철 출발 ${offset}분 전 후문 출발`;
   }
-  if (route.shuttleVariant === "station_to_campus_loop") return "후문 도착 후 학내순환 연결";
-  if (route.shuttleVariant === "station_to_campus") return "후문 종착";
-  if (route.shuttleVariant === "campus_loop") return "학내순환";
+  if (route.shuttleVariant === "station_to_campus_loop") return `열차 도착 ${route.boardingWaitMinutes ?? 5}분 후 출발 · 학내순환 1회`;
+  if (route.shuttleVariant === "station_to_campus") return `열차 도착 ${route.boardingWaitMinutes ?? 5}분 후 출발 · 후문 종착`;
+  if (route.shuttleVariant === "campus_loop") return `${route.intervalMinutes ?? 10}분 간격 학내순환`;
   const text = `${route.name || ""} ${route.description || ""}`;
 
   if (/후문.*신창|학교.*신창/.test(text)) {
@@ -68,6 +95,8 @@ export function getRouteSchedulePreview(route?: DriverRoute | null) {
     .map((time) => time.trim())
     .filter(Boolean);
 
+  if (route?.shuttleVariant === "campus_loop") return `${route.intervalMinutes ?? 10}분 간격`;
   if (times.length === 0) return route?.duration || "";
-  return times.slice(0, 3).join(", ") + (times.length > 3 ? " ..." : "");
+  const prefix = route?.scheduleBasis === "train_arrival" ? "열차 도착 " : route?.scheduleBasis === "train_departure" ? "열차 출발 " : "";
+  return prefix + times.slice(0, 3).join(", ") + (times.length > 3 ? " ..." : "");
 }

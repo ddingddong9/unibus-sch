@@ -4,7 +4,12 @@ import { Hono } from "npm:hono";
 import { db } from "../db.tsx";
 import { requireAdmin, requireDriver } from "../middleware/auth.tsx";
 
-const buses = new Hono();
+const buses = new Hono<{
+  Variables: {
+    userId: string;
+    userRole: string;
+  };
+}>();
 
 const toClientBusType = (type: string) => type === 'shuttle' ? 'campus' : type === 'commute' ? 'commuter' : type;
 const toDbBusType = (type: string) => type === 'campus' ? 'shuttle' : type === 'commuter' || type === 'direct' ? 'commute' : type;
@@ -28,6 +33,15 @@ buses.get("/", async (c) => {
       return c.json({ success: false, error: "Failed to fetch buses" }, 500);
     }
 
+    const busIds = (allBuses || []).map((bus: any) => bus.id);
+    const { data: activeTrips } = busIds.length > 0
+      ? await db.from('bus_trips')
+        .select('id, bus_id, route_id, service_phase, planned_departure_at, current_stop_order')
+        .in('bus_id', busIds)
+        .eq('status', 'active')
+      : { data: [] };
+    const tripByBus = new Map((activeTrips || []).map((trip: any) => [trip.bus_id, trip]));
+
     // 프론트엔드 호환성을 위해 필드명 변환
     const formattedBuses = allBuses?.map(bus => ({
       id: bus.id,
@@ -46,6 +60,13 @@ buses.get("/", async (c) => {
         id: bus.route_id,
         name: bus.route_name,
         color: bus.route_color,
+      } : null,
+      activeTrip: tripByBus.has(bus.id) ? {
+        id: tripByBus.get(bus.id).id,
+        routeId: tripByBus.get(bus.id).route_id,
+        servicePhase: tripByBus.get(bus.id).service_phase,
+        plannedDepartureAt: tripByBus.get(bus.id).planned_departure_at,
+        currentStopOrder: tripByBus.get(bus.id).current_stop_order,
       } : null,
       createdAt: bus.created_at,
       updatedAt: bus.updated_at,
@@ -127,9 +148,9 @@ buses.get("/:id", async (c) => {
 // Get all bus locations (latest)
 buses.get("/locations/latest", async (c) => {
   try {
-    // latest_bus_locations 뷰 사용
+    // 5초마다 upsert되는 버스별 최신 상태를 직접 조회한다.
     const { data: locations, error } = await db
-      .from('latest_bus_locations')
+      .from('bus_latest_state')
       .select('*');
 
     if (error) {

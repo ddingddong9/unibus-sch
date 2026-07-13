@@ -1,10 +1,14 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Bus, Clock, MapPin, Route as RouteIcon, Train } from "lucide-react";
+import { lazy, Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Box, Bus, Map as MapIcon, MapPin, Route as RouteIcon, Train } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import NaverMapComponent from "../components/NaverMapComponent";
 import { api } from "../services/api";
 import { supabase } from "../services/supabase";
+import { estimateStopArrivals } from "../utils/shuttleEta";
+import { formatServiceTime, getNextShuttleService, getServiceRuleSummary } from "../utils/shuttleSchedule";
+
+const Shuttle3DMap = lazy(() => import("../components/Shuttle3DMap"));
 
 const CAMPUS_STOPS = [
   { id: "rear-gate", nameKo: "후문", nameEn: "Rear Gate", lat: 36.772760, lng: 126.933816, order: 1 },
@@ -21,6 +25,10 @@ interface BusMarker {
   position: { lat: number; lng: number };
   heading: number;
   label: string;
+  speed: number;
+  timestamp: string;
+  servicePhase?: string | null;
+  plannedDepartureAt?: string | null;
 }
 
 interface FocusLocation {
@@ -40,26 +48,7 @@ interface ShuttleStop {
 }
 
 type ShuttleMode = "campus" | "station";
-
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
-function getArrivalMinutes(stopLat: number, stopLng: number, buses: BusMarker[]): number | null {
-  if (buses.length === 0) return null;
-  const minDist = Math.min(
-    ...buses.map((bus) => haversineKm(bus.position.lat, bus.position.lng, stopLat, stopLng))
-  );
-  return Math.max(1, Math.round(minDist / 0.25));
-}
+type MapMode = "2d" | "3d";
 
 function hasStationSignal(route: any) {
   if (route.shuttleVariant && route.shuttleVariant !== "campus_loop") return true;
@@ -101,37 +90,6 @@ function continuesCampusLoop(route: any) {
   );
 }
 
-function parseTimes(schedule?: string | null) {
-  return (schedule || "")
-    .split(/[,\n]/)
-    .map((time) => time.trim())
-    .filter(Boolean)
-    .filter((time) => /^\d{1,2}:\d{2}$/.test(time));
-}
-
-function parseOffsetMinutes(route: any) {
-  const text = `${route.duration || ""} ${route.description || ""}`;
-  const match = text.match(/(\d{1,2})\s*분/);
-  return match ? Number(match[1]) : 10;
-}
-
-function minusMinutes(time: string, minutes: number) {
-  const [hour, minute] = time.split(":").map(Number);
-  const date = new Date(2000, 0, 1, hour, minute);
-  date.setMinutes(date.getMinutes() - minutes);
-  return `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-}
-
-function nextTime(times: string[]) {
-  if (times.length === 0) return null;
-  const now = new Date();
-  const current = now.getHours() * 60 + now.getMinutes();
-  return times.find((time) => {
-    const [hour, minute] = time.split(":").map(Number);
-    return hour * 60 + minute >= current;
-  }) || times[0];
-}
-
 function formatRouteStops(stops: any[]): ShuttleStop[] {
   return stops
     .filter((stop: any) => stop.lat != null && stop.lng != null)
@@ -149,6 +107,7 @@ export default function CampusShuttleWrapper() {
   const { t } = useLanguage();
 
   const [mode, setMode] = useState<ShuttleMode>("campus");
+  const [mapMode, setMapMode] = useState<MapMode>("2d");
   const [allRoutes, setAllRoutes] = useState<any[]>([]);
   const [stationRouteId, setStationRouteId] = useState<string | null>(null);
   const [allBuses, setAllBuses] = useState<any[]>([]);
@@ -164,6 +123,7 @@ export default function CampusShuttleWrapper() {
   const [stationStops, setStationStops] = useState<ShuttleStop[]>([]);
   const [sheetVisible, setSheetVisible] = useState(true);
   const [dragY, setDragY] = useState(0);
+  const [clockTick, setClockTick] = useState(() => Date.now());
   const isDragging = useRef(false);
   const dragStartY = useRef(0);
   const currentDragY = useRef(0);
@@ -188,6 +148,11 @@ export default function CampusShuttleWrapper() {
     () => new Set(stationRoutes.map((route) => route.id)),
     [stationRoutes]
   );
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockTick(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const fetchRoutes = async () => {
@@ -264,7 +229,7 @@ export default function CampusShuttleWrapper() {
       .channel(`shuttle-tracking-${Date.now()}`)
       .on(
         "postgres_changes",
-        { event: "INSERT", schema: "public", table: "bus_locations" },
+        { event: "*", schema: "public", table: "bus_latest_state" },
         (payload) => {
           const row = payload.new as any;
           setLocationsByBus((previous) => {
@@ -329,7 +294,7 @@ export default function CampusShuttleWrapper() {
   const visibleBuses = useMemo<BusMarker[]>(() => {
     return allBuses
       .filter((bus: any) => {
-        if (bus.type !== "campus" || bus.status !== "active") return false;
+        if (bus.type !== "campus" || bus.status !== "active" || !bus.isRunning) return false;
         const routeId = bus.currentRoute?.id;
         if (mode === "station") return routeId && stationRouteIds.has(routeId);
         return !routeId || campusLoopRouteIds.has(routeId) || !stationRouteIds.has(routeId);
@@ -342,32 +307,48 @@ export default function CampusShuttleWrapper() {
           position: { lat: location.lat, lng: location.lng },
           heading: location.heading ?? 0,
           label: bus.name,
+          speed: Number(location.speed) || 0,
+          timestamp: location.timestamp,
+          servicePhase: bus.activeTrip?.servicePhase,
+          plannedDepartureAt: bus.activeTrip?.plannedDepartureAt,
         };
       })
       .filter(Boolean) as BusMarker[];
   }, [allBuses, locationsByBus, mode, campusLoopRouteIds, stationRouteIds]);
 
-  const activeStops = mode === "station" ? stationStops : campusStops;
-  const mapStops = activeStops.map((stop) => ({
+  const activeStops = useMemo(
+    () => mode === "station" ? stationStops : campusStops,
+    [campusStops, mode, stationStops],
+  );
+  const mapStops = useMemo(() => activeStops.map((stop) => ({
     id: stop.id,
     name: stop.nameKo,
     position: { lat: stop.lat, lng: stop.lng },
-  }));
+  })), [activeStops]);
   const mapCenter = activeStops[0] ? { lat: activeStops[0].lat, lng: activeStops[0].lng } : CAMPUS_CENTER;
-
-  const stopsWithArrival = activeStops.map((stop) => {
-    const arrival = getArrivalMinutes(stop.lat, stop.lng, visibleBuses);
-    const status = arrival === null ? "waiting" : arrival <= 2 ? "arriving" : "scheduled";
-    return { ...stop, arrival, status };
-  });
+  const arrivalEstimates = useMemo(
+    () => estimateStopArrivals(
+      routePath,
+      activeStops.map((stop) => ({ id: stop.id, order: stop.order, lat: stop.lat, lng: stop.lng })),
+      visibleBuses,
+      { loop: mode === "campus", fallbackSpeedMps: mode === "campus" ? 6.2 : 9.5, nowMs: clockTick },
+    ),
+    [activeStops, mode, routePath, visibleBuses, clockTick],
+  );
+  const stopsWithArrival = useMemo(() => activeStops.map((stop) => ({
+    ...stop,
+    estimate: arrivalEstimates.get(stop.id) ?? null,
+  })), [activeStops, arrivalEstimates]);
 
   const selectedStationDirection = selectedStationRoute ? routeDirection(selectedStationRoute) : "to-station";
-  const selectedStationTimes = selectedStationRoute ? parseTimes(selectedStationRoute.schedule) : [];
-  const selectedStationNextTime = nextTime(selectedStationTimes);
-  const stationOffset = selectedStationRoute ? parseOffsetMinutes(selectedStationRoute) : 10;
-  const stationDeparture = selectedStationNextTime && selectedStationDirection === "to-station"
-    ? minusMinutes(selectedStationNextTime, stationOffset)
-    : selectedStationNextTime;
+  const selectedStationService = selectedStationRoute ? getNextShuttleService(selectedStationRoute, new Date(clockTick)) : null;
+  const stationOffset = selectedStationRoute?.departureOffsetMinutes ?? 10;
+  const stationWait = selectedStationRoute?.boardingWaitMinutes ?? 5;
+  const selectedStationEventTime = selectedStationService
+    ? formatServiceTime(selectedStationService.eventAt, selectedStationService.dayOffset) : null;
+  const stationDeparture = selectedStationService
+    ? formatServiceTime(selectedStationService.departureAt, selectedStationService.dayOffset) : null;
+  const campusLoopRoute = campusRoutes.find((route) => route.shuttleVariant === "campus_loop") || null;
 
   const handleBusClick = useCallback((busId: string) => {
     const bus = visibleBuses.find((item) => item.id === busId);
@@ -399,18 +380,33 @@ export default function CampusShuttleWrapper() {
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
       <div className="bg-[#f6f6f8] overflow-hidden relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full max-w-[430px]" style={{ height: "100dvh" }}>
         <div className="absolute inset-0 w-full h-full">
-          <NaverMapComponent
-            center={mapCenter}
-            zoom={mode === "station" ? 14 : 16}
-            buses={visibleBuses}
-            stops={mapStops}
-            userLocation={userLocation}
-            focusLocation={focusLocation}
-            fitBoundsKey={fitBoundsKey}
-            routePath={routePath}
-            onBusClick={handleBusClick}
-            onLocateRequest={enableUserLocation}
-          />
+          {mapMode === "2d" ? (
+            <NaverMapComponent
+              center={mapCenter}
+              zoom={mode === "station" ? 14 : 16}
+              buses={visibleBuses}
+              stops={mapStops}
+              userLocation={userLocation}
+              focusLocation={focusLocation}
+              fitBoundsKey={fitBoundsKey}
+              routePath={routePath}
+              onBusClick={handleBusClick}
+              onLocateRequest={enableUserLocation}
+            />
+          ) : (
+            <Suspense fallback={<div className="grid h-full place-items-center bg-[#e8edf1] text-sm font-bold text-[#1e3a8a]">3D 캠퍼스를 준비 중입니다</div>}>
+              <Shuttle3DMap
+                key={`${mode}-${selectedStationRoute?.id ?? "campus"}-${fitBoundsKey}`}
+                routePath={routePath}
+                stops={mapStops}
+                buses={visibleBuses}
+                onSelectStop={(stopId) => {
+                  const stop = activeStops.find((item) => item.id === stopId);
+                  if (stop) setFocusLocation({ lat: stop.lat, lng: stop.lng, zoom: 18, key: Date.now() });
+                }}
+              />
+            </Suspense>
+          )}
         </div>
 
         <div className="absolute left-0 right-0 top-0 z-20 pt-safe">
@@ -425,7 +421,7 @@ export default function CampusShuttleWrapper() {
                   onClick={() => {
                     setMode(item.key);
                     setFitBoundsKey((key) => key + 1);
-                    setSheetVisible(true);
+                    setSheetVisible(mapMode === "2d");
                   }}
                   className={`h-10 rounded-[14px] font-['Public_Sans'] text-[13px] font-bold transition-all ${
                     mode === item.key
@@ -438,6 +434,28 @@ export default function CampusShuttleWrapper() {
               ))}
             </div>
           </div>
+        </div>
+
+        <div className="absolute right-4 top-[84px] z-20 flex overflow-hidden rounded-xl border border-white/90 bg-white/94 p-1 shadow-[0_8px_22px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+          {([
+            { key: "2d", label: "2D 지도", icon: MapIcon },
+            { key: "3d", label: "3D 캠퍼스", icon: Box },
+          ] as const).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              title={item.label}
+              aria-label={item.label}
+              aria-pressed={mapMode === item.key}
+              onClick={() => {
+                setMapMode(item.key);
+                setSheetVisible(item.key === "2d");
+              }}
+              className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${mapMode === item.key ? "bg-[#1e3a8a] text-white" : "text-[#64748b] hover:bg-[#f1f5f9]"}`}
+            >
+              <item.icon className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ))}
         </div>
 
         {!sheetVisible && (
@@ -476,7 +494,7 @@ export default function CampusShuttleWrapper() {
                   <p className="font-['Public_Sans'] text-[#64748b] text-[12px] leading-[18px]">
                     {mode === "station"
                       ? "신창역과 후문을 오가는 셔틀입니다"
-                      : "교내 정류장을 순환하는 셔틀입니다"}
+                      : campusLoopRoute ? getServiceRuleSummary(campusLoopRoute) : "교내 정류장을 순환하는 셔틀입니다"}
                   </p>
                 </div>
                 <button
@@ -508,7 +526,7 @@ export default function CampusShuttleWrapper() {
                           {selectedStationRoute
                             ? selectedStationDirection === "to-station"
                               ? `지하철 출발 ${stationOffset}분 전 후문 출발`
-                              : continuesCampusLoop(selectedStationRoute) ? "후문 도착 후 학내순환 연결" : "후문 종착"
+                              : `지하철 도착 ${stationWait}분 후 출발 · ${continuesCampusLoop(selectedStationRoute) ? "학내순환 1회" : "후문 종착"}`
                             : "관리자 > 버스 노선 관리에서 신창역 정류장이 포함된 셔틀버스 노선을 만들면 표시됩니다"}
                         </p>
                       </div>
@@ -517,20 +535,20 @@ export default function CampusShuttleWrapper() {
                       <div className="mt-4 grid grid-cols-2 gap-3">
                         <div className="rounded-[14px] bg-white p-3">
                           <p className="font-['Public_Sans'] text-[11px] font-bold uppercase tracking-[0.3px] text-[#94a3b8]">
-                            {selectedStationDirection === "to-station" ? "후문 출발" : "신창역 출발"}
+                            {selectedStationDirection === "to-station" ? "후문 출발" : "지하철 도착"}
                           </p>
                           <p className="mt-1 font-['Public_Sans'] text-[22px] font-black text-[#1e3a8a]">
-                            {stationDeparture || "--:--"}
+                            {(selectedStationDirection === "to-station" ? stationDeparture : selectedStationEventTime) || "--:--"}
                           </p>
                         </div>
                         <div className="rounded-[14px] bg-white p-3">
                           <p className="font-['Public_Sans'] text-[11px] font-bold uppercase tracking-[0.3px] text-[#94a3b8]">
-                            {selectedStationDirection === "to-station" ? "지하철 출발" : "운행 방식"}
+                            {selectedStationDirection === "to-station" ? "지하철 출발" : "신창역 출발"}
                           </p>
                           <p className="mt-1 font-['Public_Sans'] text-[16px] font-black text-[#0f172a] leading-[28px]">
                             {selectedStationDirection === "to-station"
-                              ? selectedStationNextTime || "--:--"
-                              : continuesCampusLoop(selectedStationRoute) ? "순환 연결" : "후문 종착"}
+                              ? selectedStationEventTime || "--:--"
+                              : stationDeparture || "--:--"}
                           </p>
                         </div>
                       </div>
@@ -574,21 +592,21 @@ export default function CampusShuttleWrapper() {
                       key={stop.id}
                       onClick={() => setFocusLocation({ lat: stop.lat, lng: stop.lng, zoom: 18, key: Date.now() })}
                       className={`bg-[rgba(248,250,252,0.5)] relative rounded-[16px] shrink-0 w-full border border-[#f1f5f9] text-left transition-all active:scale-[0.99] ${
-                        stop.status === "waiting" ? "opacity-80" : ""
+                        !stop.estimate?.minutes ? "opacity-80" : ""
                       }`}
                     >
                       <div className="flex items-center gap-[14px] p-[16px] w-full">
                         <div
                           className={`${
-                            stop.status === "arriving" ? "bg-[#1e3a8a]" : "bg-[#e2e8f0]"
+                            stop.estimate?.state === "arriving" ? "bg-[#1e3a8a]" : "bg-[#e2e8f0]"
                           } relative rounded-[12px] shrink-0 size-[46px] flex items-center justify-center ${
-                            stop.status === "arriving" ? "shadow-[0px_4px_6px_-1px_rgba(30,58,138,0.2)]" : ""
+                            stop.estimate?.state === "arriving" ? "shadow-[0px_4px_6px_-1px_rgba(30,58,138,0.2)]" : ""
                           }`}
                         >
                           {mode === "station" ? (
-                            <RouteIcon className={`w-5 h-5 ${stop.status === "arriving" ? "text-white" : "text-[#64748b]"}`} />
+                            <RouteIcon className={`w-5 h-5 ${stop.estimate?.state === "arriving" ? "text-white" : "text-[#64748b]"}`} />
                           ) : (
-                            <Bus className={`w-5 h-5 ${stop.status === "arriving" ? "text-white" : "text-[#64748b]"}`} />
+                            <Bus className={`w-5 h-5 ${stop.estimate?.state === "arriving" ? "text-white" : "text-[#64748b]"}`} />
                           )}
                         </div>
 
@@ -597,20 +615,26 @@ export default function CampusShuttleWrapper() {
                             {t(stop.nameKo, stop.nameEn)}
                           </p>
                           <p className="font-['Public_Sans'] font-medium text-[#64748b] text-[11px] leading-[16.5px]">
-                            {mode === "station" ? "신창역 셔틀" : "학내순환"} · {stop.order}번째 정류장
+                            {stop.estimate?.busLabel
+                              ? `${stop.estimate.busLabel} · ${stop.order}번째 정류장`
+                              : `${mode === "station" ? "신창역 셔틀" : "학내순환"} · ${stop.order}번째 정류장`}
                           </p>
                         </div>
 
                         <div className="flex flex-col items-end">
                           <div className={`font-['Public_Sans'] font-bold text-[10px] tracking-[0.25px] uppercase ${
-                            stop.status === "arriving" ? "text-[#059669]" : "text-[#94a3b8]"
+                            stop.estimate?.state === "arriving" ? "text-[#059669]" : "text-[#94a3b8]"
                           }`}>
-                            {stop.status === "arriving" ? "도착 예정" : "예상 시간"}
+                            {stop.estimate?.state === "arriving"
+                              ? "곧 도착"
+                              : stop.estimate?.state === "stale" ? "위치 지연" : "예상 시간"}
                           </div>
                           <div className={`font-['Public_Sans'] font-extrabold text-[16px] leading-[24px] ${
-                            stop.status === "waiting" ? "text-[#94a3b8]" : "text-[#0f172a]"
+                            !stop.estimate?.minutes ? "text-[#94a3b8]" : "text-[#0f172a]"
                           }`}>
-                            {stop.arrival === null ? "--" : `${stop.arrival}분`}
+                            {stop.estimate?.state === "arriving" && stop.estimate.minutes === 1
+                              ? "잠시 후"
+                              : stop.estimate?.minutes ? `약 ${stop.estimate.minutes}분` : "--"}
                           </div>
                         </div>
                       </div>
@@ -619,16 +643,6 @@ export default function CampusShuttleWrapper() {
                 )}
               </div>
 
-              {mode === "station" && (
-                <div className="w-full rounded-[16px] bg-[#f8fafc] px-4 py-3">
-                  <div className="flex items-center gap-2 text-[#64748b]">
-                    <Clock className="h-4 w-4" />
-                    <p className="font-['Public_Sans'] text-[12px] font-semibold">
-                      출발 시간과 정류장 위치는 관리자 노선 관리에서 수정한 값과 연동됩니다.
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
           </div>
         </div>
