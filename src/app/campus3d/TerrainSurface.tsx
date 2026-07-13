@@ -1,10 +1,12 @@
 import { memo, useEffect, useMemo } from "react";
 import * as THREE from "three";
-import { terrainData } from "./terrain";
+import { getTerrainHeight, terrainData } from "./terrain";
 
 const TerrainSurface = memo(function TerrainSurface({ isNight }: { isNight: boolean }) {
   const geometry = useMemo(() => {
-    const { heights, resolution, size } = terrainData;
+    const { heights, resolution: sourceResolution, size: sourceSize } = terrainData;
+    const size = sourceSize + 2800;
+    const resolution = sourceResolution + 84;
     const positions = new Float32Array(resolution * resolution * 3);
     const colors = new Float32Array(resolution * resolution * 3);
     const lowColor = new THREE.Color(isNight ? "#111c1a" : "#9eaa8b");
@@ -18,7 +20,7 @@ const TerrainSurface = memo(function TerrainSurface({ isNight }: { isNight: bool
         const offset = index * 3;
         const x = -size / 2 + (column / (resolution - 1)) * size;
         const z = -size / 2 + (row / (resolution - 1)) * size;
-        const height = heights[index];
+        const height = getTerrainHeight(x, z);
         positions[offset] = x;
         positions[offset + 1] = height;
         positions[offset + 2] = z;

@@ -20,6 +20,17 @@ import { getTerrainHeight } from "./terrain";
 const campusData = campusDataSource as CampusData;
 export type CampusWeather = "clear" | "cloudy" | "rain";
 export type RenderQuality = "balanced" | "high";
+export interface CampusLiveBus {
+  id: string;
+  label: string;
+  position: Point2D;
+  heading?: number;
+  routeProgress?: number;
+}
+export interface CampusInitialView {
+  target: Point2D;
+  distance: number;
+}
 const MAJOR_BUILDINGS = new Set([
   "대학본부",
   "도서관",
@@ -141,6 +152,8 @@ interface Campus3DSceneProps {
   onSelectStop: (stop: CampusStop) => void;
   resetVersion: number;
   onSelectBuilding: (building: CampusBuilding | null) => void;
+  liveBuses?: CampusLiveBus[];
+  initialView?: CampusInitialView | null;
 }
 
 function shapeFromPoints(points: Point2D[]) {
@@ -527,28 +540,120 @@ function ShuttleBus({
   );
 }
 
+const LiveShuttleBus = memo(function LiveShuttleBus({ bus, track, followed, controls, onFollow }: {
+  bus: CampusLiveBus;
+  track: RouteTrack;
+  followed: boolean;
+  controls: React.RefObject<OrbitControlsImpl | null>;
+  onFollow: (busId: string | null) => void;
+}) {
+  const group = useRef<THREE.Group>(null);
+  const camera = useThree((state) => state.camera);
+  const routeDistance = useRef(bus.routeProgress ?? 0);
+  const target = useMemo(
+    () => new THREE.Vector3(bus.position[0], getTerrainHeight(bus.position[0], bus.position[1]) + 0.8, bus.position[1]),
+    [bus.position],
+  );
+  const cameraPosition = useMemo(() => new THREE.Vector3(), []);
+  const cameraTarget = useMemo(() => new THREE.Vector3(), []);
+  const rotation = Math.PI - THREE.MathUtils.degToRad(bus.heading ?? 0);
+
+  useFrame((_, delta) => {
+    if (!group.current) return;
+    let desiredDistance = bus.routeProgress ?? routeDistance.current;
+    if (track.total > 0) {
+      const difference = desiredDistance - routeDistance.current;
+      if (difference < -track.total / 2) desiredDistance += track.total;
+      else if (difference > track.total / 2) desiredDistance -= track.total;
+    }
+    routeDistance.current = THREE.MathUtils.lerp(routeDistance.current, desiredDistance, 1 - Math.exp(-delta * 1.25));
+    const sample = sampleRoute(track, routeDistance.current, target);
+    group.current.position.copy(target);
+    const routeRotation = Number.isFinite(sample.angle) ? sample.angle : rotation;
+    group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, routeRotation, 1 - Math.exp(-delta * 5));
+    if (followed) {
+      cameraPosition.set(target.x + 38, target.y + 30, target.z + 44);
+      cameraTarget.set(target.x, target.y + 3, target.z);
+      camera.position.lerp(cameraPosition, 1 - Math.exp(-delta * 2.4));
+      controls.current?.target.lerp(cameraTarget, 1 - Math.exp(-delta * 3));
+      controls.current?.update();
+    }
+  });
+
+  return (
+    <group
+      ref={group}
+      position={target}
+      rotation={[0, rotation, 0]}
+      scale={1.45}
+      onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }}
+    >
+      <mesh castShadow position={[0, 1.55, 0]}>
+        <boxGeometry args={[3.1, 2.5, 7.4]} />
+        <meshStandardMaterial color="#f8fafc" roughness={0.5} metalness={0.08} />
+      </mesh>
+      <mesh position={[0, 0.72, 0]}>
+        <boxGeometry args={[3.18, 0.72, 7.5]} />
+        <meshStandardMaterial color="#1e3a8a" roughness={0.42} />
+      </mesh>
+      <mesh position={[0, 1.82, 0.08]}>
+        <boxGeometry args={[3.22, 0.82, 5.55]} />
+        <meshStandardMaterial color="#17324a" roughness={0.32} metalness={0.22} />
+      </mesh>
+      <mesh position={[0, 1.85, 3.72]} rotation={[0.08, 0, 0]}>
+        <boxGeometry args={[2.65, 0.9, 0.12]} />
+        <meshStandardMaterial color="#9ed8ef" emissive="#6dc6e8" emissiveIntensity={0.24} />
+      </mesh>
+      {[-1.62, 1.62].flatMap((z) => [-1.58, 1.58].map((x) => (
+        <mesh key={`${x}-${z}`} position={[x, 0.45, z]} rotation={[0, 0, Math.PI / 2]}>
+          <cylinderGeometry args={[0.5, 0.5, 0.3, 12]} />
+          <meshStandardMaterial color="#151a1f" roughness={0.82} />
+        </mesh>
+      )))}
+      <Html position={[0, 6.6, 0]} center distanceFactor={330} zIndexRange={[16, 0]}>
+        <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
+          <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
+          {bus.label}
+        </button>
+      </Html>
+    </group>
+  );
+});
+
 function CameraDirector({
   controls,
   selectedBuildingId,
   focusTarget,
   resetVersion,
+  initialView,
 }: {
   controls: React.RefObject<OrbitControlsImpl | null>;
   selectedBuildingId: string | null;
   focusTarget: { x: number; z: number; height: number } | null;
   resetVersion: number;
+  initialView?: CampusInitialView | null;
 }) {
   const camera = useThree((state) => state.camera);
 
   useEffect(() => {
     const selected = campusData.buildings.find((building) => building.id === selectedBuildingId);
-    const target = selected ? polygonCenter(selected.points) : focusTarget ? [focusTarget.x, focusTarget.z] : [0, 0];
+    const target = selected
+      ? polygonCenter(selected.points)
+      : focusTarget
+        ? [focusTarget.x, focusTarget.z] as Point2D
+        : initialView?.target ?? [0, 0];
     const terrainHeight = getTerrainHeight(target[0], target[1]);
     const subjectHeight = selected?.height ?? focusTarget?.height ?? 0;
     const hasSubject = Boolean(selected || focusTarget);
     const targetPosition = hasSubject
       ? new THREE.Vector3(target[0] + 105, terrainHeight + Math.max(subjectHeight + 72, 90), target[1] + 125)
-      : new THREE.Vector3(560, 900, 720);
+      : initialView
+        ? new THREE.Vector3(
+            target[0] + initialView.distance * (initialView.distance > 1500 ? 0.12 : 0.52),
+            terrainHeight + initialView.distance * (initialView.distance > 1500 ? 0.92 : 0.72),
+            target[1] + initialView.distance * (initialView.distance > 1500 ? 0.12 : 0.58),
+          )
+        : new THREE.Vector3(560, 900, 720);
     const targetLookAt = new THREE.Vector3(target[0], terrainHeight + (hasSubject ? subjectHeight * 0.3 : 0), target[1]);
     const startPosition = camera.position.clone();
     const startTarget = controls.current?.target.clone() ?? new THREE.Vector3();
@@ -565,7 +670,7 @@ function CameraDirector({
     };
     frame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frame);
-  }, [camera, controls, focusTarget, resetVersion, selectedBuildingId]);
+  }, [camera, controls, focusTarget, initialView, resetVersion, selectedBuildingId]);
 
   return null;
 }
@@ -722,9 +827,15 @@ function CampusWorld(props: Campus3DSceneProps) {
               </Html>
             </group>
           ))}
-          <ShuttleBus track={routeTrack} offset={0} running={props.isRunning} label="SCH 01" followed={props.followBusId === "SCH 01"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
-          <ShuttleBus track={routeTrack} offset={routeTrack.total / 3} running={props.isRunning} label="SCH 02" followed={props.followBusId === "SCH 02"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
-          <ShuttleBus track={routeTrack} offset={(routeTrack.total * 2) / 3} running={props.isRunning} label="SCH 03" followed={props.followBusId === "SCH 03"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
+          {props.liveBuses !== undefined ? props.liveBuses.map((bus) => (
+            <LiveShuttleBus key={bus.id} bus={bus} track={routeTrack} followed={props.followBusId === bus.id} controls={controls} onFollow={props.onFollowBus} />
+          )) : (
+            <>
+              <ShuttleBus track={routeTrack} offset={0} running={props.isRunning} label="SCH 01" followed={props.followBusId === "SCH 01"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
+              <ShuttleBus track={routeTrack} offset={routeTrack.total / 3} running={props.isRunning} label="SCH 02" followed={props.followBusId === "SCH 02"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
+              <ShuttleBus track={routeTrack} offset={(routeTrack.total * 2) / 3} running={props.isRunning} label="SCH 03" followed={props.followBusId === "SCH 03"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
+            </>
+          )}
         </group>
       ) : null}
       <OrbitControls
@@ -735,13 +846,13 @@ function CampusWorld(props: Campus3DSceneProps) {
         autoRotate={props.autoRotate}
         autoRotateSpeed={0.45}
         minDistance={70}
-        maxDistance={1900}
+        maxDistance={6000}
         minPolarAngle={0.18}
         maxPolarAngle={Math.PI / 2.08}
         screenSpacePanning={false}
         enabled={!props.isTouring}
       />
-      <CameraDirector controls={controls} selectedBuildingId={props.selectedBuildingId} focusTarget={props.focusTarget} resetVersion={props.resetVersion} />
+      <CameraDirector controls={controls} selectedBuildingId={props.selectedBuildingId} focusTarget={props.focusTarget} initialView={props.initialView} resetVersion={props.resetVersion} />
       <CinematicTour enabled={props.isTouring} controls={controls} />
     </>
   );
@@ -753,7 +864,7 @@ export default function Campus3DScene(props: Campus3DSceneProps) {
       shadows={props.renderQuality === "high"}
       dpr={[1, props.renderQuality === "high" ? 2 : 1.4]}
       performance={{ min: 0.5 }}
-      camera={{ position: [560, 900, 720], fov: 42, near: 1, far: 4200 }}
+      camera={{ position: [560, 900, 720], fov: 42, near: 1, far: 8000 }}
       gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
       onPointerMissed={() => props.onSelectBuilding(null)}
     >

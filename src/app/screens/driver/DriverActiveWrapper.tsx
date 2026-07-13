@@ -7,6 +7,7 @@ import {
   getRouteKindLabel,
   getRouteSchedulePreview,
   type DriverRoute,
+  type DriverActiveTrip,
 } from "../../utils/driverRouteDisplay";
 
 interface ActiveBus {
@@ -15,6 +16,7 @@ interface ActiveBus {
   type?: string;
   capacity?: number;
   currentRoute?: DriverRoute | null;
+  activeTrip?: DriverActiveTrip | null;
 }
 
 export default function DriverActiveWrapper() {
@@ -27,6 +29,8 @@ export default function DriverActiveWrapper() {
   const [elapsed, setElapsed] = useState(0);
   const [stopping, setStopping] = useState(false);
   const [sendCount, setSendCount] = useState(0);
+  const [progressUpdating, setProgressUpdating] = useState(false);
+  const [progressError, setProgressError] = useState("");
 
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -56,6 +60,15 @@ export default function DriverActiveWrapper() {
       mounted = false;
     };
   }, [bus, navigate]);
+
+  useEffect(() => {
+    const startedAt = bus?.activeTrip?.startedAt;
+    if (!startedAt) return;
+    const startedAtMs = new Date(startedAt).getTime();
+    if (Number.isFinite(startedAtMs)) {
+      setElapsed(Math.max(0, Math.floor((Date.now() - startedAtMs) / 1000)));
+    }
+  }, [bus?.activeTrip?.startedAt]);
 
   // GPS watchPosition 시작
   useEffect(() => {
@@ -126,6 +139,26 @@ export default function DriverActiveWrapper() {
     }
   };
 
+  const handleStopProgress = async (stopOrder: number) => {
+    setProgressUpdating(true);
+    setProgressError("");
+    try {
+      const activeTrip = await api.driverUpdateProgress(stopOrder);
+      setBus((current) => current ? {
+        ...current,
+        activeTrip: {
+          ...current.activeTrip,
+          ...activeTrip,
+          status: "active",
+        } as DriverActiveTrip,
+      } : current);
+    } catch (error) {
+      setProgressError(error instanceof Error ? error.message : "정류장 진행 상태를 저장하지 못했습니다");
+    } finally {
+      setProgressUpdating(false);
+    }
+  };
+
   const formatTime = (secs: number) => {
     const h = Math.floor(secs / 3600);
     const m = Math.floor((secs % 3600) / 60);
@@ -139,6 +172,12 @@ export default function DriverActiveWrapper() {
   const routeKind = getRouteKindLabel(bus);
   const routeSchedule = getRouteSchedulePreview(bus.currentRoute);
   const routeColor = bus.currentRoute?.color || "#1e3b8a";
+  const routeStops = [...(bus.currentRoute?.stops || [])].sort((a, b) => a.order - b.order);
+  const currentStopOrder = bus.activeTrip?.currentStopOrder ?? 0;
+  const nextStop = routeStops.find((stop) => stop.order > currentStopOrder) ?? null;
+  const currentStop = routeStops.find((stop) => stop.order === currentStopOrder) ?? null;
+  const routeLoops = bus.currentRoute?.shuttleVariant === "campus_loop"
+    || bus.currentRoute?.shuttleVariant === "station_to_campus_loop";
 
   return (
     <div className="min-h-screen bg-[#f6f6f8] flex flex-col items-center">
@@ -188,6 +227,41 @@ export default function DriverActiveWrapper() {
             </div>
           </div>
         </div>
+
+        {routeStops.length > 0 && (
+          <div className="mx-5 mt-4 rounded-2xl border border-[#dbe4ef] bg-white p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[11px] font-black uppercase text-[#64748b]">다음 정류장</p>
+                <p className="mt-1 truncate text-xl font-black text-[#0f172a]">
+                  {nextStop?.name || "이번 순환 완료"}
+                </p>
+                <p className="mt-1 text-xs font-semibold text-[#64748b]">
+                  {currentStop ? `${currentStop.name} 통과 · ` : "운행 시작 · "}
+                  {Math.min(currentStopOrder, routeStops.length)}/{routeStops.length} 정류장
+                </p>
+              </div>
+              <div className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-[#eef3ff] text-lg font-black text-[#1e3a8a]">
+                {nextStop?.order ?? 1}
+              </div>
+            </div>
+
+            {progressError ? <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs font-semibold text-red-600">{progressError}</p> : null}
+
+            <button
+              type="button"
+              disabled={progressUpdating || (!nextStop && !routeLoops)}
+              onClick={() => void handleStopProgress(nextStop?.order ?? 0)}
+              className="mt-4 h-12 w-full rounded-xl bg-[#1e3a8a] text-sm font-black text-white transition-transform active:scale-[0.98] disabled:opacity-60"
+            >
+              {progressUpdating
+                ? "저장 중..."
+                : nextStop
+                  ? `${nextStop.name} 도착 처리`
+                  : routeLoops ? "다음 순환 시작" : "모든 정류장 운행 완료"}
+            </button>
+          </div>
+        )}
 
         {/* 경과 시간 */}
         <div className="mx-5 mt-4 bg-[#f8fafc] rounded-2xl p-5 flex items-center justify-between border border-[#e2e8f0]">

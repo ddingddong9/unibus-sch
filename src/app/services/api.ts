@@ -471,12 +471,13 @@ class ApiClient {
     throw new Error(response.error || 'Failed to fetch buses');
   }
 
-  async driverStart(busId: string): Promise<void> {
-    const response = await this.request<ApiResponse>('/driver/start', {
+  async driverStart(busId: string): Promise<{ busId: string; driverId: string; tripId: string }> {
+    const response = await this.request<ApiResponse<{ busId: string; driverId: string; tripId: string }>>('/driver/start', {
       method: 'POST',
       body: JSON.stringify({ busId }),
     });
-    if (!response.success) throw new Error(response.error || 'Failed to start driving');
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to start driving');
   }
 
   async driverSendLocation(lat: number, lng: number, speed: number, heading: number): Promise<void> {
@@ -492,6 +493,15 @@ class ApiClient {
       method: 'POST',
     });
     if (!response.success) throw new Error(response.error || 'Failed to stop driving');
+  }
+
+  async driverUpdateProgress(stopOrder: number): Promise<{ id: string; routeId: string | null; currentStopOrder: number; startedAt: string; updatedAt: string }> {
+    const response = await this.request<ApiResponse<{ id: string; routeId: string | null; currentStopOrder: number; startedAt: string; updatedAt: string }>>('/driver/progress', {
+      method: 'PUT',
+      body: JSON.stringify({ stopOrder }),
+    });
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to update trip progress');
   }
 
   async getDriverStatus(): Promise<{ activeBus: any | null }> {
