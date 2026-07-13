@@ -23,6 +23,11 @@ declare global {
   interface Window { naver: any; }
 }
 
+const getNaverMaps = () => {
+  const maps = window.naver?.maps;
+  return typeof maps?.LatLng === "function" ? maps : null;
+};
+
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
@@ -241,7 +246,8 @@ export default function NaverMapComponent({
   }, [snapToSegment]);
 
   const updateBusMarkers = useCallback(() => {
-    if (!mapInstance.current || !window.naver) return;
+    const maps = getNaverMaps();
+    if (!mapInstance.current || !maps) return;
 
     const currentBuses = busesRef.current;
     const existingMap = new Map<string, any>(
@@ -269,13 +275,13 @@ export default function NaverMapComponent({
       } else {
         // 새 마커 생성
         try {
-          const marker = new window.naver.maps.Marker({
-            position: new window.naver.maps.LatLng(bus.position.lat, bus.position.lng),
+          const marker = new maps.Marker({
+            position: new maps.LatLng(bus.position.lat, bus.position.lng),
             map: mapInstance.current,
             icon: {
               content: BUS_MARKER_CONTENT(bus.label, bus.heading ?? 0),
-              size: new window.naver.maps.Size(92, 66),
-              anchor: new window.naver.maps.Point(46, 66),
+              size: new maps.Size(92, 66),
+              anchor: new maps.Point(46, 66),
             },
             zIndex: 20,
           });
@@ -284,7 +290,7 @@ export default function NaverMapComponent({
           marker.__heading = bus.heading ?? 0;
           marker.__routeIdx = 0;
           marker.__animRafId = null; // [변경] RAF ID 초기화
-          window.naver.maps.Event.addListener(marker, 'click', () => {
+          maps.Event.addListener(marker, 'click', () => {
             onBusClickRef.current?.(bus.id);
           });
           newMarkers.push(marker);
@@ -304,19 +310,20 @@ export default function NaverMapComponent({
   }, [animateMarker]);
 
   const updateStopMarkers = useCallback(() => {
-    if (!mapInstance.current || !window.naver) return;
+    const maps = getNaverMaps();
+    if (!mapInstance.current || !maps) return;
     stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
     stopMarkersRef.current = [];
 
     stopsRef.current.forEach(stop => {
       try {
-        const marker = new window.naver.maps.Marker({
-          position: new window.naver.maps.LatLng(stop.position.lat, stop.position.lng),
+        const marker = new maps.Marker({
+          position: new maps.LatLng(stop.position.lat, stop.position.lng),
           map: mapInstance.current,
           icon: {
             content: STOP_MARKER_CONTENT(stop.name, stop.type ?? 'middle'),
-            size: new window.naver.maps.Size(128, 58),
-            anchor: new window.naver.maps.Point(64, 43),
+            size: new maps.Size(128, 58),
+            anchor: new maps.Point(64, 43),
           },
           zIndex: 10,
         });
@@ -326,20 +333,21 @@ export default function NaverMapComponent({
   }, []);
 
   const updateUserMarker = useCallback((loc: { lat: number; lng: number } | null) => {
-    if (!mapInstance.current || !window.naver) return;
+    const maps = getNaverMaps();
+    if (!mapInstance.current || !maps) return;
     if (userMarkerRef.current) {
       try { userMarkerRef.current.setMap(null); } catch (_) {}
       userMarkerRef.current = null;
     }
     if (!loc) return;
     try {
-      userMarkerRef.current = new window.naver.maps.Marker({
-        position: new window.naver.maps.LatLng(loc.lat, loc.lng),
+      userMarkerRef.current = new maps.Marker({
+        position: new maps.LatLng(loc.lat, loc.lng),
         map: mapInstance.current,
         icon: {
           content: USER_MARKER_CONTENT(),
-          size: new window.naver.maps.Size(28, 28),
-          anchor: new window.naver.maps.Point(14, 14),
+          size: new maps.Size(28, 28),
+          anchor: new maps.Point(14, 14),
         },
         zIndex: 30,
       });
@@ -347,15 +355,16 @@ export default function NaverMapComponent({
   }, []);
 
   const updatePolyline = useCallback((path: [number, number][]) => {
-    if (!mapInstance.current || !window.naver) return;
+    const maps = getNaverMaps();
+    if (!mapInstance.current || !maps) return;
     if (polylineRef.current) {
       try { polylineRef.current.setMap(null); } catch (_) {}
       polylineRef.current = null;
     }
     if (!path || path.length === 0) return;
     try {
-      const latLngPath = path.map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng));
-      polylineRef.current = new window.naver.maps.Polyline({
+      const latLngPath = path.map(([lng, lat]) => new maps.LatLng(lat, lng));
+      polylineRef.current = new maps.Polyline({
         path: latLngPath,
         strokeColor: '#1e3a8a',
         strokeWeight: 5,
@@ -456,8 +465,9 @@ export default function NaverMapComponent({
   }, [clientId]);
 
   useEffect(() => {
-    if (!mapInstance.current || !window.naver) return;
-    mapInstance.current.setCenter(new window.naver.maps.LatLng(center.lat, center.lng));
+    const maps = getNaverMaps();
+    if (!mapInstance.current || !maps) return;
+    mapInstance.current.setCenter(new maps.LatLng(center.lat, center.lng));
     mapInstance.current.setZoom(zoom);
   }, [center.lat, center.lng, zoom]);
 
@@ -471,31 +481,34 @@ export default function NaverMapComponent({
   }, [routePath, updatePolyline, updateStopMarkers]);
 
   useEffect(() => {
-    if (!focusLocation || !mapInstance.current || !window.naver) return;
-    mapInstance.current.setCenter(new window.naver.maps.LatLng(focusLocation.lat, focusLocation.lng));
+    const maps = getNaverMaps();
+    if (!focusLocation || !mapInstance.current || !maps) return;
+    mapInstance.current.setCenter(new maps.LatLng(focusLocation.lat, focusLocation.lng));
     mapInstance.current.setZoom(focusLocation.zoom ?? 18);
   }, [focusLocation]);
 
   useEffect(() => {
-    if (!fitBoundsKey || !mapInstance.current || !window.naver) return;
+    const maps = getNaverMaps();
+    if (!fitBoundsKey || !mapInstance.current || !maps) return;
     const currentStops = stopsRef.current;
     const currentPath = routePathRef.current;
     if (currentStops.length === 0 && currentPath.length === 0) return;
-    const bounds = new window.naver.maps.LatLngBounds();
-    currentStops.forEach(s => bounds.extend(new window.naver.maps.LatLng(s.position.lat, s.position.lng)));
-    currentPath.forEach(([lng, lat]) => bounds.extend(new window.naver.maps.LatLng(lat, lng)));
+    const bounds = new maps.LatLngBounds();
+    currentStops.forEach(s => bounds.extend(new maps.LatLng(s.position.lat, s.position.lng)));
+    currentPath.forEach(([lng, lat]) => bounds.extend(new maps.LatLng(lat, lng)));
     mapInstance.current.fitBounds(bounds, { padding: 80 });
   }, [fitBoundsKey]);
 
   const handleZoomIn  = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() + 1); };
   const handleZoomOut = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() - 1); };
   const handleLocate  = () => {
-    if (!mapInstance.current || !window.naver) return;
+    const maps = getNaverMaps();
+    if (!mapInstance.current || !maps) return;
     if (!userLocationRef.current) {
       onLocateRequestRef.current?.();
     }
     const loc = userLocationRef.current ?? center;
-    mapInstance.current.setCenter(new window.naver.maps.LatLng(loc.lat, loc.lng));
+    mapInstance.current.setCenter(new maps.LatLng(loc.lat, loc.lng));
     mapInstance.current.setZoom(18);
   };
 

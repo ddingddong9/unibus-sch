@@ -7,6 +7,7 @@ import { api } from "../services/api";
 import { supabase } from "../services/supabase";
 import { estimateStopArrivals } from "../utils/shuttleEta";
 import { formatServiceTime, getNextShuttleService, getServiceRuleSummary } from "../utils/shuttleSchedule";
+import { getStationShuttleMap } from "../utils/stationShuttleMap";
 
 const Shuttle3DMap = lazy(() => import("../components/Shuttle3DMap"));
 
@@ -103,6 +104,19 @@ function formatRouteStops(stops: any[]): ShuttleStop[] {
     }));
 }
 
+function formatDepartureCountdown(departureAt: Date | undefined, nowMs: number) {
+  if (!departureAt) return "시간표 확인";
+  const remainingMinutes = Math.max(0, Math.ceil((departureAt.getTime() - nowMs) / 60_000));
+  if (remainingMinutes <= 1) return "곧 출발";
+  if (remainingMinutes < 60) return `${remainingMinutes}분 남음`;
+  const hours = Math.floor(remainingMinutes / 60);
+  const minutes = remainingMinutes % 60;
+  return minutes > 0 ? `${hours}시간 ${minutes}분` : `${hours}시간 남음`;
+}
+
+const formatStationRouteName = (name?: string | null) =>
+  (name || "신창역 셔틀").replace(/후문/g, "김승우 라운지");
+
 export default function CampusShuttleWrapper() {
   const { t } = useLanguage();
 
@@ -144,6 +158,10 @@ export default function CampusShuttleWrapper() {
     () => stationRoutes.find((route) => route.id === stationRouteId) || stationRoutes[0] || null,
     [stationRouteId, stationRoutes]
   );
+  const stationDepartureRoute = useMemo(
+    () => stationRoutes.find((route) => routeDirection(route) === "to-station") || stationRoutes[0] || null,
+    [stationRoutes],
+  );
   const stationRouteIds = useMemo(
     () => new Set(stationRoutes.map((route) => route.id)),
     [stationRoutes]
@@ -160,7 +178,8 @@ export default function CampusShuttleWrapper() {
         const routes = await api.getRoutes();
         setAllRoutes(routes);
         const station = routes.filter((route: any) => route.type === "campus" && route.isActive && hasStationSignal(route));
-        setStationRouteId((current) => current || station[0]?.id || null);
+        const departureRoute = station.find((route: any) => routeDirection(route) === "to-station") || station[0];
+        setStationRouteId((current) => current || departureRoute?.id || null);
       } catch (error) {
         console.warn("셔틀 노선 불러오기 실패:", error);
       }
@@ -201,13 +220,26 @@ export default function CampusShuttleWrapper() {
     }
     api.getRoutePath(selectedStationRoute.id)
       .then(({ path, stops }) => {
-        setRoutePath(path || []);
-        setStationStops(formatRouteStops(stops || selectedStationRoute.stops || []));
+        const stationMap = getStationShuttleMap(
+          path || [],
+          formatRouteStops(stops || selectedStationRoute.stops || []),
+          routeDirection(selectedStationRoute),
+        );
+        setRoutePath(stationMap.path);
+        setStationStops(stationMap.stops);
+        const departureStop = stationMap.stops[0];
+        if (departureStop) {
+          setFocusLocation({ lat: departureStop.lat, lng: departureStop.lng, zoom: 17, key: Date.now() });
+        }
       })
       .catch((error) => {
         console.warn("신창역 셔틀 경로 불러오기 실패:", error);
         setRoutePath([]);
-        setStationStops(formatRouteStops(selectedStationRoute.stops || []));
+        setStationStops(getStationShuttleMap(
+          [],
+          formatRouteStops(selectedStationRoute.stops || []),
+          routeDirection(selectedStationRoute),
+        ).stops);
       });
   }, [mode, selectedStationRoute]);
 
@@ -320,6 +352,7 @@ export default function CampusShuttleWrapper() {
     () => mode === "station" ? stationStops : campusStops,
     [campusStops, mode, stationStops],
   );
+  const selectedStationDirection = selectedStationRoute ? routeDirection(selectedStationRoute) : "to-station";
   const mapStops = useMemo(() => activeStops.map((stop) => ({
     id: stop.id,
     name: stop.nameKo,
@@ -335,12 +368,22 @@ export default function CampusShuttleWrapper() {
     ),
     [activeStops, mode, routePath, visibleBuses, clockTick],
   );
+  const displayBuses = useMemo(() => {
+    if (mode !== "station") return visibleBuses;
+    const destination = activeStops[activeStops.length - 1];
+    const destinationEstimate = destination ? arrivalEstimates.get(destination.id) : null;
+    return visibleBuses.map((bus) => ({
+      ...bus,
+      label: destinationEstimate?.busId === bus.id && destinationEstimate.minutes
+        ? `${destination?.nameKo === "신창역" ? "신창역" : "라운지"} 약 ${destinationEstimate.minutes}분`
+        : bus.label,
+    }));
+  }, [activeStops, arrivalEstimates, mode, visibleBuses]);
   const stopsWithArrival = useMemo(() => activeStops.map((stop) => ({
     ...stop,
     estimate: arrivalEstimates.get(stop.id) ?? null,
   })), [activeStops, arrivalEstimates]);
 
-  const selectedStationDirection = selectedStationRoute ? routeDirection(selectedStationRoute) : "to-station";
   const selectedStationService = selectedStationRoute ? getNextShuttleService(selectedStationRoute, new Date(clockTick)) : null;
   const stationOffset = selectedStationRoute?.departureOffsetMinutes ?? 10;
   const stationWait = selectedStationRoute?.boardingWaitMinutes ?? 5;
@@ -348,6 +391,7 @@ export default function CampusShuttleWrapper() {
     ? formatServiceTime(selectedStationService.eventAt, selectedStationService.dayOffset) : null;
   const stationDeparture = selectedStationService
     ? formatServiceTime(selectedStationService.departureAt, selectedStationService.dayOffset) : null;
+  const stationCountdown = formatDepartureCountdown(selectedStationService?.departureAt, clockTick);
   const campusLoopRoute = campusRoutes.find((route) => route.shuttleVariant === "campus_loop") || null;
 
   const handleBusClick = useCallback((busId: string) => {
@@ -384,7 +428,7 @@ export default function CampusShuttleWrapper() {
             <NaverMapComponent
               center={mapCenter}
               zoom={mode === "station" ? 14 : 16}
-              buses={visibleBuses}
+              buses={displayBuses}
               stops={mapStops}
               userLocation={userLocation}
               focusLocation={focusLocation}
@@ -397,9 +441,10 @@ export default function CampusShuttleWrapper() {
             <Suspense fallback={<div className="grid h-full place-items-center bg-[#e8edf1] text-sm font-bold text-[#1e3a8a]">3D 캠퍼스를 준비 중입니다</div>}>
               <Shuttle3DMap
                 key={`${mode}-${selectedStationRoute?.id ?? "campus"}-${fitBoundsKey}`}
+                sceneMode={mode}
                 routePath={routePath}
                 stops={mapStops}
-                buses={visibleBuses}
+                buses={displayBuses}
                 onSelectStop={(stopId) => {
                   const stop = activeStops.find((item) => item.id === stopId);
                   if (stop) setFocusLocation({ lat: stop.lat, lng: stop.lng, zoom: 18, key: Date.now() });
@@ -420,6 +465,9 @@ export default function CampusShuttleWrapper() {
                   key={item.key}
                   onClick={() => {
                     setMode(item.key);
+                    if (item.key === "station" && stationDepartureRoute) {
+                      setStationRouteId(stationDepartureRoute.id);
+                    }
                     setFitBoundsKey((key) => key + 1);
                     setSheetVisible(mapMode === "2d");
                   }}
@@ -493,7 +541,7 @@ export default function CampusShuttleWrapper() {
                   </p>
                   <p className="font-['Public_Sans'] text-[#64748b] text-[12px] leading-[18px]">
                     {mode === "station"
-                      ? "신창역과 후문을 오가는 셔틀입니다"
+                      ? "김승우 라운지와 신창역을 오가는 셔틀입니다"
                       : campusLoopRoute ? getServiceRuleSummary(campusLoopRoute) : "교내 정류장을 순환하는 셔틀입니다"}
                   </p>
                 </div>
@@ -513,47 +561,43 @@ export default function CampusShuttleWrapper() {
 
               {mode === "station" && (
                 <div className="w-full space-y-3">
-                  <div className="rounded-[18px] border border-[#e2e8f0] bg-[#f8fafc] p-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex size-11 items-center justify-center rounded-[14px] bg-[#1e3a8a] text-white">
-                        {selectedStationDirection === "to-station" ? <Train className="w-5 h-5" /> : <Bus className="w-5 h-5" />}
+                  <div className="overflow-hidden rounded-lg bg-[#1e3a8a] text-white shadow-[0_12px_30px_rgba(30,58,138,0.2)]">
+                    <div className="flex items-start gap-3 p-4">
+                      <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#43c7e8] text-[#102a66]">
+                        {selectedStationDirection === "to-station" ? <MapPin className="h-5 w-5" /> : <Train className="h-5 w-5" />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-['Public_Sans'] text-[15px] font-extrabold text-[#0f172a]">
-                          {selectedStationRoute?.name || "신창역 셔틀 노선을 추가해 주세요"}
+                        <p className="text-[11px] font-bold text-[#b9d5ff]">
+                          {selectedStationDirection === "to-station" ? "김승우 라운지 출발" : "신창역 출발"}
                         </p>
-                        <p className="font-['Public_Sans'] text-[12px] text-[#64748b]">
-                          {selectedStationRoute
-                            ? selectedStationDirection === "to-station"
-                              ? `지하철 출발 ${stationOffset}분 전 후문 출발`
-                              : `지하철 도착 ${stationWait}분 후 출발 · ${continuesCampusLoop(selectedStationRoute) ? "학내순환 1회" : "후문 종착"}`
-                            : "관리자 > 버스 노선 관리에서 신창역 정류장이 포함된 셔틀버스 노선을 만들면 표시됩니다"}
+                        <p className="mt-0.5 text-[24px] font-black leading-8">{stationCountdown}</p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-[10px] font-bold text-[#b9d5ff]">
+                          {selectedStationDirection === "to-station" ? "열차 출발" : "열차 도착"}
+                        </p>
+                        <p className="mt-1 text-[17px] font-black">
+                          {selectedStationEventTime || "--:--"}
                         </p>
                       </div>
                     </div>
-                    {selectedStationRoute && (
-                      <div className="mt-4 grid grid-cols-2 gap-3">
-                        <div className="rounded-[14px] bg-white p-3">
-                          <p className="font-['Public_Sans'] text-[11px] font-bold uppercase tracking-[0.3px] text-[#94a3b8]">
-                            {selectedStationDirection === "to-station" ? "후문 출발" : "지하철 도착"}
-                          </p>
-                          <p className="mt-1 font-['Public_Sans'] text-[22px] font-black text-[#1e3a8a]">
-                            {(selectedStationDirection === "to-station" ? stationDeparture : selectedStationEventTime) || "--:--"}
-                          </p>
-                        </div>
-                        <div className="rounded-[14px] bg-white p-3">
-                          <p className="font-['Public_Sans'] text-[11px] font-bold uppercase tracking-[0.3px] text-[#94a3b8]">
-                            {selectedStationDirection === "to-station" ? "지하철 출발" : "신창역 출발"}
-                          </p>
-                          <p className="mt-1 font-['Public_Sans'] text-[16px] font-black text-[#0f172a] leading-[28px]">
-                            {selectedStationDirection === "to-station"
-                              ? selectedStationEventTime || "--:--"
-                              : stationDeparture || "--:--"}
-                          </p>
-                        </div>
-                      </div>
-                    )}
+                    <div className="flex items-center justify-between border-t border-white/15 bg-[#173477] px-4 py-2.5 text-[11px]">
+                      <span className="truncate pr-3 font-bold text-white/90">
+                        {selectedStationRoute ? formatStationRouteName(selectedStationRoute.name) : "신창역 셔틀 노선을 추가해 주세요"}
+                      </span>
+                      <span className="shrink-0 font-extrabold text-[#80e1f5]">
+                        {stationDeparture || "--:--"} 출발
+                      </span>
+                    </div>
                   </div>
+
+                  {selectedStationRoute && (
+                    <p className="px-1 text-[11px] font-semibold text-[#64748b]">
+                      {selectedStationDirection === "to-station"
+                        ? `열차 출발 ${stationOffset}분 전에 김승우 라운지에서 출발합니다`
+                        : `열차 도착 ${stationWait}분 후 출발 · ${continuesCampusLoop(selectedStationRoute) ? "후문 도착 후 학내순환 1회" : "김승우 라운지 종착"}`}
+                    </p>
+                  )}
 
                   {stationRoutes.length > 0 && (
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -567,7 +611,7 @@ export default function CampusShuttleWrapper() {
                               : "bg-[#f1f5f9] text-[#64748b]"
                           }`}
                         >
-                          {route.name}
+                          {formatStationRouteName(route.name)}
                         </button>
                       ))}
                     </div>
