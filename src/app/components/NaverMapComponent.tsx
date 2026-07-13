@@ -13,6 +13,8 @@ interface NaverMapProps {
   userLocation?: { lat: number; lng: number } | null;
   focusLocation?: { lat: number; lng: number; zoom?: number; key?: number } | null;
   fitBoundsKey?: number;
+  autoFitBounds?: boolean;
+  fitBoundsOptions?: { top: number; right: number; bottom: number; left: number; maxZoom?: number };
   routePath?: [number, number][]; // [[lng, lat], ...] from Naver Directions API
   onBusClick?: (busId: string) => void;
   onLocateRequest?: () => void;
@@ -27,6 +29,8 @@ const getNaverMaps = () => {
   const maps = window.naver?.maps;
   return typeof maps?.LatLng === "function" ? maps : null;
 };
+
+const DEFAULT_FIT_BOUNDS_OPTIONS = { top: 80, right: 80, bottom: 80, left: 80 };
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (char) => ({
@@ -91,6 +95,8 @@ export default function NaverMapComponent({
   userLocation = null,
   focusLocation = null,
   fitBoundsKey = 0,
+  autoFitBounds = false,
+  fitBoundsOptions = DEFAULT_FIT_BOUNDS_OPTIONS,
   routePath = [],
   onBusClick,
   onLocateRequest,
@@ -103,6 +109,7 @@ export default function NaverMapComponent({
   const userMarkerRef = useRef<any>(null);
   const polylineRef = useRef<any>(null);
   const scriptLoadedRef = useRef<boolean>(false);
+  const fitBoundsFrameRef = useRef<number | null>(null);
 
   const busesRef = useRef(buses);
   busesRef.current = buses;
@@ -114,10 +121,45 @@ export default function NaverMapComponent({
   userLocationRef.current = userLocation;
   const routePathRef = useRef(routePath);
   routePathRef.current = routePath;
+  const autoFitBoundsRef = useRef(autoFitBounds);
+  autoFitBoundsRef.current = autoFitBounds;
+  const fitBoundsOptionsRef = useRef(fitBoundsOptions);
+  fitBoundsOptionsRef.current = fitBoundsOptions;
   const onLocateRequestRef = useRef(onLocateRequest);
   onLocateRequestRef.current = onLocateRequest;
   const initialCenterRef = useRef(center);
   const initialZoomRef = useRef(zoom);
+
+  const fitMapToContent = useCallback(() => {
+    const maps = getNaverMaps();
+    if (!mapInstance.current || !maps) return;
+
+    const bounds = new maps.LatLngBounds();
+    let pointCount = 0;
+    stopsRef.current.forEach((stop) => {
+      if (!Number.isFinite(stop.position.lat) || !Number.isFinite(stop.position.lng)) return;
+      bounds.extend(new maps.LatLng(stop.position.lat, stop.position.lng));
+      pointCount += 1;
+    });
+    routePathRef.current.forEach(([lng, lat]) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      bounds.extend(new maps.LatLng(lat, lng));
+      pointCount += 1;
+    });
+    if (pointCount === 0) return;
+
+    mapInstance.current.fitBounds(bounds, fitBoundsOptionsRef.current);
+  }, []);
+
+  const requestFitMapToContent = useCallback(() => {
+    if (fitBoundsFrameRef.current !== null) {
+      cancelAnimationFrame(fitBoundsFrameRef.current);
+    }
+    fitBoundsFrameRef.current = requestAnimationFrame(() => {
+      fitBoundsFrameRef.current = null;
+      fitMapToContent();
+    });
+  }, [fitMapToContent]);
 
   // ── snap-to-segment: GPS 좌표를 경로 선분 위 최근접 점으로 스냅 ──
   const snapToSegment = useCallback((
@@ -424,6 +466,7 @@ export default function NaverMapComponent({
           updateStopMarkersRef.current();
           if (routePathRef.current?.length) updatePolylineRef.current(routePathRef.current);
         });
+        if (autoFitBoundsRef.current) requestFitMapToContent();
       } catch (e) { console.error("네이버 지도 초기화 오류:", e); }
     };
 
@@ -451,6 +494,10 @@ export default function NaverMapComponent({
     return () => {
       disposed = true;
       if (retryTimer !== null) window.clearTimeout(retryTimer);
+      if (fitBoundsFrameRef.current !== null) {
+        cancelAnimationFrame(fitBoundsFrameRef.current);
+        fitBoundsFrameRef.current = null;
+      }
       busMarkersRef.current.forEach(m => {
         if (m.__animRafId) {
           cancelAnimationFrame(m.__animRafId);
@@ -462,7 +509,7 @@ export default function NaverMapComponent({
       if (polylineRef.current) { try { polylineRef.current.setMap(null); } catch (_) {} }
       mapInstance.current = null;
     };
-  }, [clientId]);
+  }, [clientId, requestFitMapToContent]);
 
   useEffect(() => {
     const maps = getNaverMaps();
@@ -472,13 +519,17 @@ export default function NaverMapComponent({
   }, [center.lat, center.lng, zoom]);
 
   useEffect(() => { updateBusMarkers(); }, [buses, updateBusMarkers]);
-  useEffect(() => { updateStopMarkers(); }, [stops, updateStopMarkers]);
+  useEffect(() => {
+    updateStopMarkers();
+    if (autoFitBoundsRef.current) requestFitMapToContent();
+  }, [stops, updateStopMarkers, requestFitMapToContent]);
   useEffect(() => { updateUserMarker(userLocation ?? null); }, [userLocation, updateUserMarker]);
   useEffect(() => {
     updatePolyline(routePath);
     // 경로 로드 후 정류장 마커를 경로 위에 스냅해서 다시 그림
     updateStopMarkers();
-  }, [routePath, updatePolyline, updateStopMarkers]);
+    if (autoFitBoundsRef.current) requestFitMapToContent();
+  }, [routePath, updatePolyline, updateStopMarkers, requestFitMapToContent]);
 
   useEffect(() => {
     const maps = getNaverMaps();
@@ -488,16 +539,9 @@ export default function NaverMapComponent({
   }, [focusLocation]);
 
   useEffect(() => {
-    const maps = getNaverMaps();
-    if (!fitBoundsKey || !mapInstance.current || !maps) return;
-    const currentStops = stopsRef.current;
-    const currentPath = routePathRef.current;
-    if (currentStops.length === 0 && currentPath.length === 0) return;
-    const bounds = new maps.LatLngBounds();
-    currentStops.forEach(s => bounds.extend(new maps.LatLng(s.position.lat, s.position.lng)));
-    currentPath.forEach(([lng, lat]) => bounds.extend(new maps.LatLng(lat, lng)));
-    mapInstance.current.fitBounds(bounds, { padding: 80 });
-  }, [fitBoundsKey]);
+    if (!fitBoundsKey) return;
+    requestFitMapToContent();
+  }, [fitBoundsKey, requestFitMapToContent]);
 
   const handleZoomIn  = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() + 1); };
   const handleZoomOut = () => { mapInstance.current?.setZoom(mapInstance.current.getZoom() - 1); };
