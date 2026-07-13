@@ -1,5 +1,5 @@
-import { Suspense } from "react";
-import { ThemeProvider } from "next-themes";
+import { Suspense, useEffect } from "react";
+import { ThemeProvider, useTheme } from "next-themes";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./routes";
 import { LanguageProvider } from "./contexts/LanguageContext";
@@ -14,9 +14,20 @@ function AppLoadingFallback() {
   );
 }
 
+function ThemeModeMigration() {
+  const { theme, setTheme } = useTheme();
+
+  useEffect(() => {
+    if (theme && theme !== "light" && theme !== "dark") setTheme("light");
+  }, [setTheme, theme]);
+
+  return null;
+}
+
 export default function App() {
   return (
-    <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} themes={["light", "dark"]} disableTransitionOnChange>
+      <ThemeModeMigration />
       <AuthProvider>
         <LanguageProvider>
           <div className="unibus-theme min-h-dvh bg-background text-foreground">

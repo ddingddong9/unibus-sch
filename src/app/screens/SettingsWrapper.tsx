@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
-import { Monitor, Moon, Sun } from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
@@ -33,9 +33,6 @@ export default function SettingsWrapper() {
   const [notifications, setNotifications] = useState(() => isNotificationEnabled());
   const [notificationPermission, setNotificationPermission] = useState(() => getNotificationPermission());
   const [location, setLocation] = useState(true);
-  const [themeReady, setThemeReady] = useState(false);
-
-  useEffect(() => setThemeReady(true), []);
 
   const handleLogout = async () => {
     if (confirm(t("로그아웃 하시겠습니까?", "Are you sure you want to logout?"))) {
@@ -215,8 +212,8 @@ export default function SettingsWrapper() {
 
             <motion.div variants={rowVariant} className="flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px]">
               <div className="flex items-center gap-3">
-                <div className="bg-[#10b981]/10 rounded-[8px] size-[40px] flex items-center justify-center">
-                  <svg className="w-5 h-5 text-[#10b981]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <div className="bg-[#1e3a8a]/10 rounded-[8px] size-[40px] flex items-center justify-center">
+                  <svg className="w-5 h-5 text-[#1e3a8a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
@@ -232,8 +229,10 @@ export default function SettingsWrapper() {
               </div>
               <button
                 onClick={() => setLocation(!location)}
+                aria-label={t("위치 서비스", "Location Services")}
+                aria-pressed={location}
                 className={`relative w-[52px] h-[28px] rounded-full transition-colors ${
-                  location ? "bg-[#10b981]" : "bg-[#cbd5e1]"
+                  location ? "bg-[#1e3a8a]" : "bg-[#cbd5e1]"
                 }`}
               >
                 <div
@@ -253,24 +252,21 @@ export default function SettingsWrapper() {
                 </div>
                 <div>
                   <p className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] leading-[20px]">
-                    {t("다크 모드", "Dark Mode")}
+                    {t("화면 모드", "Appearance")}
                   </p>
                   <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[12px] leading-[16px]">
                     {theme === "dark"
-                      ? t("어두운 화면 사용", "Dark appearance")
-                      : theme === "light"
-                        ? t("밝은 화면 사용", "Light appearance")
-                        : t("기기 설정에 맞춤", "Match device settings")}
+                      ? t("다크 화면 사용", "Dark appearance")
+                      : t("화이트 화면 사용", "Light appearance")}
                   </p>
                 </div>
               </div>
-              <div className="grid w-full grid-cols-3 gap-1 rounded-[8px] bg-[#f1f5f9] p-1 sm:w-[186px]" role="group" aria-label={t("화면 테마", "Appearance theme")}>
+              <div className="grid w-full grid-cols-2 gap-1 rounded-[8px] bg-[#f1f5f9] p-1 sm:w-[156px]" role="group" aria-label={t("화면 모드", "Appearance")}>
                 {([
-                  { value: "system", label: t("시스템", "System"), Icon: Monitor },
-                  { value: "light", label: t("라이트", "Light"), Icon: Sun },
+                  { value: "light", label: t("화이트", "Light"), Icon: Sun },
                   { value: "dark", label: t("다크", "Dark"), Icon: Moon },
                 ] as const).map(({ value, label, Icon }) => {
-                  const selected = themeReady && theme === value;
+                  const selected = theme === value;
                   return (
                     <button
                       key={value}

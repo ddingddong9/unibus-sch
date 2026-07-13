@@ -113,11 +113,11 @@ export default function HomeWrapper() {
               </div>
               <button
                 onClick={() => navigate("/notice")}
-                className="bg-[#f1f5f9] content-stretch flex items-center justify-center relative rounded-[9999px] shrink-0 size-[40px] hover:bg-[#e2e8f0] transition-colors active:scale-95"
+                className="bg-[#f1f5f9] content-stretch flex items-center justify-center relative rounded-[9999px] shrink-0 size-[40px] text-[#0f172a] hover:bg-[#e2e8f0] transition-colors active:scale-95"
               >
                 <div className="h-[20px] relative shrink-0 w-[16px]">
                   <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 20">
-                    <path d={svgPaths.p164b49c0} fill="#0F172A" />
+                    <path d={svgPaths.p164b49c0} fill="currentColor" />
                   </svg>
                 </div>
               </button>
@@ -135,12 +135,12 @@ export default function HomeWrapper() {
               <div className="relative shrink-0 w-full animate-[routeLift_220ms_ease-out]">
                 <div className="content-stretch flex flex-col items-start px-[24px] py-[16px] relative w-full">
                   <div
-                    className="bg-[#1e3a8a] relative rounded-[16px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] shrink-0 w-full overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+                    className="home-accent-gradient bg-[#1e3a8a] relative rounded-[16px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] shrink-0 w-full overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
                     onClick={() => navigate("/campus-shuttle")}
                   >
                     <div className="content-stretch flex flex-col items-start p-[24px] relative w-full">
-                      <div className="absolute bg-[rgba(255,255,255,0.1)] right-[-16px] rounded-[9999px] size-[128px] top-[-16px]" />
-                      <div className="absolute bg-[rgba(255,255,255,0.05)] bottom-[-32px] left-[-32px] rounded-[9999px] size-[128px]" />
+                      <div className="home-accent-circle absolute bg-[rgba(255,255,255,0.1)] right-[-16px] rounded-[9999px] size-[128px] top-[-16px]" />
+                      <div className="home-accent-circle absolute bg-[rgba(255,255,255,0.05)] bottom-[-32px] left-[-32px] rounded-[9999px] size-[128px]" />
 
                       <div className="content-stretch flex flex-col gap-[4px] items-start relative shrink-0 w-full z-10">
                         <div className="content-stretch flex gap-[8px] items-center opacity-90 relative shrink-0 w-full">
@@ -239,7 +239,7 @@ export default function HomeWrapper() {
                       className={`bg-white content-stretch flex items-center justify-between p-[21px] relative rounded-[16px] shrink-0 w-full border border-[#e2e8f0] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] hover:shadow-md transition-all active:scale-[0.98] ${action.extra ?? ""}`}
                     >
                       <div className="flex gap-[16px] items-center">
-                        <div className="bg-[#1e3a8a] content-stretch flex items-center justify-center relative rounded-[12px] shrink-0 size-[48px]">
+                        <div className="home-accent-gradient bg-[#1e3a8a] content-stretch flex items-center justify-center relative rounded-[12px] shrink-0 size-[48px]">
                           <div className="h-[21px] relative shrink-0 w-[25.667px]">
                             <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox={action.viewBox}>
                               <path d={action.icon} fill="white" />
@@ -286,7 +286,7 @@ export default function HomeWrapper() {
                     <div className="absolute content-stretch flex inset-0 items-center justify-center">
                       <div className="relative">
                         <div className="absolute bg-[rgba(30,58,138,0.2)] left-[-6px] rounded-[9999px] size-[32px] top-[-6px] animate-ping" />
-                        <div className="bg-[#1e3a8a] relative rounded-[9999px] size-[20px] border-2 border-white shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]" />
+                        <div className="home-accent-gradient bg-[#1e3a8a] relative rounded-[9999px] size-[20px] border-2 border-white shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)]" />
                       </div>
                     </div>
 
