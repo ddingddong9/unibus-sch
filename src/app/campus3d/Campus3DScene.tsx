@@ -7,7 +7,6 @@ import campusDataSource from "./campus-data.json";
 import {
   CAMPUS_STOPS,
   createCampusRoute,
-  createTreePositions,
   polygonCenter,
   projectCoordinate,
 } from "./campus-geometry";
@@ -36,8 +35,9 @@ interface Campus3DSceneProps {
 function shapeFromPoints(points: Point2D[]) {
   const shape = new THREE.Shape();
   points.forEach(([x, z], index) => {
-    if (index === 0) shape.moveTo(x, z);
-    else shape.lineTo(x, z);
+    // Extrusion uses local XY and is rotated onto XZ, so local Y must invert once.
+    if (index === 0) shape.moveTo(x, -z);
+    else shape.lineTo(x, -z);
   });
   shape.closePath();
   return shape;
@@ -63,8 +63,8 @@ const Ground = memo(function Ground({ isNight }: { isNight: boolean }) {
         <meshStandardMaterial color={isNight ? "#16251f" : "#7c9a68"} roughness={0.95} />
       </mesh>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -3.8, 0]} receiveShadow>
-        <circleGeometry args={[760, 96]} />
-        <meshStandardMaterial color={isNight ? "#07100d" : "#dfe7d8"} roughness={1} />
+        <planeGeometry args={[1800, 1800]} />
+        <meshStandardMaterial color={isNight ? "#08110f" : "#e9edeb"} roughness={1} />
       </mesh>
     </>
   );
@@ -181,49 +181,6 @@ const BuildingMesh = memo(function BuildingMesh({
           </button>
         </Html>
       ) : null}
-    </group>
-  );
-});
-
-const TreeInstances = memo(function TreeInstances({ isNight }: { isNight: boolean }) {
-  const positions = useMemo(() => createTreePositions(campusData), []);
-  const trunks = useRef<THREE.InstancedMesh>(null);
-  const crowns = useRef<THREE.InstancedMesh>(null);
-
-  useEffect(() => {
-    const transform = new THREE.Object3D();
-    const color = new THREE.Color();
-    positions.forEach(([x, z], index) => {
-      const scale = 0.72 + ((index * 37) % 28) / 100;
-      transform.position.set(x, 2.6 * scale, z);
-      transform.scale.set(scale, scale, scale);
-      transform.rotation.y = index * 1.73;
-      transform.updateMatrix();
-      trunks.current?.setMatrixAt(index, transform.matrix);
-
-      transform.position.set(x, 7.2 * scale, z);
-      transform.updateMatrix();
-      crowns.current?.setMatrixAt(index, transform.matrix);
-      color.set(index % 4 === 0 ? "#4f7653" : index % 3 === 0 ? "#3d6847" : "#5e8255");
-      crowns.current?.setColorAt(index, color);
-    });
-    if (trunks.current) trunks.current.instanceMatrix.needsUpdate = true;
-    if (crowns.current) {
-      crowns.current.instanceMatrix.needsUpdate = true;
-      if (crowns.current.instanceColor) crowns.current.instanceColor.needsUpdate = true;
-    }
-  }, [positions]);
-
-  return (
-    <group>
-      <instancedMesh ref={trunks} args={[undefined, undefined, positions.length]} castShadow>
-        <cylinderGeometry args={[0.55, 0.8, 5.2, 6]} />
-        <meshStandardMaterial color={isNight ? "#392f28" : "#745743"} roughness={1} />
-      </instancedMesh>
-      <instancedMesh ref={crowns} args={[undefined, undefined, positions.length]} castShadow receiveShadow>
-        <coneGeometry args={[4.2, 8.4, 8]} />
-        <meshStandardMaterial color={isNight ? "#25432e" : "#517957"} roughness={0.96} vertexColors />
-      </instancedMesh>
     </group>
   );
 });
@@ -422,7 +379,6 @@ function CampusWorld(props: Campus3DSceneProps) {
           onSelect={props.onSelectBuilding}
         />
       ))}
-      <TreeInstances isNight={props.isNight} />
       {props.showRoute ? (
         <group>
           <Line points={route.map(([x, z]) => [x, 2, z])} color="#f59e0b" lineWidth={5.5} transparent opacity={0.94} />

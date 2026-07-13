@@ -39,61 +39,10 @@ export function polygonCenter(points: Point2D[]): Point2D {
   return [total[0] / points.length, total[1] / points.length];
 }
 
-function pointInPolygon(point: Point2D, polygon: Point2D[]) {
-  let inside = false;
-  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index++) {
-    const [x, z] = polygon[index];
-    const [previousX, previousZ] = polygon[previous];
-    const intersects =
-      z > point[1] !== previousZ > point[1] &&
-      point[0] < ((previousX - x) * (point[1] - z)) / (previousZ - z || Number.EPSILON) + x;
-    if (intersects) inside = !inside;
-  }
-  return inside;
-}
-
 function distanceSquared(a: Point2D, b: Point2D) {
   const x = a[0] - b[0];
   const z = a[1] - b[1];
   return x * x + z * z;
-}
-
-export function createTreePositions(data: CampusData, count = 210): Point2D[] {
-  const xs = data.boundary.map(([x]) => x);
-  const zs = data.boundary.map(([, z]) => z);
-  const bounds = {
-    minX: Math.min(...xs),
-    maxX: Math.max(...xs),
-    minZ: Math.min(...zs),
-    maxZ: Math.max(...zs),
-  };
-  const buildingCenters = data.buildings.map((building) => {
-    const center = polygonCenter(building.points);
-    return {
-      center,
-      radius: Math.max(10, ...building.points.map((point) => Math.sqrt(distanceSquared(point, center)))),
-    };
-  });
-
-  let seed = 20_260_713;
-  const random = () => {
-    seed = (seed * 1_664_525 + 1_013_904_223) >>> 0;
-    return seed / 4_294_967_296;
-  };
-
-  const positions: Point2D[] = [];
-  let attempts = 0;
-  while (positions.length < count && attempts < count * 30) {
-    attempts += 1;
-    const candidate: Point2D = [
-      bounds.minX + random() * (bounds.maxX - bounds.minX),
-      bounds.minZ + random() * (bounds.maxZ - bounds.minZ),
-    ];
-    if (!pointInPolygon(candidate, data.boundary)) continue;
-    if (buildingCenters.some(({ center, radius }) => distanceSquared(candidate, center) < (radius + 8) ** 2)) continue;
-    positions.push(candidate);
-  }
-  return positions;
 }
 
 interface GraphEdge {
