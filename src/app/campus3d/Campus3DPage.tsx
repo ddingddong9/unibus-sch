@@ -2,9 +2,13 @@ import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import {
   Building2,
   BusFront,
+  Cloud,
+  CloudRain,
+  CloudSun,
   Compass,
   Expand,
   Gauge,
+  Film,
   Layers3,
   Maximize2,
   Minimize2,
@@ -17,9 +21,10 @@ import {
   Route,
   Search,
   Sun,
+  Sparkles,
   X,
 } from "lucide-react";
-import Campus3DScene, { campusData } from "./Campus3DScene";
+import Campus3DScene, { campusData, type CampusWeather, type RenderQuality } from "./Campus3DScene";
 import { buildingCategory, projectCoordinate } from "./campus-geometry";
 import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
 import type { CampusBuilding, CampusStop, Point2D } from "./types";
@@ -95,6 +100,9 @@ export default function Campus3DPage() {
   const [simulationSpeed, setSimulationSpeed] = useState(1);
   const [presentationOpen, setPresentationOpen] = useState(false);
   const [selectedStop, setSelectedStop] = useState<CampusStop | null>(null);
+  const [weather, setWeather] = useState<CampusWeather>("clear");
+  const [renderQuality, setRenderQuality] = useState<RenderQuality>("balanced");
+  const [isTouring, setIsTouring] = useState(false);
 
   const buildings = useMemo(
     () => [...campusData.buildings].sort((a, b) => a.name.localeCompare(b.name, "ko")),
@@ -165,6 +173,7 @@ export default function Campus3DPage() {
     setAutoRotate(false);
     setFollowBusId(null);
     setSelectedStop(null);
+    setIsTouring(false);
     setResetVersion((version) => version + 1);
   };
 
@@ -181,6 +190,7 @@ export default function Campus3DPage() {
     setFollowBusId(null);
     setSelectedStop(null);
     setPresentationOpen(false);
+    setIsTouring(false);
   };
 
   const selectLandmark = (landmark: (typeof LANDMARKS)[number]) => {
@@ -191,6 +201,7 @@ export default function Campus3DPage() {
     setFollowBusId(null);
     setSelectedStop(null);
     setPresentationOpen(false);
+    setIsTouring(false);
   };
 
   return (
@@ -207,6 +218,9 @@ export default function Campus3DPage() {
           routeStops={remoteStops}
           followBusId={followBusId}
           simulationSpeed={simulationSpeed}
+          weather={weather}
+          renderQuality={renderQuality}
+          isTouring={isTouring}
           onFollowBus={setFollowBusId}
           resetVersion={resetVersion}
           onSelectBuilding={(building) => {
@@ -216,6 +230,7 @@ export default function Campus3DPage() {
               setFollowBusId(null);
               setSelectedStop(null);
               setPresentationOpen(false);
+              setIsTouring(false);
             }
           }}
           selectedStopId={selectedStop?.id ?? null}
@@ -225,6 +240,7 @@ export default function Campus3DPage() {
             setFocusTarget(null);
             setFollowBusId(null);
             setPresentationOpen(false);
+            setIsTouring(false);
           }}
         />
       </Suspense>
@@ -326,7 +342,7 @@ export default function Campus3DPage() {
           {[
             { icon: Building2, value: campusData.buildings.length, label: "건물" },
             { icon: Layers3, value: campusData.areas.length, label: "시설 영역" },
-            { icon: Route, value: 5, label: "정류장" },
+            { icon: Route, value: remoteStops?.length ?? 5, label: "정류장" },
             { icon: BusFront, value: 3, label: "운행 차량" },
           ].map((item, index) => (
             <div key={item.label} className={`flex min-w-[94px] items-center gap-2.5 px-3 py-2.5 ${index > 0 ? "border-l border-[#e2e8f0]" : ""}`}>
@@ -397,7 +413,7 @@ export default function Campus3DPage() {
       ) : null}
 
       {presentationOpen ? (
-        <section className="absolute bottom-[82px] left-1/2 z-30 w-[min(420px,calc(100%-24px))] -translate-x-1/2 rounded-2xl border border-white/80 bg-white/94 p-3 shadow-[0_14px_38px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:bottom-24">
+        <section className="absolute bottom-[82px] left-1/2 z-30 w-[min(440px,calc(100%-24px))] -translate-x-1/2 rounded-2xl border border-white/80 bg-white/94 p-3 shadow-[0_14px_38px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:bottom-24">
           <div className="flex items-center justify-between gap-3">
             <div>
               <p className="text-xs font-extrabold text-[#0f172a]">발표 운행 제어</p>
@@ -421,6 +437,28 @@ export default function Campus3DPage() {
               전체 보기
             </button>
           </div>
+          <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-[#e2e8f0] pt-2">
+            {([
+              { value: "clear", label: "맑음", icon: CloudSun },
+              { value: "cloudy", label: "흐림", icon: Cloud },
+              { value: "rain", label: "비", icon: CloudRain },
+            ] as const).map((item) => (
+              <button key={item.value} type="button" onClick={() => setWeather(item.value)} className={`flex h-9 items-center justify-center gap-1.5 rounded-xl border text-[10px] font-extrabold ${weather === item.value ? "border-[#1e3a8a] bg-[#eef3ff] text-[#1e3a8a]" : "border-[#e2e8f0] bg-white text-[#64748b]"}`}>
+                <item.icon className="h-3.5 w-3.5" aria-hidden="true" />
+                {item.label}
+              </button>
+            ))}
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            <button type="button" onClick={() => { setFollowBusId(null); setAutoRotate(false); setSelectedBuilding(null); setSelectedStop(null); setFocusTarget(null); setIsTouring((touring) => !touring); }} className={`flex h-10 items-center justify-center gap-2 rounded-xl border text-[10px] font-extrabold ${isTouring ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-[#e2e8f0] bg-white text-[#475569]"}`}>
+              <Film className="h-4 w-4" aria-hidden="true" />
+              {isTouring ? "캠퍼스 투어 종료" : "캠퍼스 자동 투어"}
+            </button>
+            <button type="button" onClick={() => setRenderQuality((quality) => quality === "balanced" ? "high" : "balanced")} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] bg-white text-[10px] font-extrabold text-[#475569]">
+              <Sparkles className="h-4 w-4 text-[#1e3a8a]" aria-hidden="true" />
+              {renderQuality === "high" ? "고화질" : "균형 화질"}
+            </button>
+          </div>
         </section>
       ) : null}
 
@@ -435,7 +473,7 @@ export default function Campus3DPage() {
         <IconButton label="셔틀 경로 표시" active={showRoute} onClick={() => setShowRoute((visible) => !visible)}>
           <Route className="h-4.5 w-4.5" aria-hidden="true" />
         </IconButton>
-        <IconButton label="자동 회전" active={autoRotate} onClick={() => { setFollowBusId(null); setAutoRotate((rotating) => !rotating); }}>
+        <IconButton label="자동 회전" active={autoRotate} onClick={() => { setFollowBusId(null); setIsTouring(false); setAutoRotate((rotating) => !rotating); }}>
           <Rotate3D className="h-4.5 w-4.5" aria-hidden="true" />
         </IconButton>
         <IconButton label={isNight ? "주간 모드" : "야간 모드"} active={isNight} onClick={() => setIsNight((night) => !night)}>
