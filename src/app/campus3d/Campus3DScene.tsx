@@ -6,6 +6,7 @@ import * as THREE from "three";
 import campusDataSource from "./campus-data.json";
 import {
   CAMPUS_STOPS,
+  CAMPUS_OUTER_ROAD,
   createCampusRoute,
   polygonCenter,
   projectCoordinate,
@@ -27,6 +28,99 @@ const MAJOR_BUILDINGS = new Set([
   "학생회관",
   "의료과학대",
 ]);
+
+interface BuildingFootprint {
+  width: number;
+  depth: number;
+  rotation: number;
+}
+
+function RoofMaterial({ variant, isNight }: { variant: "concrete" | "glass"; isNight: boolean }) {
+  if (variant === "glass") {
+    return <meshStandardMaterial color={isNight ? "#9cc8d8" : "#78aabb"} emissive="#4f9fbd" emissiveIntensity={isNight ? 0.4 : 0.04} metalness={0.26} roughness={0.34} />;
+  }
+  return <meshStandardMaterial color={isNight ? "#4b5e69" : "#d8dfe1"} roughness={0.72} metalness={0.12} />;
+}
+
+const MajorBuildingRoof = memo(function MajorBuildingRoof({
+  name,
+  footprint,
+  isNight,
+}: {
+  name: string;
+  footprint: BuildingFootprint;
+  isNight: boolean;
+}) {
+  if (name === "도서관") {
+    return (
+      <group rotation={[0, footprint.rotation, 0]}>
+        <mesh castShadow position={[0, 1.25, 0]}>
+          <boxGeometry args={[Math.max(footprint.width * 0.62, 10), 2.5, Math.max(footprint.depth * 0.2, 5)]} />
+          <RoofMaterial variant="glass" isNight={isNight} />
+        </mesh>
+        {[-0.32, 0.32].map((ratio) => (
+          <mesh key={ratio} castShadow position={[footprint.width * ratio, 0.75, 0]}>
+            <boxGeometry args={[Math.max(footprint.width * 0.12, 3), 1.5, Math.max(footprint.depth * 0.38, 6)]} />
+            <RoofMaterial variant="concrete" isNight={isNight} />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
+  if (name === "대학본부") {
+    return (
+      <group rotation={[0, footprint.rotation, 0]}>
+        <mesh castShadow position={[0, 1.55, 0]}>
+          <boxGeometry args={[Math.max(footprint.width * 0.2, 5), 3.1, Math.max(footprint.depth * 0.5, 8)]} />
+          <RoofMaterial variant="glass" isNight={isNight} />
+        </mesh>
+        {[-0.3, 0.3].map((ratio) => (
+          <mesh key={ratio} castShadow position={[footprint.width * ratio, 0.7, 0]}>
+            <boxGeometry args={[Math.max(footprint.width * 0.18, 4), 1.4, Math.max(footprint.depth * 0.28, 5)]} />
+            <RoofMaterial variant="concrete" isNight={isNight} />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
+
+  if (name === "유니토피아관") {
+    return (
+      <group rotation={[0, footprint.rotation, 0]}>
+        <mesh castShadow position={[0, 2.4, 0]}>
+          <boxGeometry args={[Math.max(footprint.width * 0.34, 7), 4.8, Math.max(footprint.depth * 0.34, 7)]} />
+          <RoofMaterial variant="glass" isNight={isNight} />
+        </mesh>
+        <mesh castShadow position={[0, 0.55, 0]}>
+          <boxGeometry args={[Math.max(footprint.width * 0.58, 10), 1.1, Math.max(footprint.depth * 0.58, 10)]} />
+          <RoofMaterial variant="concrete" isNight={isNight} />
+        </mesh>
+      </group>
+    );
+  }
+
+  const unitCount = name === "공과대학" ? 3 : 2;
+  const canopy = name === "학생회관";
+  return (
+    <group rotation={[0, footprint.rotation, 0]}>
+      {canopy ? (
+        <mesh castShadow position={[0, 0.65, footprint.depth * 0.18]}>
+          <boxGeometry args={[Math.max(footprint.width * 0.68, 12), 1.3, Math.max(footprint.depth * 0.24, 5)]} />
+          <RoofMaterial variant="glass" isNight={isNight} />
+        </mesh>
+      ) : Array.from({ length: unitCount }, (_, index) => {
+        const offset = (index - (unitCount - 1) / 2) * Math.max(footprint.width * 0.22, 6);
+        return (
+          <mesh key={index} castShadow position={[offset, 0.9, 0]}>
+            <boxGeometry args={[Math.max(footprint.width * 0.16, 4), 1.8, Math.max(footprint.depth * 0.28, 5)]} />
+            <RoofMaterial variant={index === unitCount - 1 ? "glass" : "concrete"} isNight={isNight} />
+          </mesh>
+        );
+      })}
+    </group>
+  );
+});
 
 interface Campus3DSceneProps {
   isNight: boolean;
@@ -120,14 +214,30 @@ const BuildingMesh = memo(function BuildingMesh({
   const edges = useMemo(() => new THREE.EdgesGeometry(geometry, 32), [geometry]);
   const center = useMemo(() => polygonCenter(building.points), [building.points]);
   const baseHeight = useMemo(() => getTerrainHeight(center[0], center[1]), [center]);
-  const footprint = useMemo(() => {
-    const xs = building.points.map(([x]) => x);
-    const zs = building.points.map(([, z]) => z);
+  const footprint = useMemo<BuildingFootprint>(() => {
+    let longest = { length: 0, dx: 1, dz: 0 };
+    building.points.forEach((point, index) => {
+      const next = building.points[(index + 1) % building.points.length];
+      const dx = next[0] - point[0];
+      const dz = next[1] - point[1];
+      const length = Math.hypot(dx, dz);
+      if (length > longest.length) longest = { length, dx, dz };
+    });
+    const ux = longest.dx / longest.length;
+    const uz = longest.dz / longest.length;
+    const local = building.points.map(([x, z]) => {
+      const dx = x - center[0];
+      const dz = z - center[1];
+      return [dx * ux + dz * uz, dx * -uz + dz * ux] as Point2D;
+    });
+    const xs = local.map(([x]) => x);
+    const zs = local.map(([, z]) => z);
     return {
       width: Math.max(...xs) - Math.min(...xs),
       depth: Math.max(...zs) - Math.min(...zs),
+      rotation: -Math.atan2(uz, ux),
     };
-  }, [building.points]);
+  }, [building.points, center]);
   const isMajor = MAJOR_BUILDINGS.has(building.name);
 
   useEffect(() => () => {
@@ -201,14 +311,7 @@ const BuildingMesh = memo(function BuildingMesh({
       ) : null}
       {isMajor ? (
         <group position={[center[0], baseHeight + building.height + 0.7, center[1]]}>
-          <mesh castShadow position={[0, 0.8, 0]}>
-            <boxGeometry args={[Math.max(footprint.width * 0.28, 5), 1.6, Math.max(footprint.depth * 0.24, 5)]} />
-            <meshStandardMaterial color={isNight ? "#4b5e69" : "#d8dfe1"} roughness={0.72} metalness={0.12} />
-          </mesh>
-          <mesh position={[0, 1.72, 0]}>
-            <boxGeometry args={[Math.max(footprint.width * 0.18, 3.5), 0.35, Math.max(footprint.depth * 0.16, 3.5)]} />
-            <meshStandardMaterial color={isNight ? "#9cc8d8" : "#78aabb"} emissive="#4f9fbd" emissiveIntensity={isNight ? 0.4 : 0.04} metalness={0.26} roughness={0.34} />
-          </mesh>
+          <MajorBuildingRoof name={building.name} footprint={footprint} isNight={isNight} />
         </group>
       ) : null}
     </group>
@@ -478,6 +581,10 @@ function CampusWorld(props: Campus3DSceneProps) {
     })),
     [props.routeStops],
   );
+  const outerRoadLabel = useMemo(
+    () => projectCoordinate(36.774595, 126.932422, campusData.origin),
+    [],
+  );
 
   return (
     <>
@@ -527,6 +634,26 @@ function CampusWorld(props: Campus3DSceneProps) {
           );
         })}
       </group>
+      <group position={[0, 0.7, 0]}>
+        <Line
+          points={CAMPUS_OUTER_ROAD.map((point) => {
+            const [x, z] = projectCoordinate(point.latitude, point.longitude, campusData.origin);
+            return [x, getTerrainHeight(x, z), z];
+          })}
+          color={props.isNight ? "#242f37" : "#555d61"}
+          lineWidth={6.5}
+        />
+        <Line
+          points={CAMPUS_OUTER_ROAD.map((point) => {
+            const [x, z] = projectCoordinate(point.latitude, point.longitude, campusData.origin);
+            return [x, getTerrainHeight(x, z) + 0.08, z];
+          })}
+          color={props.isNight ? "#aeb7bc" : "#e7eaeb"}
+          lineWidth={0.8}
+          transparent
+          opacity={0.72}
+        />
+      </group>
       {campusData.buildings.map((building) => (
         <BuildingMesh
           key={building.id}
@@ -541,6 +668,12 @@ function CampusWorld(props: Campus3DSceneProps) {
         <group>
           <Line points={route.map(([x, z]) => [x, getTerrainHeight(x, z) + 2, z])} color="#f59e0b" lineWidth={5.5} transparent opacity={0.94} />
           <Line points={route.map(([x, z]) => [x, getTerrainHeight(x, z) + 2.05, z])} color="#fff7d6" lineWidth={1.25} transparent opacity={0.85} />
+          <Html position={[outerRoadLabel[0], getTerrainHeight(outerRoadLabel[0], outerRoadLabel[1]) + 8, outerRoadLabel[1]]} center distanceFactor={430} zIndexRange={[10, 0]}>
+            <div className="pointer-events-none flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/85 bg-white/94 px-2.5 py-1.5 text-[10px] font-extrabold text-[#1e3a8a] shadow-[0_8px_22px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+              <span className="h-1.5 w-1.5 rounded-full bg-[#f59e0b]" />
+              온천대로 · 외곽 운행
+            </div>
+          </Html>
           {stopPositions.map((stop, index) => (
             <group key={stop.id} position={[stop.position[0], getTerrainHeight(stop.position[0], stop.position[1]) + 2.2, stop.position[1]]} onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }}>
               <mesh castShadow>
