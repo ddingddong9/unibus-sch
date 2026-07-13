@@ -305,8 +305,21 @@ function StationCamera({ controls, initialView, resetVersion }: {
   const camera = useThree((state) => state.camera);
   useEffect(() => {
     const initialTarget = initialView?.target ?? [0, 0];
-    // The route runs mostly east-west. A shallow eastward camera offset turns
-    // that long axis into useful vertical screen space on the mobile map.
+    if (initialView?.cameraPosition) {
+      const targetTerrain = getStationTerrainHeight(initialTarget[0], initialTarget[1]);
+      const cameraTerrain = getStationTerrainHeight(initialView.cameraPosition[0], initialView.cameraPosition[1]);
+      camera.up.set(0, 1, 0);
+      camera.position.set(
+        initialView.cameraPosition[0],
+        cameraTerrain + (initialView.cameraHeight ?? 145),
+        initialView.cameraPosition[1],
+      );
+      camera.lookAt(initialTarget[0], targetTerrain + 8, initialTarget[1]);
+      controls.current?.target.set(initialTarget[0], targetTerrain + 8, initialTarget[1]);
+      controls.current?.update();
+      return;
+    }
+
     const target: Point2D = [initialTarget[0] + 170, initialTarget[1]];
     const distance = THREE.MathUtils.clamp((initialView?.distance ?? 2450) * 1.2, 2500, 3100);
     const terrain = getStationTerrainHeight(target[0], target[1]);
@@ -348,7 +361,7 @@ function StationWorld(props: StationShuttle3DSceneProps) {
       {stationCorridorData.buildings.map((building) => <CorridorBuilding key={building.id} building={building} />)}
       <SinchangStation />
       <Line points={routeSurface} color="#ffffff" lineWidth={6} depthTest={false} renderOrder={20} />
-      <Line points={routeSurface} color="#f59e0b" lineWidth={3.6} depthTest={false} renderOrder={21} />
+      <Line points={routeSurface} color="#1e3a8a" lineWidth={3.6} depthTest={false} renderOrder={21} />
       {stops.map((stop, index) => (
         <group key={stop.id} position={[stop.position[0], getStationTerrainHeight(stop.position[0], stop.position[1]) + 2, stop.position[1]]} onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }}>
           <mesh castShadow>

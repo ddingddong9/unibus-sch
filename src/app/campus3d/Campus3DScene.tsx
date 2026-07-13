@@ -30,6 +30,8 @@ export interface CampusLiveBus {
 export interface CampusInitialView {
   target: Point2D;
   distance: number;
+  cameraPosition?: Point2D;
+  cameraHeight?: number;
 }
 const MAJOR_BUILDINGS = new Set([
   "대학본부",
@@ -154,6 +156,7 @@ interface Campus3DSceneProps {
   onSelectBuilding: (building: CampusBuilding | null) => void;
   liveBuses?: CampusLiveBus[];
   initialView?: CampusInitialView | null;
+  fallbackBusLabels?: string[];
 }
 
 function shapeFromPoints(points: Point2D[]) {
@@ -657,6 +660,13 @@ function CameraDirector({
     const hasSubject = Boolean(selected || focusTarget);
     const targetPosition = hasSubject
       ? new THREE.Vector3(target[0] + 105, terrainHeight + Math.max(subjectHeight + 72, 90), target[1] + 125)
+      : initialView?.cameraPosition
+        ? new THREE.Vector3(
+            initialView.cameraPosition[0],
+            getTerrainHeight(initialView.cameraPosition[0], initialView.cameraPosition[1])
+              + (initialView.cameraHeight ?? initialView.distance * 0.72),
+            initialView.cameraPosition[1],
+          )
       : initialView
         ? new THREE.Vector3(
             target[0] + initialView.distance * (initialView.distance > 1500 ? 0.12 : 0.52),
@@ -664,9 +674,14 @@ function CameraDirector({
             target[1] + initialView.distance * (initialView.distance > 1500 ? 0.12 : 0.58),
           )
         : new THREE.Vector3(560, 900, 720);
-    const targetLookAt = new THREE.Vector3(target[0], terrainHeight + (hasSubject ? subjectHeight * 0.3 : 0), target[1]);
+    const targetLookAt = new THREE.Vector3(
+      target[0],
+      terrainHeight + (hasSubject ? subjectHeight * 0.3 : initialView?.cameraPosition ? 12 : 0),
+      target[1],
+    );
     const startPosition = camera.position.clone();
     const startTarget = controls.current?.target.clone() ?? new THREE.Vector3();
+    const animatedTarget = new THREE.Vector3();
     const startedAt = performance.now();
     let frame = 0;
 
@@ -674,8 +689,13 @@ function CameraDirector({
       const rawProgress = Math.min((now - startedAt) / 780, 1);
       const progress = 1 - (1 - rawProgress) ** 3;
       camera.position.lerpVectors(startPosition, targetPosition, progress);
-      controls.current?.target.lerpVectors(startTarget, targetLookAt, progress);
-      controls.current?.update();
+      animatedTarget.lerpVectors(startTarget, targetLookAt, progress);
+      if (controls.current) {
+        controls.current.target.copy(animatedTarget);
+        controls.current.update();
+      } else {
+        camera.lookAt(animatedTarget);
+      }
       if (rawProgress < 1) frame = requestAnimationFrame(animate);
     };
     frame = requestAnimationFrame(animate);
@@ -826,7 +846,7 @@ function CampusWorld(props: Campus3DSceneProps) {
           />
           <Line
             points={routeSurface}
-            color="#ffae00"
+            color="#1e3a8a"
             lineWidth={4.2}
             depthTest={false}
             renderOrder={31}
@@ -852,11 +872,19 @@ function CampusWorld(props: Campus3DSceneProps) {
           {props.liveBuses !== undefined ? props.liveBuses.map((bus) => (
             <LiveShuttleBus key={bus.id} bus={bus} track={routeTrack} followed={props.followBusId === bus.id} controls={controls} onFollow={props.onFollowBus} />
           )) : (
-            <>
-              <ShuttleBus track={routeTrack} offset={0} running={props.isRunning} label="학내순환 1호" followed={props.followBusId === "학내순환 1호"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
-              <ShuttleBus track={routeTrack} offset={(routeTrack.total * 2) / 3} running={props.isRunning} label="학내순환 2호" followed={props.followBusId === "학내순환 2호"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
-              <ShuttleBus track={routeTrack} offset={(routeTrack.total * 4) / 3} running={props.isRunning} label="학내순환 3호" followed={props.followBusId === "학내순환 3호"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
-            </>
+            (props.fallbackBusLabels ?? ["학내순환 1호", "학내순환 2호", "학내순환 3호"]).map((label, index, labels) => (
+              <ShuttleBus
+                key={label}
+                track={routeTrack}
+                offset={(routeTrack.total * 2 * index) / labels.length}
+                running={props.isRunning}
+                label={label}
+                followed={props.followBusId === label}
+                speedMultiplier={props.simulationSpeed}
+                controls={controls}
+                onFollow={props.onFollowBus}
+              />
+            ))
           )}
         </group>
       ) : null}
