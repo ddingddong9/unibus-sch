@@ -114,11 +114,11 @@ export default function UserManagement() {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-6 flex items-center justify-between sm:mb-8">
           <div>
-            <h1 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[32px] mb-2">
+            <h1 className="mb-2 font-['Public_Sans'] text-[26px] font-bold text-[#0f172a] sm:text-[32px]">
               사용자 관리
             </h1>
             <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">
@@ -138,7 +138,7 @@ export default function UserManagement() {
             <button
               key={stat.key}
               onClick={() => setFilterRole(stat.key)}
-              className={`bg-white rounded-xl p-5 shadow-sm border transition-all text-left hover:shadow-md ${
+              className={`rounded-xl border bg-white p-3 text-left shadow-sm transition-all hover:shadow-md sm:p-5 ${
                 filterRole === stat.key ? "border-[#1e3b8a] ring-2 ring-[#1e3b8a]/20" : "border-gray-100"
               }`}
             >

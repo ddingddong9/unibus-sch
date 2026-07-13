@@ -116,11 +116,11 @@ export default function NoticeManagement() {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[32px] mb-2">
+            <h1 className="mb-2 font-['Public_Sans'] text-[26px] font-bold text-[#0f172a] sm:text-[32px]">
               공지사항 관리
             </h1>
             <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">
@@ -129,7 +129,7 @@ export default function NoticeManagement() {
           </div>
           <button
             onClick={handleCreate}
-            className="flex items-center gap-2 px-6 py-3 bg-[#1e3b8a] text-white font-['Public_Sans'] font-semibold text-[15px] rounded-lg hover:bg-[#1e3b8a]/90 transition-colors shadow-sm"
+            className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#1e3b8a] px-6 py-3 font-['Public_Sans'] text-[15px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1e3b8a]/90 sm:w-auto"
           >
             <Plus className="w-5 h-5" />
             새 공지사항
@@ -151,8 +151,8 @@ export default function NoticeManagement() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <table className="w-full">
+        <div className="overflow-x-auto rounded-xl border border-gray-100 bg-white shadow-sm">
+          <table className="w-full min-w-[760px]">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-6 py-4 text-left font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] w-[50%]">제목</th>
@@ -210,8 +210,8 @@ export default function NoticeManagement() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-auto">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="h-dvh w-full max-w-2xl overflow-auto bg-white sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
             <div className="p-6 border-b border-gray-200">
               <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[24px]">
                 {editingNotice ? "공지사항 수정" : "새 공지사항 작성"}

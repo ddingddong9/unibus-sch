@@ -131,10 +131,10 @@ export default function NotificationSender() {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[32px] mb-2">
+          <h1 className="mb-2 font-['Public_Sans'] text-[26px] font-bold text-[#0f172a] sm:text-[32px]">
             알림 전송
           </h1>
           <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">
@@ -144,7 +144,7 @@ export default function NotificationSender() {
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6 mb-6">
           {/* Send Form */}
-          <div className="xl:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6 xl:col-span-2">
             <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px] mb-6">
               새 알림 보내기
             </h2>
@@ -218,7 +218,7 @@ export default function NotificationSender() {
                 </div>
 
                 {!formData.scheduleNow && (
-                  <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <input
                       type="date"
                       value={formData.scheduleDate}

@@ -335,17 +335,17 @@ export default function BusManagement() {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[32px] mb-2">버스 관리</h1>
+          <h1 className="mb-2 font-['Public_Sans'] text-[26px] font-bold text-[#0f172a] sm:text-[32px]">버스 관리</h1>
           <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">버스 등록, 기사 배정, 운행 가능 상태와 실시간 운행을 관리합니다</p>
         </div>
 
         <div className="space-y-6">
 
           {/* ① 실시간 버스 현황 */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6">
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[18px]">실시간 버스 현황</h3>
@@ -388,7 +388,7 @@ export default function BusManagement() {
                   return (
                     <div
                       key={bus.id}
-                      className={`flex items-center gap-4 p-4 rounded-xl border transition-all ${
+                      className={`flex flex-col items-stretch gap-4 rounded-xl border p-4 transition-all lg:flex-row lg:items-center ${
                         isActive ? "border-[#1e3b8a]/20 bg-[#1e3b8a]/[0.03]" : "border-gray-100 bg-gray-50/50"
                       }`}
                     >
@@ -488,7 +488,7 @@ export default function BusManagement() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                      <div className="flex shrink-0 flex-wrap items-center justify-start gap-2 lg:justify-end">
                         <label className="flex items-center gap-2">
                           <UserCheck className="w-4 h-4 text-[#94a3b8]" />
                           <select
