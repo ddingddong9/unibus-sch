@@ -37,26 +37,24 @@ const ROUTE_SEGMENT_OVERRIDES: Record<string, Pick<CampusStop, "latitude" | "lon
     { latitude: 36.76856, longitude: 126.935722 },
     { latitude: 36.7684558, longitude: 126.9354662 },
   ],
-  // 정문에서 후문으로 갈 때는 교내를 가로지르지 않고 온천대로와 순천향로를 이용한다.
-  "main-gate:rear-gate": [
-    { latitude: 36.76938, longitude: 126.927631 },
-    { latitude: 36.7697, longitude: 126.927521 },
-    { latitude: 36.770127, longitude: 126.928039 },
-    { latitude: 36.770792, longitude: 126.928952 },
-    { latitude: 36.771585, longitude: 126.929795 },
-    { latitude: 36.773278, longitude: 126.93132 },
-    { latitude: 36.774595, longitude: 126.932422 },
-    { latitude: 36.774798, longitude: 126.93261 },
-    { latitude: 36.774053, longitude: 126.933208 },
-    { latitude: 36.773641, longitude: 126.93354 },
-    { latitude: 36.773328, longitude: 126.933792 },
-    { latitude: 36.773166, longitude: 126.933923 },
-    { latitude: 36.772936, longitude: 126.934107 },
-    { latitude: 36.772808, longitude: 126.933885 },
-  ],
 };
 
-export const CAMPUS_OUTER_ROAD = ROUTE_SEGMENT_OVERRIDES["main-gate:rear-gate"];
+export const CAMPUS_OUTER_ROAD = [
+  { latitude: 36.76938, longitude: 126.927631 },
+  { latitude: 36.7697, longitude: 126.927521 },
+  { latitude: 36.770127, longitude: 126.928039 },
+  { latitude: 36.770792, longitude: 126.928952 },
+  { latitude: 36.771585, longitude: 126.929795 },
+  { latitude: 36.773278, longitude: 126.93132 },
+  { latitude: 36.774595, longitude: 126.932422 },
+  { latitude: 36.774798, longitude: 126.93261 },
+  { latitude: 36.774053, longitude: 126.933208 },
+  { latitude: 36.773641, longitude: 126.93354 },
+  { latitude: 36.773328, longitude: 126.933792 },
+  { latitude: 36.773166, longitude: 126.933923 },
+  { latitude: 36.772936, longitude: 126.934107 },
+  { latitude: 36.772808, longitude: 126.933885 },
+];
 
 export function projectCoordinate(
   latitude: number,
@@ -186,53 +184,6 @@ export function createCampusRoute(data: CampusData) {
     route.push(route[0]);
   }
   return route;
-}
-
-export function applyCampusRouteRules(route: Point2D[], data: CampusData) {
-  if (route.length < 2) return route;
-  const first = route[0];
-  const last = route[route.length - 1];
-  const openRoute = distanceSquared(first, last) < 1 ? route.slice(0, -1) : [...route];
-  const mainGate = CAMPUS_STOPS.find((stop) => stop.id === "main-gate");
-  const rearGate = CAMPUS_STOPS.find((stop) => stop.id === "rear-gate");
-  if (!mainGate || !rearGate) return route;
-
-  const mainPoint = projectCoordinate(mainGate.latitude, mainGate.longitude, data.origin);
-  const rearPoint = projectCoordinate(rearGate.latitude, rearGate.longitude, data.origin);
-  const nearestIndex = (target: Point2D) => {
-    let result = 0;
-    let best = Number.POSITIVE_INFINITY;
-    openRoute.forEach((point, index) => {
-      const distance = distanceSquared(point, target);
-      if (distance < best) {
-        best = distance;
-        result = index;
-      }
-    });
-    return { index: result, distance: Math.sqrt(best) };
-  };
-  const mainMatch = nearestIndex(mainPoint);
-  const rearMatch = nearestIndex(rearPoint);
-  if (mainMatch.distance > 100 || rearMatch.distance > 100) return route;
-
-  const rotated = [
-    ...openRoute.slice(mainMatch.index),
-    ...openRoute.slice(0, mainMatch.index),
-  ];
-  const rearOffset = rotated.reduce(
-    (best, point, index) => distanceSquared(point, rearPoint) < best.distance
-      ? { index, distance: distanceSquared(point, rearPoint) }
-      : best,
-    { index: 0, distance: Number.POSITIVE_INFINITY },
-  ).index;
-  const outerSegment = [
-    mainPoint,
-    ...CAMPUS_OUTER_ROAD.map((point) => projectCoordinate(point.latitude, point.longitude, data.origin)),
-    rearPoint,
-  ];
-  const corrected = [...outerSegment, ...rotated.slice(rearOffset + 1)];
-  corrected.push(corrected[0]);
-  return corrected;
 }
 
 export function buildingCategory(building: CampusBuilding) {

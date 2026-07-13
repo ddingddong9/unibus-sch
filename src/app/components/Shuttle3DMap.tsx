@@ -1,13 +1,17 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
 import Campus3DScene, {
   campusData,
   type CampusInitialView,
   type CampusLiveBus,
 } from "../campus3d/Campus3DScene";
 import { projectCoordinate } from "../campus3d/campus-geometry";
+import { stationCorridorData } from "../campus3d/station-corridor";
 import type { CampusStop, Point2D } from "../campus3d/types";
 
+const StationShuttle3DScene = lazy(() => import("../campus3d/StationShuttle3DScene"));
+
 interface Shuttle3DMapProps {
+  sceneMode: "campus" | "station";
   routePath: [number, number][];
   stops: Array<{ id: string; name: string; position: { lat: number; lng: number } }>;
   buses: Array<{
@@ -48,12 +52,13 @@ function projectBusToRoute(point: Point2D, path: Point2D[]) {
   return { point: bestPoint, progress: bestProgress };
 }
 
-export default function Shuttle3DMap({ routePath, stops, buses, onSelectStop }: Shuttle3DMapProps) {
+export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSelectStop }: Shuttle3DMapProps) {
   const [followBusId, setFollowBusId] = useState<string | null>(null);
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
+  const projectionOrigin = sceneMode === "station" ? stationCorridorData.origin : campusData.origin;
   const projectedRoute = useMemo<Point2D[]>(
-    () => routePath.map(([lng, lat]) => projectCoordinate(lat, lng, campusData.origin)),
-    [routePath],
+    () => routePath.map(([lng, lat]) => projectCoordinate(lat, lng, projectionOrigin)),
+    [projectionOrigin, routePath],
   );
   const projectedStops = useMemo<CampusStop[]>(
     () => stops.map((stop) => ({
@@ -66,7 +71,7 @@ export default function Shuttle3DMap({ routePath, stops, buses, onSelectStop }: 
   );
   const liveBuses = useMemo<CampusLiveBus[]>(
     () => buses.map((bus) => {
-      const rawPosition = projectCoordinate(bus.position.lat, bus.position.lng, campusData.origin);
+      const rawPosition = projectCoordinate(bus.position.lat, bus.position.lng, projectionOrigin);
       const projected = projectBusToRoute(rawPosition, projectedRoute);
       return {
         id: bus.id,
@@ -76,7 +81,7 @@ export default function Shuttle3DMap({ routePath, stops, buses, onSelectStop }: 
         routeProgress: projected.progress,
       };
     }),
-    [buses, projectedRoute],
+    [buses, projectedRoute, projectionOrigin],
   );
   const initialView = useMemo<CampusInitialView | null>(() => {
     const points = projectedRoute.length > 1
@@ -105,6 +110,30 @@ export default function Shuttle3DMap({ routePath, stops, buses, onSelectStop }: 
     );
   }
 
+  const handleSelectStop = (stop: CampusStop) => {
+    setSelectedStopId(stop.id);
+    setFollowBusId(null);
+    onSelectStop?.(stop.id);
+  };
+
+  if (sceneMode === "station") {
+    return (
+      <Suspense fallback={<div className="grid h-full place-items-center bg-[#e8edf1] text-sm font-bold text-[#1e3a8a]">신창역 3D 지도를 준비 중입니다</div>}>
+        <StationShuttle3DScene
+          routePath={projectedRoute}
+          routeStops={projectedStops}
+          liveBuses={liveBuses}
+          initialView={initialView}
+          followBusId={followBusId}
+          selectedStopId={selectedStopId}
+          onFollowBus={setFollowBusId}
+          onSelectStop={handleSelectStop}
+          resetVersion={0}
+        />
+      </Suspense>
+    );
+  }
+
   return (
     <Campus3DScene
       isNight={false}
@@ -124,11 +153,7 @@ export default function Shuttle3DMap({ routePath, stops, buses, onSelectStop }: 
       isTouring={false}
       onFollowBus={setFollowBusId}
       selectedStopId={selectedStopId}
-      onSelectStop={(stop) => {
-        setSelectedStopId(stop.id);
-        setFollowBusId(null);
-        onSelectStop?.(stop.id);
-      }}
+      onSelectStop={handleSelectStop}
       resetVersion={0}
       onSelectBuilding={() => undefined}
     />

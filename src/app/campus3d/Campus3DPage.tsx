@@ -25,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import Campus3DScene, { campusData, type CampusWeather, type RenderQuality } from "./Campus3DScene";
-import { applyCampusRouteRules, buildingCategory, projectCoordinate } from "./campus-geometry";
+import { buildingCategory, projectCoordinate } from "./campus-geometry";
 import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
 import type { CampusBuilding, CampusStop, Point2D } from "./types";
 import { terrainData } from "./terrain";
@@ -82,7 +82,11 @@ function IconButton({
   );
 }
 
-export default function Campus3DPage() {
+interface Campus3DPageProps {
+  embedded?: boolean;
+}
+
+export default function Campus3DPage({ embedded = false }: Campus3DPageProps) {
   const shellRef = useRef<HTMLDivElement>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<CampusBuilding | null>(null);
   const [focusTarget, setFocusTarget] = useState<{ x: number; z: number; height: number; label: string } | null>(null);
@@ -134,7 +138,7 @@ export default function Campus3DPage() {
         const first = projected[0];
         const last = projected[projected.length - 1];
         if (Math.hypot(first[0] - last[0], first[1] - last[1]) > 1) projected.push(first);
-        setRemoteRoute(applyCampusRouteRules(projected, campusData));
+        setRemoteRoute(projected);
         const validStops = stops
           .filter((stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lng))
           .map((stop, index) => ({
@@ -205,7 +209,12 @@ export default function Campus3DPage() {
   };
 
   return (
-    <main ref={shellRef} className="relative h-[100dvh] min-h-[560px] w-full overflow-hidden bg-[#e8edf1] font-['Public_Sans'] text-[#0f172a]">
+    <main
+      ref={shellRef}
+      className={`relative min-h-[560px] w-full overflow-hidden bg-[#e8edf1] font-['Public_Sans'] text-[#0f172a] ${
+        embedded ? "h-full" : "h-[100dvh]"
+      }`}
+    >
       <Suspense fallback={<SceneLoading />}>
         <Campus3DScene
           isNight={isNight}
@@ -252,7 +261,9 @@ export default function Campus3DPage() {
           </div>
           <div className="min-w-0">
             <p className="text-[10px] font-extrabold text-[#1e3a8a]">UNIBUS</p>
-            <h1 className="truncate text-sm font-extrabold text-[#0f172a] sm:text-base">순천향대학교 3D 캠퍼스</h1>
+            <h1 className="truncate text-sm font-extrabold text-[#0f172a] sm:text-base">
+              {embedded ? "3D 캠퍼스 관리" : "순천향대학교 3D 캠퍼스"}
+            </h1>
           </div>
         </div>
 

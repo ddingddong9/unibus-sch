@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { LayoutDashboard, FileText, Bus, Bell, LogOut, Users, Home, MonitorPlay } from "lucide-react";
+import { LayoutDashboard, FileText, Bus, Bell, LogOut, Users, Home, MonitorPlay, Box } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
 interface AdminLayoutProps {
@@ -28,6 +28,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { path: "/admin/notices", icon: FileText, label: "공지사항 관리" },
     { path: "/admin/routes", icon: Bus, label: "버스 노선 관리" },
     { path: "/admin/buses", icon: Bus, label: "버스 관리" },
+    { path: "/admin/campus-3d", icon: Box, label: "3D 캠퍼스" },
     { path: "/admin/demo", icon: MonitorPlay, label: "운행 데모" },
     { path: "/admin/notifications", icon: Bell, label: "알림 전송" },
     { path: "/admin/users", icon: Users, label: "사용자 관리" },

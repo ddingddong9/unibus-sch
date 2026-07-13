@@ -23,6 +23,7 @@ const AdminDashboard = lazy(() => import("./admin/AdminDashboard"));
 const NoticeManagement = lazy(() => import("./admin/NoticeManagement"));
 const RouteManagement = lazy(() => import("./admin/RouteManagement"));
 const BusManagement = lazy(() => import("./admin/BusManagement"));
+const Campus3DManagement = lazy(() => import("./admin/Campus3DManagement"));
 const BusDemo = lazy(() => import("./admin/BusDemo"));
 const NotificationSender = lazy(() => import("./admin/NotificationSender"));
 const UserManagement = lazy(() => import("./admin/UserManagement"));
@@ -83,6 +84,7 @@ export const router = createBrowserRouter([
       { path: "/admin/notices",       element: <NoticeManagement /> },
       { path: "/admin/routes",        element: <RouteManagement /> },
       { path: "/admin/buses",         element: <BusManagement /> },
+      { path: "/admin/campus-3d",     element: <Campus3DManagement /> },
       { path: "/admin/demo",          element: <BusDemo /> },
       { path: "/admin/notifications", element: <NotificationSender /> },
       { path: "/admin/users",         element: <UserManagement /> },
