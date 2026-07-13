@@ -6,7 +6,6 @@ import * as THREE from "three";
 import campusDataSource from "./campus-data.json";
 import {
   CAMPUS_STOPS,
-  CAMPUS_OUTER_ROAD,
   createCampusRoute,
   polygonCenter,
   projectCoordinate,
@@ -18,7 +17,6 @@ import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
 import { getTerrainHeight } from "./terrain";
 
 const campusData = campusDataSource as CampusData;
-const ROUTE_OVERLAP_ROAD_IDS = new Set(["471471941"]);
 export type CampusWeather = "clear" | "cloudy" | "rain";
 export type RenderQuality = "balanced" | "high";
 export interface CampusLiveBus {
@@ -777,12 +775,6 @@ function CampusWorld(props: Campus3DSceneProps) {
     () => drapePathToTerrain([...campusData.boundary, campusData.boundary[0]], 0.82, 7),
     [],
   );
-  const outerRoad = useMemo(
-    () => CAMPUS_OUTER_ROAD.map((point) => projectCoordinate(point.latitude, point.longitude, campusData.origin)),
-    [],
-  );
-  const outerRoadSurface = useMemo(() => drapePathToTerrain(outerRoad, 1.18, 6), [outerRoad]);
-  const outerRoadCenter = useMemo(() => drapePathToTerrain(outerRoad, 1.27, 6), [outerRoad]);
   const routeUnderlay = useMemo(() => drapePathToTerrain(route, 3.05, 8), [route]);
   const routeSurface = useMemo(() => drapePathToTerrain(route, 3.12, 8), [route]);
 
@@ -819,23 +811,7 @@ function CampusWorld(props: Campus3DSceneProps) {
         opacity={0.42}
       />
       {campusData.areas.map((area) => <AreaMesh key={area.id} area={area} isNight={props.isNight} />)}
-      {campusData.roads
-        .filter((road) => !props.showRoute || !ROUTE_OVERLAP_ROAD_IDS.has(road.id))
-        .map((road) => <TerrainRoad key={road.id} road={road} isNight={props.isNight} />)}
-      <group>
-        <Line
-          points={outerRoadSurface}
-          color={props.isNight ? "#242f37" : "#555d61"}
-          lineWidth={6.5}
-        />
-        <Line
-          points={outerRoadCenter}
-          color={props.isNight ? "#aeb7bc" : "#e7eaeb"}
-          lineWidth={0.8}
-          transparent
-          opacity={0.72}
-        />
-      </group>
+      {campusData.roads.map((road) => <TerrainRoad key={road.id} road={road} isNight={props.isNight} />)}
       {campusData.buildings.map((building) => (
         <BuildingMesh
           key={building.id}
