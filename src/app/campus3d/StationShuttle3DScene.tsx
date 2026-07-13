@@ -368,7 +368,7 @@ function StationWorld(props: StationShuttle3DSceneProps) {
         </group>
       ))}
       {props.liveBuses.map((bus) => <ShuttleBusModel key={bus.id} bus={bus} track={routeTrack} followed={props.followBusId === bus.id} controls={controls} onFollow={props.onFollowBus} />)}
-      <OrbitControls ref={controls} makeDefault enableDamping dampingFactor={0.075} minDistance={80} maxDistance={3400} minPolarAngle={0.2} maxPolarAngle={Math.PI / 2.08} screenSpacePanning={false} />
+      <OrbitControls ref={controls} makeDefault enableDamping dampingFactor={0.075} rotateSpeed={-0.7} minDistance={80} maxDistance={3400} minPolarAngle={0.2} maxPolarAngle={Math.PI / 2.08} screenSpacePanning={false} />
       <StationCamera controls={controls} initialView={props.initialView} resetVersion={props.resetVersion} />
       <Html position={[0, -200, 0]}>
         <span className="sr-only">{stationTerrainData.attribution}</span>

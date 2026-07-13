@@ -137,14 +137,14 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
   return (
     <Campus3DScene
       isNight={false}
-      isRunning={false}
+      isRunning
       autoRotate={false}
       showRoute
       selectedBuildingId={null}
       focusTarget={null}
       routePath={projectedRoute}
       routeStops={projectedStops}
-      liveBuses={liveBuses}
+      liveBuses={liveBuses.length > 0 ? liveBuses : undefined}
       initialView={initialView}
       followBusId={followBusId}
       simulationSpeed={1}

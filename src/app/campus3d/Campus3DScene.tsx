@@ -457,6 +457,16 @@ function sampleRoute(track: RouteTrack, distance: number, position: THREE.Vector
   };
 }
 
+function samplePingPongRoute(track: RouteTrack, distance: number, position: THREE.Vector3) {
+  if (track.total <= 0) return { angle: 0 };
+  const cycleLength = track.total * 2;
+  const cycleDistance = ((distance % cycleLength) + cycleLength) % cycleLength;
+  const returning = cycleDistance > track.total;
+  const routeDistance = returning ? cycleLength - cycleDistance : cycleDistance;
+  const sample = sampleRoute(track, Math.min(routeDistance, track.total - 0.001), position);
+  return { angle: returning ? sample.angle + Math.PI : sample.angle };
+}
+
 function ShuttleBus({
   track,
   offset,
@@ -488,7 +498,7 @@ function ShuttleBus({
   useFrame((_, delta) => {
     if (!group.current || track.points.length < 2) return;
     if (running) distance.current += delta * 10.5 * speedMultiplier;
-    const sample = sampleRoute(track, distance.current, targetPosition);
+    const sample = samplePingPongRoute(track, distance.current, targetPosition);
     group.current.position.copy(targetPosition);
     targetEuler.set(0, sample.angle, 0);
     targetQuaternion.setFromEuler(targetEuler);
@@ -744,7 +754,8 @@ function CampusWorld(props: Campus3DSceneProps) {
   );
   const outerRoadSurface = useMemo(() => drapePathToTerrain(outerRoad, 1.18, 6), [outerRoad]);
   const outerRoadCenter = useMemo(() => drapePathToTerrain(outerRoad, 1.27, 6), [outerRoad]);
-  const routeSurface = useMemo(() => drapePathToTerrain(route, 2.1, 8), [route]);
+  const routeUnderlay = useMemo(() => drapePathToTerrain(route, 3.05, 8), [route]);
+  const routeSurface = useMemo(() => drapePathToTerrain(route, 3.12, 8), [route]);
 
   return (
     <>
@@ -807,14 +818,21 @@ function CampusWorld(props: Campus3DSceneProps) {
       {props.showRoute ? (
         <group>
           <Line
-            points={routeSurface}
-            color="#f59e0b"
-            lineWidth={3}
+            points={routeUnderlay}
+            color="#ffffff"
+            lineWidth={7}
             depthTest={false}
-            renderOrder={20}
+            renderOrder={30}
+          />
+          <Line
+            points={routeSurface}
+            color="#ffae00"
+            lineWidth={4.2}
+            depthTest={false}
+            renderOrder={31}
           />
           {stopPositions.map((stop, index) => (
-            <group key={stop.id} position={[stop.position[0], getTerrainHeight(stop.position[0], stop.position[1]) + 2.2, stop.position[1]]} onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }}>
+            <group key={stop.id} position={[stop.position[0], getTerrainHeight(stop.position[0], stop.position[1]) + 3.2, stop.position[1]]} onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }}>
               <mesh castShadow>
                 <cylinderGeometry args={[3.5, 3.5, 1.5, 24]} />
                 <meshStandardMaterial color="#ffffff" emissive="#f59e0b" emissiveIntensity={0.15} />
@@ -835,9 +853,9 @@ function CampusWorld(props: Campus3DSceneProps) {
             <LiveShuttleBus key={bus.id} bus={bus} track={routeTrack} followed={props.followBusId === bus.id} controls={controls} onFollow={props.onFollowBus} />
           )) : (
             <>
-              <ShuttleBus track={routeTrack} offset={0} running={props.isRunning} label="SCH 01" followed={props.followBusId === "SCH 01"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
-              <ShuttleBus track={routeTrack} offset={routeTrack.total / 3} running={props.isRunning} label="SCH 02" followed={props.followBusId === "SCH 02"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
-              <ShuttleBus track={routeTrack} offset={(routeTrack.total * 2) / 3} running={props.isRunning} label="SCH 03" followed={props.followBusId === "SCH 03"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
+              <ShuttleBus track={routeTrack} offset={0} running={props.isRunning} label="학내순환 1호" followed={props.followBusId === "학내순환 1호"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
+              <ShuttleBus track={routeTrack} offset={(routeTrack.total * 2) / 3} running={props.isRunning} label="학내순환 2호" followed={props.followBusId === "학내순환 2호"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
+              <ShuttleBus track={routeTrack} offset={(routeTrack.total * 4) / 3} running={props.isRunning} label="학내순환 3호" followed={props.followBusId === "학내순환 3호"} speedMultiplier={props.simulationSpeed} controls={controls} onFollow={props.onFollowBus} />
             </>
           )}
         </group>
@@ -847,6 +865,7 @@ function CampusWorld(props: Campus3DSceneProps) {
         makeDefault
         enableDamping
         dampingFactor={0.075}
+        rotateSpeed={-0.7}
         autoRotate={props.autoRotate}
         autoRotateSpeed={0.45}
         minDistance={70}
