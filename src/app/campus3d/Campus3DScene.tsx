@@ -401,8 +401,8 @@ function CampusWorld(props: Campus3DSceneProps) {
                 <meshStandardMaterial color="#f59e0b" />
               </mesh>
               <Html position={[0, 7, 0]} center zIndexRange={[12, 0]}>
-                <div className="flex items-center gap-1.5 whitespace-nowrap border border-white/30 bg-slate-950/78 px-2 py-1 text-[10px] font-semibold text-white shadow-sm backdrop-blur-md">
-                  <span className="grid h-4 w-4 place-items-center bg-amber-400 text-[9px] font-bold text-slate-950">{index + 1}</span>
+                <div className="flex items-center gap-1.5 whitespace-nowrap rounded-xl border border-white/85 bg-white/95 py-1.5 pl-1.5 pr-2.5 text-[10px] font-extrabold text-[#0f172a] shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl">
+                  <span className="grid h-5 w-5 place-items-center rounded-lg bg-[#1e3a8a] text-[9px] font-extrabold text-white">{index + 1}</span>
                   {stop.name}
                 </div>
               </Html>
