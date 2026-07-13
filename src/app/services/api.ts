@@ -28,6 +28,7 @@ type RouteShapePointInput = {
 type RouteMutationPayload = Omit<Partial<BusRoute>, 'stops'> & {
   stops?: RouteStopInput[];
   shapePoints?: RouteShapePointInput[];
+  shuttleVariant?: BusRoute['shuttleVariant'];
 };
 
 const SUPABASE_URL = supabaseUrl;

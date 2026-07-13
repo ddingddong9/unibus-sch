@@ -8,6 +8,62 @@ const routes = new Hono();
 
 const toClientRouteType = (type: string) => type === 'shuttle' ? 'campus' : type === 'commute' ? 'commuter' : type;
 const toDbRouteType = (type: string) => type === 'campus' ? 'shuttle' : type === 'commuter' ? 'commute' : type;
+const SHUTTLE_VARIANTS = new Set([
+  'campus_loop',
+  'campus_to_station',
+  'station_to_campus',
+  'station_to_campus_loop',
+]);
+
+const normalizeShuttleVariant = (type: string, variant?: string | null) => {
+  if (toDbRouteType(type) !== 'shuttle') return null;
+  if (variant && SHUTTLE_VARIANTS.has(variant)) return variant;
+  return 'campus_loop';
+};
+
+const validateRouteDetailsInput = (
+  type: string,
+  shuttleVariant?: string | null,
+  stops?: any[],
+  shapePoints?: any[],
+) => {
+  const errors: string[] = [];
+
+  if (stops !== undefined) {
+    if (!Array.isArray(stops)) {
+      errors.push("정류장 데이터 형식이 올바르지 않습니다.");
+    } else {
+      const names = stops.map((stop) => String(stop?.name || '').trim()).filter(Boolean);
+      const normalized = names.map((name) => name.replace(/\s+/g, '').toLowerCase());
+      const duplicate = names.find((_, index) => normalized.indexOf(normalized[index]) !== index);
+      if (names.length < 2) errors.push("정류장은 최소 2개 이상 필요합니다.");
+      if (duplicate) errors.push(`중복된 정류장이 있습니다: ${duplicate}`);
+      if (
+        toDbRouteType(type) === 'shuttle' &&
+        shuttleVariant &&
+        shuttleVariant !== 'campus_loop' &&
+        !names.some((name) => /신창|순천향대역|순천향대학교역/.test(name))
+      ) {
+        errors.push("신창역 셔틀은 정류장에 신창역 또는 순천향대역이 포함되어야 합니다.");
+      }
+    }
+  }
+
+  if (shapePoints !== undefined) {
+    if (!Array.isArray(shapePoints)) {
+      errors.push("경로 보정점 데이터 형식이 올바르지 않습니다.");
+    } else if (shapePoints.some((point) =>
+      point.lat == null ||
+      point.lng == null ||
+      !Number.isFinite(Number(point.lat)) ||
+      !Number.isFinite(Number(point.lng))
+    )) {
+      errors.push("좌표가 잘못된 경로 보정점이 있습니다.");
+    }
+  }
+
+  return errors;
+};
 
 const formatShapePoint = (point: any) => ({
   id: point.id,
@@ -145,6 +201,7 @@ routes.get("/", async (c) => {
           name: route.name,
           type: toClientRouteType(route.type),
           description: route.description,
+          shuttleVariant: route.shuttle_variant,
           color: route.color,
           region: route.region,
           schedule: route.schedule,
@@ -301,6 +358,7 @@ routes.get("/:id", async (c) => {
       name: route.name,
       type: toClientRouteType(route.type),
       description: route.description,
+      shuttleVariant: route.shuttle_variant,
       color: route.color,
       region: route.region,
       schedule: route.schedule,
@@ -332,10 +390,15 @@ routes.get("/:id", async (c) => {
 // Create route (admin only)
 routes.post("/", requireAdmin, async (c) => {
   try {
-    const { name, type, description, color, region, schedule, duration, fare, stops, shapePoints } = await c.req.json();
+    const { name, type, shuttleVariant, description, color, region, schedule, duration, fare, isActive, stops, shapePoints } = await c.req.json();
 
     if (!name || !type) {
       return c.json({ success: false, error: "Missing required fields" }, 400);
+    }
+
+    const detailErrors = validateRouteDetailsInput(type, shuttleVariant, stops, shapePoints);
+    if (detailErrors.length > 0) {
+      return c.json({ success: false, error: detailErrors.join(" ") }, 400);
     }
 
     // 노선 생성
@@ -344,13 +407,14 @@ routes.post("/", requireAdmin, async (c) => {
       .insert({
         name,
         type: toDbRouteType(type),
+        shuttle_variant: normalizeShuttleVariant(type, shuttleVariant),
         description: description || null,
         color: color || '#1E3B8A',
         region: region || null,
         schedule: schedule || null,
         duration: duration || null,
         fare: fare || null,
-        is_active: true,
+        is_active: isActive ?? true,
       })
       .select()
       .single();
@@ -383,6 +447,7 @@ routes.post("/", requireAdmin, async (c) => {
         id: route.id,
         name: route.name,
         type: toClientRouteType(route.type),
+        shuttleVariant: route.shuttle_variant,
         description: route.description,
         color: route.color,
         region: route.region,
@@ -403,12 +468,16 @@ routes.post("/", requireAdmin, async (c) => {
 routes.put("/:id", requireAdmin, async (c) => {
   try {
     const id = c.req.param("id");
-    const { name, type, description, color, isActive, region, schedule, duration, fare, stops, shapePoints } = await c.req.json();
+    const { name, type, shuttleVariant, description, color, isActive, region, schedule, duration, fare, stops, shapePoints } = await c.req.json();
+
+    if (!id) {
+      return c.json({ success: false, error: "Route id is required" }, 400);
+    }
 
     // 노선 존재 여부 확인
     const { data: existingRoute } = await db
       .from('routes')
-      .select('id')
+      .select('id, type')
       .eq('id', id)
       .single();
 
@@ -416,10 +485,22 @@ routes.put("/:id", requireAdmin, async (c) => {
       return c.json({ success: false, error: "Route not found" }, 404);
     }
 
+    const nextType = type || toClientRouteType(existingRoute.type);
+    const nextShuttleVariant = shuttleVariant !== undefined
+      ? shuttleVariant
+      : undefined;
+    const detailErrors = validateRouteDetailsInput(nextType, nextShuttleVariant, stops, shapePoints);
+    if (detailErrors.length > 0) {
+      return c.json({ success: false, error: detailErrors.join(" ") }, 400);
+    }
+
     // 노선 수정
     const dbUpdates: any = {};
     if (name) dbUpdates.name = name;
     if (type) dbUpdates.type = toDbRouteType(type);
+    if (type || shuttleVariant !== undefined) {
+      dbUpdates.shuttle_variant = normalizeShuttleVariant(type || existingRoute.type, shuttleVariant);
+    }
     if (description !== undefined) dbUpdates.description = description;
     if (color) dbUpdates.color = color;
     if (isActive !== undefined) dbUpdates.is_active = isActive;
@@ -478,6 +559,7 @@ routes.put("/:id", requireAdmin, async (c) => {
         id: updatedRoute.id,
         name: updatedRoute.name,
         type: toClientRouteType(updatedRoute.type),
+        shuttleVariant: updatedRoute.shuttle_variant,
         description: updatedRoute.description,
         color: updatedRoute.color,
         region: updatedRoute.region,

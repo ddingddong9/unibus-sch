@@ -69,7 +69,7 @@ export default function BusDemo() {
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [status, setStatus] = useState("데모를 시작하면 기존 등록 버스 5대가 발표용 경로로 움직입니다.");
+  const [status, setStatus] = useState("데모를 시작하면 기존 등록 버스 최대 5대가 발표용 경로로 움직입니다.");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const plansRef = useRef<DemoBusPlan[]>([]);
   const busyRef = useRef(false);
@@ -90,34 +90,34 @@ export default function BusDemo() {
   const tick = async () => {
     if (busyRef.current) return;
     busyRef.current = true;
-    const now = performance.now();
-    const elapsedSeconds = lastTickRef.current ? Math.min((now - lastTickRef.current) / 1000, 1) : 0.5;
-    lastTickRef.current = now;
-
-    const nextPlans = plansRef.current.map((plan) => {
-      const trackLength = plan.track.lengthMeters;
-      if (trackLength <= 0) return plan;
-
-      let progressMeters = plan.progressMeters + plan.speedMetersPerSecond * elapsedSeconds * plan.direction;
-      let direction = plan.direction;
-
-      if (plan.pingPong) {
-        if (progressMeters >= trackLength) {
-          progressMeters = trackLength - (progressMeters - trackLength);
-          direction = -1;
-        } else if (progressMeters <= 0) {
-          progressMeters = Math.abs(progressMeters);
-          direction = 1;
-        }
-      } else {
-        progressMeters = ((progressMeters % trackLength) + trackLength) % trackLength;
-      }
-
-      return { ...plan, progressMeters, direction };
-    });
-
     try {
-      await Promise.all(nextPlans.map((plan) => {
+      const now = performance.now();
+      const elapsedSeconds = lastTickRef.current ? Math.min((now - lastTickRef.current) / 1000, 1) : 0.5;
+      lastTickRef.current = now;
+
+      const nextPlans = plansRef.current.map((plan) => {
+        const trackLength = plan.track.lengthMeters;
+        if (trackLength <= 0) return plan;
+
+        let progressMeters = plan.progressMeters + plan.speedMetersPerSecond * elapsedSeconds * plan.direction;
+        let direction = plan.direction;
+
+        if (plan.pingPong) {
+          if (progressMeters >= trackLength) {
+            progressMeters = trackLength - (progressMeters - trackLength);
+            direction = -1;
+          } else if (progressMeters <= 0) {
+            progressMeters = Math.abs(progressMeters);
+            direction = 1;
+          }
+        } else {
+          progressMeters = ((progressMeters % trackLength) + trackLength) % trackLength;
+        }
+
+        return { ...plan, progressMeters, direction };
+      });
+
+      const results = await Promise.allSettled(nextPlans.map((plan) => {
         const point = sampleTrack(plan.track, plan.progressMeters);
         const headingDistance = plan.direction === 1
           ? plan.progressMeters
@@ -132,6 +132,12 @@ export default function BusDemo() {
           heading,
         });
       }));
+      const failedCount = results.filter((result) => result.status === "rejected").length;
+      if (failedCount > 0) {
+        setError(`${failedCount}대 위치 갱신이 실패했습니다. 나머지 버스는 계속 운행 중입니다.`);
+      } else {
+        setError("");
+      }
       plansRef.current = nextPlans;
       setPlans(nextPlans);
     } finally {
@@ -146,8 +152,8 @@ export default function BusDemo() {
 
     try {
       const [buses, routes] = await Promise.all([api.getBuses(), api.getRoutes()]);
-      if (buses.length < 5) {
-        throw new Error("데모는 등록된 버스가 최소 5대 필요합니다. 버스 관리에서 버스를 먼저 등록해 주세요.");
+      if (buses.length === 0) {
+        throw new Error("데모를 실행할 등록 버스가 없습니다. 버스 관리에서 버스를 먼저 등록해 주세요.");
       }
 
       const commuterRoutes = routes.filter((route: any) => route.type === "commuter");
@@ -168,14 +174,17 @@ export default function BusDemo() {
         })
       );
 
-      const selected = buses.slice(0, 5);
+      const selected = buses.slice(0, Math.min(5, buses.length));
+      const campusTargetCount = Math.min(3, selected.length);
+      const commuterTargetCount = selected.length - campusTargetCount;
       const nextPlans: DemoBusPlan[] = selected.map((bus: any, index: number) => {
-        const kind: DemoKind = index < 3 ? "campus" : "commuter";
-        const route = kind === "commuter" ? commuterRoutes[(index - 3) % Math.max(commuterRoutes.length, 1)] : null;
-        const basePath = kind === "campus" ? campusRoadPath : commuterRoadPaths[(index - 3) % commuterRoadPaths.length];
+        const kind: DemoKind = index < campusTargetCount ? "campus" : "commuter";
+        const commuterIndex = Math.max(index - campusTargetCount, 0);
+        const route = kind === "commuter" ? commuterRoutes[commuterIndex % Math.max(commuterRoutes.length, 1)] : null;
+        const basePath = kind === "campus" ? campusRoadPath : commuterRoadPaths[commuterIndex % commuterRoadPaths.length];
         const track = createRouteTrack(basePath, kind === "campus" ? 4 : 10);
-        const similarKindCount = kind === "campus" ? 3 : 2;
-        const similarKindIndex = kind === "campus" ? index : index - 3;
+        const similarKindCount = Math.max(kind === "campus" ? campusTargetCount : commuterTargetCount, 1);
+        const similarKindIndex = kind === "campus" ? index : commuterIndex;
         const progressMeters = track.lengthMeters > 0
           ? (track.lengthMeters / similarKindCount) * similarKindIndex
           : 0;
@@ -183,7 +192,7 @@ export default function BusDemo() {
           busId: bus.id,
           name: bus.name,
           kind,
-          label: kind === "campus" ? `학내순환 ${index + 1}` : `통학버스 ${index - 2}`,
+          label: kind === "campus" ? `학내순환 ${index + 1}` : `통학버스 ${commuterIndex + 1}`,
           track,
           progressMeters,
           speedMetersPerSecond: kind === "campus" ? 6.5 : 15,
@@ -213,7 +222,7 @@ export default function BusDemo() {
       await tick();
       intervalRef.current = setInterval(tick, 500);
       setRunning(true);
-      setStatus("데모 운행 중입니다. 버스 위치는 경로 폴리라인 위에서 거리 기반으로 부드럽게 갱신됩니다.");
+      setStatus(`데모 운행 중입니다. ${nextPlans.length}대 위치가 경로 폴리라인 위에서 거리 기반으로 갱신됩니다.`);
     } catch (err: any) {
       setError(err.message || "데모 시작에 실패했습니다.");
     } finally {
@@ -229,7 +238,7 @@ export default function BusDemo() {
     setError("");
 
     try {
-      await Promise.all(plansRef.current.map((plan) =>
+      const results = await Promise.allSettled(plansRef.current.map((plan) =>
         api.updateBus(plan.busId, {
           type: plan.original.type,
           status: plan.original.status,
@@ -237,7 +246,10 @@ export default function BusDemo() {
           isRunning: false,
         })
       ));
-      setStatus("데모를 종료하고 버스 상태를 시작 전으로 되돌렸습니다.");
+      const failedCount = results.filter((result) => result.status === "rejected").length;
+      setStatus(failedCount > 0
+        ? `데모를 종료했지만 ${failedCount}대 상태 복구를 다시 확인해야 합니다.`
+        : "데모를 종료하고 버스 상태를 시작 전으로 되돌렸습니다.");
     } catch (err: any) {
       setError(err.message || "데모 종료에 실패했습니다.");
     } finally {
@@ -246,7 +258,9 @@ export default function BusDemo() {
   };
 
   const resetDemo = async () => {
-    await stopDemo();
+    if (running || plansRef.current.length > 0) {
+      await stopDemo();
+    }
     plansRef.current = [];
     setPlans([]);
     setStatus("데모가 초기화되었습니다.");

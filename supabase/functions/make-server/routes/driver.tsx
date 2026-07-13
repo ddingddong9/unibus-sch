@@ -13,6 +13,7 @@ const formatRoute = (route: any) => route ? {
   id: route.id,
   name: route.name,
   type: toClientRouteType(route.type),
+  shuttleVariant: route.shuttle_variant,
   color: route.color,
   description: route.description,
   region: route.region,
@@ -28,7 +29,7 @@ const attachCurrentRoutes = async (buses: any[] = [], driverId: string) => {
   if (routeIds.length > 0) {
     const { data: routes, error } = await db
       .from('routes')
-      .select('id, name, type, color, description, region, schedule, duration, fare')
+      .select('id, name, type, shuttle_variant, color, description, region, schedule, duration, fare')
       .in('id', routeIds);
 
     if (!error) {
