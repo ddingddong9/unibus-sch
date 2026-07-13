@@ -9,6 +9,23 @@ export interface DriverRoute {
   schedule?: string | null;
   duration?: string | null;
   fare?: string | null;
+  stops?: Array<{
+    id: string;
+    name: string;
+    order: number;
+    lat: number | null;
+    lng: number | null;
+    arrivalTime?: string | null;
+  }>;
+}
+
+export interface DriverActiveTrip {
+  id: string;
+  routeId?: string | null;
+  status: "active" | "completed" | "cancelled";
+  currentStopOrder: number;
+  startedAt: string;
+  updatedAt?: string;
 }
 
 export interface DriverRouteBus {

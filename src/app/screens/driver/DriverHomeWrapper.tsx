@@ -8,6 +8,7 @@ import {
   getRouteKindLabel,
   getRouteSchedulePreview,
   type DriverRoute,
+  type DriverActiveTrip,
 } from "../../utils/driverRouteDisplay";
 
 interface Bus {
@@ -21,6 +22,7 @@ interface Bus {
   is_assigned_to_me?: boolean;
   is_shared?: boolean;
   currentRoute?: DriverRoute | null;
+  activeTrip?: DriverActiveTrip | null;
 }
 
 export default function DriverHomeWrapper() {
@@ -60,8 +62,21 @@ export default function DriverHomeWrapper() {
     setStarting(bus.id);
     setError("");
     try {
-      await api.driverStart(bus.id);
-      navigate("/driver/active", { state: { bus } });
+      const trip = await api.driverStart(bus.id);
+      navigate("/driver/active", {
+        state: {
+          bus: {
+            ...bus,
+            activeTrip: {
+              id: trip.tripId,
+              routeId: bus.currentRoute?.id ?? null,
+              status: "active",
+              currentStopOrder: 0,
+              startedAt: new Date().toISOString(),
+            },
+          },
+        },
+      });
     } catch (err: any) {
       setError(err.message || "운행 시작에 실패했습니다");
     } finally {

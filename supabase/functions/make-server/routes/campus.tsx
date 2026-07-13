@@ -22,6 +22,34 @@ const ROUTE_POINTS = [
   STOPS[4],
 ];
 
+// 정문 → 후문은 교내를 가로지르지 않고 온천대로와 순천향로를 이용한다.
+const OUTER_RETURN_WAYPOINTS = [
+  { lat: 36.769380, lng: 126.927631 },
+  { lat: 36.771585, lng: 126.929795 },
+  { lat: 36.774798, lng: 126.932610 },
+  { lat: 36.773641, lng: 126.933540 },
+  { lat: 36.772936, lng: 126.934107 },
+];
+
+const OUTER_RETURN_FALLBACK = [
+  { lat: 36.769014, lng: 126.927978 },
+  { lat: 36.769380, lng: 126.927631 },
+  { lat: 36.769700, lng: 126.927521 },
+  { lat: 36.770127, lng: 126.928039 },
+  { lat: 36.770792, lng: 126.928952 },
+  { lat: 36.771585, lng: 126.929795 },
+  { lat: 36.773278, lng: 126.931320 },
+  { lat: 36.774595, lng: 126.932422 },
+  { lat: 36.774798, lng: 126.932610 },
+  { lat: 36.774053, lng: 126.933208 },
+  { lat: 36.773641, lng: 126.933540 },
+  { lat: 36.773328, lng: 126.933792 },
+  { lat: 36.773166, lng: 126.933923 },
+  { lat: 36.772936, lng: 126.934107 },
+  { lat: 36.772808, lng: 126.933885 },
+  { lat: 36.772760, lng: 126.933816 },
+];
+
 const CAMPUS_ROUTE_ID = "00000000-0000-0000-0000-000000000001";
 
 const getStoredCampusRoute = async () => {
@@ -102,44 +130,71 @@ campus.get("/path", async (c) => {
   const visibleStops = storedRoute?.stops?.length ? storedRoute.stops : STOPS;
   const routePoints = storedRoute?.routePoints?.length ? storedRoute.routePoints : ROUTE_POINTS;
 
-  const start     = `${routePoints[0].lng},${routePoints[0].lat}`;
-  const goal      = `${routePoints[routePoints.length - 1].lng},${routePoints[routePoints.length - 1].lat}`;
-  const waypoints = routePoints.slice(1, -1).slice(0, 5).map(s => `${s.lng},${s.lat}`).join("|");
-  const url = `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
-
-  let res: Response;
-  let data: any;
-  try {
-    res = await fetch(url, {
+  const mainGate = visibleStops.find((stop: any) => stop.id === "main-gate" || stop.name?.includes("정문")) || STOPS[4];
+  const rearGate = visibleStops.find((stop: any) => stop.id === "rear-gate" || stop.name?.includes("후문")) || STOPS[0];
+  const outerFallback = [
+    { lat: mainGate.lat, lng: mainGate.lng },
+    ...OUTER_RETURN_FALLBACK.slice(1, -1),
+    { lat: rearGate.lat, lng: rearGate.lng },
+  ];
+  const fetchDirections = async (points: any[]) => {
+    const start = `${points[0].lng},${points[0].lat}`;
+    const goal = `${points[points.length - 1].lng},${points[points.length - 1].lat}`;
+    const waypoints = points.slice(1, -1).slice(0, 5).map((point) => `${point.lng},${point.lat}`).join("|");
+    const url = `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
+    const response = await fetch(url, {
       headers: {
         "X-NCP-APIGW-API-KEY-ID": clientId,
-        "X-NCP-APIGW-API-KEY":    secretKey,
+        "X-NCP-APIGW-API-KEY": secretKey,
       },
     });
-    data = await res.json();
+    return response.json();
+  };
+
+  let data: any;
+  let outerData: any;
+  try {
+    [data, outerData] = await Promise.all([
+      fetchDirections(routePoints),
+      fetchDirections([mainGate, ...OUTER_RETURN_WAYPOINTS, rearGate]),
+    ]);
   } catch (e: any) {
     console.error("fetch error:", e.message);
     return c.json({ success: false, error: "fetch failed: " + e.message }, 502);
   }
-  console.log("Directions5 API response code:", data.code, data.message ?? data.error?.message);
+  console.log("Directions5 API response code:", data.code, data.message ?? data.error?.message, "outer:", outerData.code);
 
   if (data.code === 0) {
     const path: [number, number][] = data.route?.traoptimal?.[0]?.path ?? [];
     if (path.length > 0) {
-      return c.json({ success: true, data: { path, stops: visibleStops } });
+      const naverOuterPath: [number, number][] = outerData.code === 0
+        ? outerData.route?.traoptimal?.[0]?.path ?? []
+        : [];
+      const hasNaverOuterPath = naverOuterPath.length > 1;
+      const outerPath = hasNaverOuterPath
+        ? naverOuterPath
+        : outerFallback.map((point) => [point.lng, point.lat] as [number, number]);
+      return c.json({
+        success: true,
+        data: {
+          path: [...path, ...outerPath.slice(path.length > 0 ? 1 : 0)],
+          stops: visibleStops,
+          source: hasNaverOuterPath ? "naver" : "naver-with-outer-fallback",
+        },
+      });
     }
   }
 
-  // fallback: 정류장 직선 연결 (API 실패 시)
+  // 본 노선 API 실패 시 정류장을 보간하되 정문 → 후문은 외곽 도로 좌표를 유지한다.
   const fallback: [number, number][] = [];
-  const allStops = [...visibleStops, visibleStops[0]]; // 순환: 마지막 → 첫 정류장
-  for (let i = 0; i < allStops.length - 1; i++) {
-    const from = allStops[i], to = allStops[i + 1];
+  for (let i = 0; i < visibleStops.length - 1; i++) {
+    const from = visibleStops[i], to = visibleStops[i + 1];
     for (let s = 1; s <= 20; s++) {
       const t = s / 20;
       fallback.push([from.lng + (to.lng - from.lng) * t, from.lat + (to.lat - from.lat) * t]);
     }
   }
+  fallback.push(...outerFallback.map((point) => [point.lng, point.lat] as [number, number]));
   console.warn("Directions5 fallback. code:", data.code, data.message ?? JSON.stringify(data.error));
   return c.json({ success: true, data: { path: fallback, stops: visibleStops, source: "fallback", debug: { code: data.code, message: data.message, error: data.error } } });
 });
