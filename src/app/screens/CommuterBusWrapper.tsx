@@ -1,437 +1,296 @@
-import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  BusFront,
+  ChevronDown,
+  Clock3,
+  Map as MapIcon,
+  MapPin,
+  RefreshCw,
+  Ticket,
+} from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import RouteMapModal from "../components/RouteMapModal";
+import UserPageHeader from "../components/UserPageHeader";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
+import type { BusRoute } from "../types";
+import { parseScheduleTimes } from "../utils/shuttleSchedule";
+
+type Direction = "to-school" | "from-school";
+type LiveRoute = { position: { lat: number; lng: number }; etaMins: number };
 
 const getColor = (color?: string) => color || "#1e3a8a";
 
+function getDirection(route: BusRoute): Direction | null {
+  if (/\[출발\]|등교|학교행/.test(route.name)) return "to-school";
+  if (/\[도착\]|하교|귀가/.test(route.name)) return "from-school";
+  return null;
+}
+
+function cleanRouteName(name: string) {
+  return name.replace(/\s*\[(출발|도착)\]\s*/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function formatFare(fare?: string) {
+  if (!fare) return "요금 확인";
+  const digits = fare.replace(/[^0-9]/g, "");
+  if (!digits) return fare;
+  return `${Number(digits).toLocaleString("ko-KR")}원`;
+}
+
+function nextSchedule(schedule?: string) {
+  const times = parseScheduleTimes(schedule);
+  if (times.length === 0) return null;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const next = times.find((time) => time.hour * 60 + time.minute >= nowMinutes);
+  return next ? { label: next.label, tomorrow: false } : { label: times[0].label, tomorrow: true };
+}
+
 function openPayco() {
-  const ua = navigator.userAgent;
+  const fallbackUrl = /iPhone|iPad/i.test(navigator.userAgent)
+    ? "https://apps.apple.com/kr/app/payco/id924292361"
+    : "https://play.google.com/store/apps/details?id=com.nhnent.payapp";
   window.location.href = "payco://";
-  setTimeout(() => {
-    if (/iPhone|iPad/i.test(ua)) {
-      window.location.href = "https://apps.apple.com/kr/app/payco/id924292361";
-    } else {
-      window.location.href = "https://play.google.com/store/apps/details?id=com.nhnent.payapp";
-    }
-  }, 1500);
+  window.setTimeout(() => {
+    if (document.visibilityState === "visible") window.location.href = fallbackUrl;
+  }, 1_500);
 }
 
 export default function CommuterBusWrapper() {
-  const navigate = useNavigate();
   const { t } = useLanguage();
-  const [selectedRegion, setSelectedRegion] = useState<string>("to-school");
+  const [direction, setDirection] = useState<Direction>("to-school");
+  const [selectedRegion, setSelectedRegion] = useState("all");
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
-  const [routes, setRoutes] = useState<any[]>([]);
+  const [routes, setRoutes] = useState<BusRoute[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [routeModalId, setRouteModalId] = useState<string | null>(null);
-  const [routeBusMap, setRouteBusMap] = useState<Record<string, { position: { lat: number; lng: number }; etaMins: number }>>({});
+  const [routeBusMap, setRouteBusMap] = useState<Record<string, LiveRoute>>({});
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  useEffect(() => {
-    const fetchRoutes = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        const allRoutes = await api.getRoutes();
-        const commuterRoutes = allRoutes.filter((r: any) => r.type === "commuter");
-        setRoutes(commuterRoutes);
-      } catch (e: any) {
-        setError(e.message || "노선 정보를 불러오지 못했습니다.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchRoutes();
-  }, []);
-
-  useEffect(() => {
-    if (routes.length === 0) {
-      setRouteBusMap({});
-      return;
+  const loadRoutes = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const allRoutes = await api.getRoutes();
+      setRoutes(allRoutes.filter((route) => route.type === "commuter"));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("노선 정보를 불러오지 못했습니다.", "Unable to load routes."));
+    } finally {
+      setLoading(false);
     }
+  }, [t]);
 
-    const DEST: Record<string, { lat: number; lng: number }> = {
-      "서울": { lat: 37.497, lng: 127.047 },
-      "인천": { lat: 37.456, lng: 126.705 },
+  useEffect(() => {
+    loadRoutes();
+  }, [loadRoutes]);
+
+  useEffect(() => {
+    if (routes.length === 0) return;
+    const destinationByRegion: Record<string, { lat: number; lng: number }> = {
+      서울: { lat: 37.497, lng: 127.047 },
+      인천: { lat: 37.456, lng: 126.705 },
     };
     const haversineKm = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
-      const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
-      const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
-      const x = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
-      return R * 2 * Math.atan2(Math.sqrt(x), Math.sqrt(1 - x));
+      const radius = 6371;
+      const toRad = (value: number) => (value * Math.PI) / 180;
+      const dLat = toRad(b.lat - a.lat);
+      const dLng = toRad(b.lng - a.lng);
+      const value = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+      return radius * 2 * Math.atan2(Math.sqrt(value), Math.sqrt(1 - value));
     };
-
     const fetchLive = async () => {
       if (document.hidden) return;
       try {
         const [buses, locations] = await Promise.all([api.getBuses(), api.getBusLocations()]);
-        const commuterBuses = buses.filter((b: any) => b.type === "commuter" && b.status === "active");
-        const locMap = new Map(locations.map((l: any) => [l.busId, l]));
-
-        const newRouteBusMap: Record<string, { position: { lat: number; lng: number }; etaMins: number }> = {};
-        commuterBuses.forEach((b: any) => {
-          const routeId = b.currentRoute?.id;
-          if (!routeId) return;
-          const loc = locMap.get(b.id);
-          if (!loc) return;
-          const pos = { lat: loc.lat, lng: loc.lng };
-          const routeObj = routes.find((r) => r.id === routeId);
-          const region = routeObj?.region ?? "";
-          const dest = DEST[region] ?? { lat: 37.5, lng: 127.0 };
-          const km = haversineKm(pos, dest);
-          const etaMins = Math.round((km / 60) * 60);
-          newRouteBusMap[routeId] = { position: pos, etaMins };
+        const locationMap = new Map(locations.map((location) => [location.busId, location]));
+        const nextMap: Record<string, LiveRoute> = {};
+        buses.filter((bus: any) => bus.type === "commuter" && bus.status === "active").forEach((bus: any) => {
+          const routeId = bus.currentRoute?.id ?? bus.currentRouteId;
+          const location = locationMap.get(bus.id);
+          if (!routeId || !location) return;
+          const route = routes.find((item) => item.id === routeId);
+          const destination = destinationByRegion[route?.region ?? ""];
+          nextMap[routeId] = {
+            position: { lat: location.lat, lng: location.lng },
+            etaMins: destination ? Math.max(1, Math.round(haversineKm(location, destination))) : 0,
+          };
         });
-
-        setRouteBusMap(newRouteBusMap);
+        setRouteBusMap(nextMap);
       } catch {
-        // 실패 시 조용히 무시
+        // Live positions are optional; the timetable remains available.
       }
     };
-    const handleVisibilityChange = () => {
-      if (!document.hidden) fetchLive();
-    };
-
+    const onVisibility = () => !document.hidden && fetchLive();
     fetchLive();
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    liveIntervalRef.current = setInterval(fetchLive, 15000);
+    document.addEventListener("visibilitychange", onVisibility);
+    liveIntervalRef.current = setInterval(fetchLive, 15_000);
     return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      document.removeEventListener("visibilitychange", onVisibility);
       if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
     };
   }, [routes]);
 
-  // 유니크 지역 목록 (region 필드 기반)
-  const regions = ["to-school", "from-school", ...Array.from(new Set(routes.map((r) => r.region).filter(Boolean)))];
+  const directionRoutes = useMemo(
+    () => routes.filter((route) => getDirection(route) === direction || getDirection(route) === null),
+    [direction, routes],
+  );
+  const regions = useMemo(
+    () => Array.from(new Set(directionRoutes.map((route) => route.region).filter((region): region is string => Boolean(region)))),
+    [directionRoutes],
+  );
+  const filteredRoutes = useMemo(
+    () => directionRoutes
+      .filter((route) => selectedRegion === "all" || route.region === selectedRegion)
+      .sort((a, b) => (nextSchedule(a.schedule)?.label ?? "99:99").localeCompare(nextSchedule(b.schedule)?.label ?? "99:99")),
+    [directionRoutes, selectedRegion],
+  );
 
-  const filteredRoutes =
-    selectedRegion === "to-school"
-      ? routes.filter((r) => r.name?.includes("[출발]"))
-      : selectedRegion === "from-school"
-      ? routes.filter((r) => r.name?.includes("[도착]"))
-      : routes.filter((r) => r.region === selectedRegion);
+  const changeDirection = (next: Direction) => {
+    setDirection(next);
+    setSelectedRegion("all");
+    setExpandedRoute(null);
+  };
 
   return (
-    <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
-      <div
-        className="bg-white content-stretch flex flex-col items-start max-w-[430px] overflow-y-auto pb-[120px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] w-full h-full"
-      >
-        {/* Header */}
-        <div className="sticky top-0 z-30 w-full pt-safe">
-          <div className="backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] flex items-center justify-between pb-[12px] pt-[16px] px-[16px] w-full">
-            <button
-              onClick={() => navigate("/home")}
-              className="flex items-center justify-center size-[40px] hover:bg-gray-100 rounded-full active:scale-95 transition-all"
-            >
-              <svg className="w-3 h-5" fill="none" viewBox="0 0 12 20" stroke="#0F172A" strokeWidth="2">
-                <path d="M11 1L1 10L11 19" />
-              </svg>
-            </button>
+    <div className="relative size-full bg-[#f4f6f9]">
+      <main className="h-[100dvh] overflow-y-auto pb-[112px] scrollbar-hide">
+        <UserPageHeader
+          title={t("통학버스", "Commuter Bus")}
+          subtitle={t("지역별 운행 시간과 정류장", "Regional times and stops")}
+          action={<BusFront size={21} className="text-[#1e3a8a]" />}
+        />
 
-            <div className="flex flex-col items-center">
-              <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[18px] leading-[22.5px]">
-                {t("통학버스", "Commuter Bus")}
-              </p>
-              <p className="font-['Public_Sans'] font-bold text-[#1e3a8a] text-[10px] leading-[15px] tracking-[1px] uppercase">
-                {t("지역 노선", "Regional Routes")}
-              </p>
-            </div>
-
-            <div className="w-[40px]" />
-          </div>
-
-          {/* Region Filter */}
-          <div className="flex gap-2 px-[16px] py-[12px] overflow-x-auto scrollbar-hide border-b border-[#f1f5f9]">
-            {regions.map((region) => (
+        <div className="border-b border-[#e3e8ef] bg-[#f4f6f9] px-4 py-3">
+          <div className="grid grid-cols-2 rounded-lg bg-[#e5eaf0] p-1">
+            {(["to-school", "from-school"] as Direction[]).map((item) => (
               <button
-                key={region}
-                onClick={() => setSelectedRegion(region)}
-                className={`px-4 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[12px] whitespace-nowrap transition-all ${
-                  selectedRegion === region
-                    ? "bg-[#1e3a8a] text-white"
-                    : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
-                }`}
+                key={item}
+                type="button"
+                onClick={() => changeDirection(item)}
+                className={`h-9 rounded-md font-['Public_Sans'] text-[13px] font-bold transition-all ${direction === item ? "bg-white text-[#0f172a] shadow-sm" : "text-[#64748b]"}`}
               >
-                {region === "to-school"
-                  ? t("등교", "To School")
-                  : region === "from-school"
-                  ? t("하교", "From School")
-                  : region}
+                {item === "to-school" ? t("등교", "To school") : t("하교", "From school")}
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 w-full px-[16px] py-[16px] space-y-3">
-          {/* Loading */}
-          {loading && (
-            <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <div className="w-8 h-8 border-2 border-[#1e3a8a] border-t-transparent rounded-full animate-spin" />
-              <p className="font-['Public_Sans'] text-[#64748b] text-[14px]">
-                {t("노선 불러오는 중...", "Loading routes...")}
-              </p>
-            </div>
-          )}
-
-          {/* Error */}
-          {!loading && error && (
-            <div className="flex flex-col items-center justify-center py-12 gap-3">
-              <div className="bg-red-50 rounded-full p-4">
-                <svg className="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
-              </div>
-              <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[15px]">
-                {t("불러오기 실패", "Failed to load")}
-              </p>
-              <p className="font-['Public_Sans'] text-[#94a3b8] text-[13px] text-center">{error}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="mt-2 px-5 py-2 bg-[#1e3a8a] text-white rounded-lg font-['Public_Sans'] font-semibold text-[13px]"
-              >
-                {t("다시 시도", "Retry")}
-              </button>
-            </div>
-          )}
-
-          {/* Routes */}
-          {!loading && !error &&
-            filteredRoutes.map((route) => {
-              const stopNames: string[] =
-                route.stops?.map((s: any) => s.name) || [];
-              const color = getColor(route.color);
-              const isExpanded = expandedRoute === route.id;
-              const liveInfo = routeBusMap[route.id];
-
-              return (
-                <div
-                  key={route.id}
-                  className="bg-white border border-[#e2e8f0] rounded-[16px] overflow-hidden shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] hover:shadow-md transition-all"
+          {regions.length > 1 && (
+            <div className="mt-3 flex gap-2 overflow-x-auto scrollbar-hide">
+              {["all", ...regions].map((region) => (
+                <button
+                  key={region}
+                  type="button"
+                  onClick={() => setSelectedRegion(region)}
+                  className={`h-8 shrink-0 rounded-md px-3 font-['Public_Sans'] text-[12px] font-semibold ${selectedRegion === region ? "bg-[#1e3a8a] text-white" : "border border-[#d8dee7] bg-white text-[#64748b]"}`}
                 >
-                  <button
-                    onClick={() =>
-                      setExpandedRoute(isExpanded ? null : route.id)
-                    }
-                    className="w-full p-[16px] text-left"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className="rounded-[12px] size-[48px] flex items-center justify-center shrink-0 shadow-lg"
-                        style={{ backgroundColor: color }}
-                      >
-                        <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                          />
-                        </svg>
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1 flex-wrap">
-                          <h3 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] leading-[24px]">
-                            {route.name}
-                          </h3>
-                          {route.region && (
-                            <span className="bg-[#f1f5f9] text-[#64748b] px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px] uppercase">
-                              {route.region}
-                            </span>
-                          )}
-                          {liveInfo ? (
-                            <span className="flex items-center gap-1 bg-[#22c55e]/10 text-[#16a34a] px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse inline-block" />
-                              {t("운행 중", "In Service")}
-                            </span>
-                          ) : !route.isActive ? (
-                            <span className="bg-red-50 text-red-400 px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px]">
-                              {t("운행 중단", "Suspended")}
-                            </span>
-                          ) : null}
-                        </div>
-                        {liveInfo && (
-                          <div className="flex items-center gap-1 mb-1">
-                            <svg className="w-3 h-3 text-[#1e3a8a]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <span className="font-['Public_Sans'] font-bold text-[#1e3a8a] text-[12px]">
-                              {t(`도착 예상 ${liveInfo.etaMins}분`, `ETA ${liveInfo.etaMins} min`)}
-                            </span>
-                          </div>
-                        )}
-
-                        <div className="flex items-center gap-4 text-[#64748b] text-[12px] font-['Public_Sans'] mb-2">
-                          {route.duration && (
-                            <div className="flex items-center gap-1">
-                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span>{route.duration}</span>
-                            </div>
-                          )}
-                          {route.fare && (
-                            <div className="flex items-center gap-1">
-                              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                              </svg>
-                              <span>{route.fare}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        {route.schedule && (
-                          <p className="font-['Public_Sans'] font-medium text-[#1e3a8a] text-[12px] leading-[16px]">
-                            {route.schedule}
-                          </p>
-                        )}
-
-                        {route.description && (
-                          <p className="font-['Public_Sans'] text-[#64748b] text-[12px] leading-[18px] mt-1">
-                            {route.description}
-                          </p>
-                        )}
-                      </div>
-
-                      <svg
-                        className={`w-5 h-5 text-[#64748b] transition-transform shrink-0 mt-2 ${
-                          isExpanded ? "rotate-180" : ""
-                        }`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                    </div>
-                  </button>
-
-                  {isExpanded && (
-                    <div className="px-[16px] pb-[16px] border-t border-[#f1f5f9]">
-                      <div className="pt-[16px]">
-                        <h4 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[14px] mb-3">
-                          {t("정류장 목록", "Route Stops")}
-                        </h4>
-                        {stopNames.length > 0 ? (
-                          <div className="space-y-2">
-                            {stopNames.map((stop, index) => (
-                              <div key={index} className="flex items-center gap-3">
-                                <div className="relative flex flex-col items-center">
-                                  <div
-                                    className="rounded-full size-[24px] flex items-center justify-center font-['Public_Sans'] font-bold text-[10px] z-10 text-white"
-                                    style={{
-                                      backgroundColor:
-                                        index === 0
-                                          ? color
-                                          : index === stopNames.length - 1
-                                          ? "#1e3a8a"
-                                          : "#cbd5e1",
-                                    }}
-                                  >
-                                    {index + 1}
-                                  </div>
-                                  {index < stopNames.length - 1 && (
-                                    <div className="w-[2px] h-[24px] bg-[#e2e8f0] absolute top-[24px]" />
-                                  )}
-                                </div>
-                                <div className="flex-1 py-1">
-                                  <p className="font-['Public_Sans'] text-[14px] leading-[20px] font-semibold text-[#0f172a]">
-                                    {stop}
-                                  </p>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-[#94a3b8] text-[13px] font-['Public_Sans']">
-                            {t("정류장 정보 없음", "No stop info")}
-                          </p>
-                        )}
-
-                        <div className="flex gap-2 mt-4">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setRouteModalId(route.id);
-                            }}
-                            className="flex-1 h-[44px] rounded-[8px] font-['Public_Sans'] font-bold text-[#1e3a8a] text-[14px] border-2 border-[#1e3a8a] hover:bg-[#f0f4ff] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
-                          >
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-                            </svg>
-                            {t("노선 전체 보기", "View Full Route")}
-                          </button>
-                          <button
-                            onClick={route.isActive ? openPayco : undefined}
-                            className={`flex-1 h-[44px] rounded-[8px] font-['Public_Sans'] font-bold text-white text-[14px] shadow-lg hover:shadow-xl active:scale-[0.98] transition-all ${
-                              !route.isActive ? "opacity-50 cursor-not-allowed" : ""
-                            }`}
-                            style={{
-                              background: route.isActive
-                                ? "linear-gradient(135deg, #fa2828 0%, #ff5a1f 100%)"
-                                : "#94a3b8",
-                            }}
-                            disabled={!route.isActive}
-                          >
-                            {route.isActive
-                              ? t("PAYCO 예약", "Book via PAYCO")
-                              : t("운행 중단", "Suspended")}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-
-          {/* Empty state */}
-          {!loading && !error && filteredRoutes.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="bg-[#f1f5f9] rounded-full p-6 mb-4">
-                <svg className="w-12 h-12 text-[#94a3b8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"
-                  />
-                </svg>
-              </div>
-              <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] mb-1">
-                {t("노선을 찾을 수 없습니다", "No routes found")}
-              </p>
-              <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[14px] text-center">
-                {selectedRegion === "to-school"
-                  ? t("등교 노선이 없습니다", "No to-school routes")
-                  : selectedRegion === "from-school"
-                  ? t("하교 노선이 없습니다", "No from-school routes")
-                  : t(`${selectedRegion} 지역 노선이 없습니다`, `No routes in ${selectedRegion}`)}
-              </p>
+                  {region === "all" ? t("전체 지역", "All regions") : region}
+                </button>
+              ))}
             </div>
           )}
         </div>
-      </div>
 
-      {/* Route Map Modal */}
+        <div className="space-y-3 px-4 py-4">
+          {loading && Array.from({ length: 3 }).map((_, index) => (
+            <div key={index} className="h-[142px] animate-pulse rounded-lg border border-[#e2e8f0] bg-white p-4">
+              <div className="mb-4 h-4 w-2/3 rounded bg-[#edf1f5]" />
+              <div className="mb-2 h-7 w-1/3 rounded bg-[#edf1f5]" />
+              <div className="h-3 w-1/2 rounded bg-[#edf1f5]" />
+            </div>
+          ))}
+
+          {!loading && error && (
+            <div className="rounded-lg border border-[#fecaca] bg-white px-5 py-10 text-center">
+              <RefreshCw size={26} className="mx-auto mb-3 text-[#ef4444]" />
+              <p className="font-['Public_Sans'] text-[15px] font-bold text-[#0f172a]">{t("노선을 불러오지 못했습니다", "Unable to load routes")}</p>
+              <p className="mt-1 break-words font-['Public_Sans'] text-[12px] text-[#64748b]">{error}</p>
+              <button type="button" onClick={loadRoutes} className="mt-5 h-10 rounded-lg bg-[#1e3a8a] px-5 font-['Public_Sans'] text-[13px] font-bold text-white">{t("다시 시도", "Retry")}</button>
+            </div>
+          )}
+
+          {!loading && !error && filteredRoutes.map((route) => {
+            const expanded = expandedRoute === route.id;
+            const color = getColor(route.color);
+            const next = nextSchedule(route.schedule);
+            const times = parseScheduleTimes(route.schedule);
+            const live = routeBusMap[route.id];
+            return (
+              <article key={route.id} className="overflow-hidden rounded-lg border border-[#dfe5ec] bg-white shadow-[0_1px_2px_rgba(15,23,42,0.04)]">
+                <button type="button" onClick={() => setExpandedRoute(expanded ? null : route.id)} className="w-full p-4 text-left active:bg-[#f8fafc]">
+                  <div className="flex items-start gap-3">
+                    <span className="mt-0.5 flex size-10 shrink-0 items-center justify-center rounded-lg text-white" style={{ backgroundColor: color }}><BusFront size={20} /></span>
+                    <div className="min-w-0 flex-1">
+                      <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                        {route.region && <span className="rounded bg-[#eef2f7] px-1.5 py-0.5 font-['Public_Sans'] text-[10px] font-bold text-[#526074]">{route.region}</span>}
+                        <span className={`rounded px-1.5 py-0.5 font-['Public_Sans'] text-[10px] font-bold ${direction === "to-school" ? "bg-[#e8f0ff] text-[#1d4ed8]" : "bg-[#e8f8f1] text-[#087f5b]"}`}>
+                          {direction === "to-school" ? t("등교", "To school") : t("하교", "From school")}
+                        </span>
+                        {live && <span className="flex items-center gap-1 rounded bg-[#ecfdf3] px-1.5 py-0.5 font-['Public_Sans'] text-[10px] font-bold text-[#15803d]"><span className="size-1.5 rounded-full bg-[#22c55e]" />{t("운행 중", "Live")}</span>}
+                      </div>
+                      <h2 className="truncate font-['Public_Sans'] text-[16px] font-bold leading-6 text-[#0f172a]">{cleanRouteName(route.name)}</h2>
+                      <div className="mt-3 flex items-end justify-between gap-3">
+                        <div>
+                          <p className="font-['Public_Sans'] text-[10px] font-semibold text-[#94a3b8]">{t("다음 출발", "Next departure")}</p>
+                          <p className="font-['Public_Sans'] text-[23px] font-black leading-7 text-[#1e3a8a]">{next?.label ?? "시간 확인"}</p>
+                          {next?.tomorrow && <p className="font-['Public_Sans'] text-[10px] text-[#64748b]">{t("내일 첫차", "Tomorrow")}</p>}
+                        </div>
+                        <div className="text-right">
+                          <p className="flex items-center justify-end gap-1 font-['Public_Sans'] text-[12px] font-semibold text-[#334155]"><Ticket size={13} />{formatFare(route.fare)}</p>
+                          <p className="mt-1 flex items-center justify-end gap-1 font-['Public_Sans'] text-[11px] text-[#64748b]"><Clock3 size={12} />{route.duration || t("소요시간 확인", "Check duration")}</p>
+                        </div>
+                      </div>
+                    </div>
+                    <ChevronDown size={18} className={`mt-1 shrink-0 text-[#94a3b8] transition-transform ${expanded ? "rotate-180" : ""}`} />
+                  </div>
+                </button>
+
+                {expanded && (
+                  <div className="border-t border-[#edf1f5] px-4 pb-4 pt-4">
+                    {times.length > 0 && (
+                      <div className="mb-4">
+                        <p className="mb-2 font-['Public_Sans'] text-[11px] font-bold text-[#64748b]">{t("운행 시간", "Departure times")}</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {times.map((time) => <span key={time.label} className="rounded-md bg-[#f1f5f9] px-2.5 py-1.5 font-['Public_Sans'] text-[12px] font-semibold text-[#334155]">{time.label}</span>)}
+                        </div>
+                      </div>
+                    )}
+                    <p className="mb-2 font-['Public_Sans'] text-[11px] font-bold text-[#64748b]">{t("정류장", "Stops")}</p>
+                    <div className="space-y-0">
+                      {route.stops?.length ? route.stops.map((stop, index) => (
+                        <div key={stop.id} className="flex min-h-10 gap-3">
+                          <div className="flex w-5 flex-col items-center">
+                            <span className="mt-1 size-2.5 rounded-full border-2 bg-white" style={{ borderColor: color }} />
+                            {index < route.stops.length - 1 && <span className="w-px flex-1 bg-[#cbd5e1]" />}
+                          </div>
+                          <p className="pb-3 font-['Public_Sans'] text-[13px] font-semibold text-[#334155]">{stop.name}</p>
+                        </div>
+                      )) : <p className="font-['Public_Sans'] text-[12px] text-[#94a3b8]">{t("등록된 정류장이 없습니다", "No stops registered")}</p>}
+                    </div>
+                    {route.description && <p className="mt-2 rounded-lg bg-[#f8fafc] p-3 font-['Public_Sans'] text-[12px] leading-5 text-[#64748b]">{route.description}</p>}
+                    <div className="mt-4 grid grid-cols-2 gap-2">
+                      <button type="button" onClick={() => setRouteModalId(route.id)} className="flex h-11 items-center justify-center gap-2 rounded-lg border border-[#1e3a8a] font-['Public_Sans'] text-[13px] font-bold text-[#1e3a8a]"><MapIcon size={16} />{t("지도 보기", "Map")}</button>
+                      <button type="button" onClick={route.isActive ? openPayco : undefined} disabled={!route.isActive} className="flex h-11 items-center justify-center gap-2 rounded-lg bg-[#fa2828] font-['Public_Sans'] text-[13px] font-bold text-white disabled:bg-[#94a3b8]"><Ticket size={16} />{route.isActive ? t("PAYCO 예약", "Book") : t("운행 중단", "Suspended")}</button>
+                    </div>
+                  </div>
+                )}
+              </article>
+            );
+          })}
+
+          {!loading && !error && filteredRoutes.length === 0 && (
+            <div className="rounded-lg border border-dashed border-[#cbd5e1] bg-white px-6 py-14 text-center">
+              <MapPin size={28} className="mx-auto mb-3 text-[#94a3b8]" />
+              <p className="font-['Public_Sans'] text-[15px] font-bold text-[#0f172a]">{t("등록된 노선이 없습니다", "No routes found")}</p>
+              <p className="mt-1 font-['Public_Sans'] text-[12px] text-[#64748b]">{t("다른 방향이나 지역을 선택해 보세요", "Try another direction or region")}</p>
+            </div>
+          )}
+        </div>
+      </main>
       {routeModalId && (() => {
-        const modal = routes.find((r) => r.id === routeModalId);
-        if (!modal) return null;
-        return (
-          <RouteMapModal
-            route={modal}
-            color={getColor(modal.color)}
-            onClose={() => setRouteModalId(null)}
-          />
-        );
+        const route = routes.find((item) => item.id === routeModalId);
+        return route ? <RouteMapModal route={route} color={getColor(route.color)} onClose={() => setRouteModalId(null)} /> : null;
       })()}
-
-      {/* Bottom Navigation */}
       <BottomNav />
     </div>
   );

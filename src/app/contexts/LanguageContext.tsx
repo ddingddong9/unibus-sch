@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 
 type Language = 'ko' | 'en';
 
@@ -11,7 +11,15 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
-  const [language, setLanguage] = useState<Language>('ko');
+  const [language, setLanguage] = useState<Language>(() => {
+    const saved = localStorage.getItem('unibus:language');
+    return saved === 'en' ? 'en' : 'ko';
+  });
+
+  useEffect(() => {
+    localStorage.setItem('unibus:language', language);
+    document.documentElement.lang = language;
+  }, [language]);
 
   const t = (ko: string, en: string) => {
     return language === 'ko' ? ko : en;

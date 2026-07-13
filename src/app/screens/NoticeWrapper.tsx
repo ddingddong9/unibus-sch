@@ -1,337 +1,196 @@
-import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
-import { motion, AnimatePresence } from "framer-motion";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Bell, ChevronDown, ImageIcon, Inbox, Pin, RefreshCw, X } from "lucide-react";
 import BottomNav from "../components/BottomNav";
+import { NoticeSkeleton } from "../components/SkeletonLoaders";
+import UserPageHeader from "../components/UserPageHeader";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
 import type { Notice } from "../types";
-import { NoticeSkeleton } from "../components/SkeletonLoaders";
 import { clearUnreadNoticeCount, setLastNoticeSeenAt } from "../utils/notificationPreferences";
 
-const listContainer = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { staggerChildren: 0.06, delayChildren: 0.05 } },
-};
-const listItem = {
-  hidden: { opacity: 0, y: 12 },
-  visible: { opacity: 1, y: 0, transition: { type: "spring" as const, stiffness: 380, damping: 28 } },
+const categories = ["all", "route", "general", "system", "lost"] as const;
+type Category = (typeof categories)[number];
+
+const categoryStyle: Record<Exclude<Category, "all">, { dot: string; badge: string }> = {
+  route: { dot: "bg-[#2563eb]", badge: "bg-[#e8f0ff] text-[#1d4ed8]" },
+  general: { dot: "bg-[#059669]", badge: "bg-[#e8f8f1] text-[#087f5b]" },
+  system: { dot: "bg-[#d97706]", badge: "bg-[#fff4dc] text-[#a16207]" },
+  lost: { dot: "bg-[#ea580c]", badge: "bg-[#fff0e8] text-[#c2410c]" },
 };
 
 export default function NoticeWrapper() {
-  const navigate = useNavigate();
   const { t, language } = useLanguage();
-  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedCategory, setSelectedCategory] = useState<Category>("all");
   const [expandedNotice, setExpandedNotice] = useState<string | null>(null);
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [notices, setNotices] = useState<Notice[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadNotices();
-    clearUnreadNoticeCount();
-  }, []);
-
-  const loadNotices = async () => {
+  const loadNotices = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
       const data = await api.getNotices();
-      setNotices(data);
-      if (data[0]?.createdAt) setLastNoticeSeenAt(data[0].createdAt);
-    } catch (err) {
-      console.error("Failed to load notices:", err);
-      setError(err instanceof Error ? err.message : "공지사항을 불러오지 못했습니다");
+      const sorted = [...data].sort((a, b) => {
+        if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      setNotices(sorted);
+      if (sorted[0]?.createdAt) setLastNoticeSeenAt(sorted[0].createdAt);
+      clearUnreadNoticeCount();
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : t("공지사항을 불러오지 못했습니다", "Unable to load notices"));
     } finally {
       setLoading(false);
     }
-  };
+  }, [t]);
 
-  const filteredNotices = selectedCategory === "all" 
-    ? notices 
-    : notices.filter(n => n.category === selectedCategory);
+  useEffect(() => {
+    loadNotices();
+  }, [loadNotices]);
 
-  const getCategoryColor = (category: string) => {
-    switch(category) {
-      case "route": return "bg-[#3b82f6] text-white";
-      case "system": return "bg-[#f59e0b] text-white";
-      case "general": return "bg-[#10b981] text-white";
-      case "lost": return "bg-[#f97316] text-white";
-      default: return "bg-[#64748b] text-white";
-    }
-  };
+  const filteredNotices = useMemo(
+    () => selectedCategory === "all" ? notices : notices.filter((notice) => notice.category === selectedCategory),
+    [notices, selectedCategory],
+  );
 
-  const getCategoryLabel = (category: string) => {
-    const labels: Record<string, { ko: string; en: string }> = {
-      route: { ko: "운행정보", en: "Route" },
-      system: { ko: "시스템", en: "System" },
-      general: { ko: "일반", en: "General" },
-      lost: { ko: "분실물", en: "Lost & Found" },
+  const categoryLabel = (category: Category) => {
+    const labels: Record<Category, [string, string]> = {
+      all: ["전체", "All"],
+      route: ["운행", "Route"],
+      general: ["일반", "General"],
+      system: ["시스템", "System"],
+      lost: ["분실물", "Lost"],
     };
-    return language === "ko" ? (labels[category]?.ko || category) : (labels[category]?.en || category);
+    return t(...labels[category]);
   };
 
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString(language === "ko" ? "ko-KR" : "en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    });
-  };
+  const formatDate = (dateString: string) => new Intl.DateTimeFormat(language === "ko" ? "ko-KR" : "en-US", {
+    month: "short",
+    day: "numeric",
+    year: new Date(dateString).getFullYear() !== new Date().getFullYear() ? "numeric" : undefined,
+  }).format(new Date(dateString));
 
-  const isNew = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffInDays = (now.getTime() - date.getTime()) / (1000 * 60 * 60 * 24);
-    return diffInDays < 3; // New if less than 3 days old
-  };
+  const isNew = (dateString: string) => Date.now() - new Date(dateString).getTime() < 3 * 86_400_000;
 
   return (
-    <div className="bg-[#f6f6f8] content-stretch flex flex-col items-start relative size-full">
-      <div className="bg-white content-stretch flex flex-col items-start overflow-auto pb-[120px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full" style={{ height: '100dvh' }}>
-        {/* Header */}
-        <div className="sticky top-0 z-30 w-full pt-safe">
-          <div className="backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] flex items-center justify-between pb-[12px] pt-[16px] px-[16px] w-full">
-            <button
-              onClick={() => navigate("/home")}
-              className="flex items-center justify-center size-[40px] hover:bg-gray-100 rounded-full active:scale-95 transition-all"
-            >
-              <svg className="w-3 h-5" fill="none" viewBox="0 0 12 20" stroke="#0F172A" strokeWidth="2">
-                <path d="M11 1L1 10L11 19" />
-              </svg>
-            </button>
+    <div className="relative size-full bg-[#f4f6f9]">
+      <main className="h-[100dvh] overflow-y-auto pb-[112px] scrollbar-hide">
+        <UserPageHeader
+          title={t("공지사항", "Notices")}
+          subtitle={t("운행 변경과 서비스 소식", "Service and route updates")}
+          action={<Bell size={21} className="text-[#1e3a8a]" />}
+        />
 
-            <div className="flex flex-col items-center">
-              <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[18px] leading-[22.5px]">{t("공지사항", "Notice")}</p>
-              <p className="font-['Public_Sans'] font-bold text-[#1e3a8a] text-[10px] leading-[15px] tracking-[1px] uppercase">
-                {t("업데이트 및 공지", "Updates & Announcements")}
-              </p>
-            </div>
-
-            <div className="w-[40px]" />
-          </div>
-
-          {/* Category Filter */}
-          <div className="flex gap-2 px-[16px] py-[12px] overflow-x-auto scrollbar-hide border-b border-[#f1f5f9]">
-            <button
-              onClick={() => setSelectedCategory("all")}
-              className={`px-4 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[12px] whitespace-nowrap transition-all ${
-                selectedCategory === "all"
-                  ? "bg-[#1e3a8a] text-white"
-                  : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
-              }`}
-            >
-              {t("전체", "All")}
-            </button>
-            <button
-              onClick={() => setSelectedCategory("route")}
-              className={`px-4 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[12px] whitespace-nowrap transition-all ${
-                selectedCategory === "route"
-                  ? "bg-[#3b82f6] text-white"
-                  : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
-              }`}
-            >
-              {t("운행정보", "Route")}
-            </button>
-            <button
-              onClick={() => setSelectedCategory("general")}
-              className={`px-4 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[12px] whitespace-nowrap transition-all ${
-                selectedCategory === "general"
-                  ? "bg-[#10b981] text-white"
-                  : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
-              }`}
-            >
-              {t("일반", "General")}
-            </button>
-            <button
-              onClick={() => setSelectedCategory("system")}
-              className={`px-4 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[12px] whitespace-nowrap transition-all ${
-                selectedCategory === "system"
-                  ? "bg-[#f59e0b] text-white"
-                  : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
-              }`}
-            >
-              {t("시스템", "System")}
-            </button>
-            <button
-              onClick={() => setSelectedCategory("lost")}
-              className={`px-4 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[12px] whitespace-nowrap transition-all ${
-                selectedCategory === "lost"
-                  ? "bg-[#f97316] text-white"
-                  : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
-              }`}
-            >
-              {t("분실물", "Lost & Found")}
-            </button>
+        <div className="border-b border-[#e3e8ef] bg-[#f4f6f9] px-4 py-3">
+          <div className="flex gap-1 overflow-x-auto rounded-lg bg-[#e5eaf0] p-1 scrollbar-hide">
+            {categories.map((category) => {
+              const count = category === "all" ? notices.length : notices.filter((notice) => notice.category === category).length;
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => {
+                    setSelectedCategory(category);
+                    setExpandedNotice(null);
+                  }}
+                  className={`flex h-9 shrink-0 items-center gap-1.5 rounded-md px-3 font-['Public_Sans'] text-[12px] font-bold transition-colors ${selectedCategory === category ? "bg-white text-[#0f172a] shadow-sm" : "text-[#64748b]"}`}
+                >
+                  {categoryLabel(category)}
+                  {count > 0 && <span className={`text-[10px] ${selectedCategory === category ? "text-[#1e3a8a]" : "text-[#94a3b8]"}`}>{count}</span>}
+                </button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Notice List */}
-        <div className="flex-1 w-full px-[16px] py-[16px] space-y-3 overflow-y-auto scrollbar-hide">
-          {loading ? (
-            <motion.div
-              key="notice-skeleton"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              <NoticeSkeleton />
-            </motion.div>
-          ) : error ? (
-            <div className="flex flex-col items-center justify-center py-12">
-              <div className="bg-[#fee2e2] rounded-full p-6 mb-4">
-                <svg className="w-12 h-12 text-[#ef4444]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M12 3a9 9 0 100 18A9 9 0 0012 3z" />
-                </svg>
-              </div>
-              <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] mb-1">{t("불러오기 실패", "Failed to load")}</p>
-              <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[14px] mb-4">{error}</p>
-              <button
-                onClick={loadNotices}
-                className="bg-[#1e3a8a] text-white px-6 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[14px] hover:bg-[#1e40af] active:scale-95 transition-all"
-              >
-                {t("다시 시도", "Retry")}
-              </button>
+        <div className="space-y-3 px-4 py-4">
+          {loading ? <NoticeSkeleton /> : error ? (
+            <div className="rounded-lg border border-[#fecaca] bg-white px-5 py-12 text-center">
+              <RefreshCw size={28} className="mx-auto mb-3 text-[#ef4444]" />
+              <p className="font-['Public_Sans'] text-[15px] font-bold text-[#0f172a]">{t("공지를 불러오지 못했습니다", "Unable to load notices")}</p>
+              <p className="mt-1 break-words font-['Public_Sans'] text-[12px] text-[#64748b]">{error}</p>
+              <button type="button" onClick={loadNotices} className="mt-5 h-10 rounded-lg bg-[#1e3a8a] px-5 font-['Public_Sans'] text-[13px] font-bold text-white">{t("다시 시도", "Retry")}</button>
             </div>
           ) : (
-            <>
-              <motion.div
-                key={selectedCategory}
-                variants={listContainer}
-                initial="hidden"
-                animate="visible"
-                className="space-y-3"
-              >
-                {filteredNotices.map((notice) => (
-                  <motion.button
+            <AnimatePresence mode="popLayout" initial={false}>
+              {filteredNotices.map((notice) => {
+                const expanded = expandedNotice === notice.id;
+                const style = categoryStyle[notice.category];
+                return (
+                  <motion.article
+                    layout
                     key={notice.id}
-                    variants={listItem}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={() => setExpandedNotice(expandedNotice === notice.id ? null : notice.id)}
-                    className="w-full bg-white border border-[#e2e8f0] rounded-[16px] p-[16px] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] hover:shadow-md transition-shadow text-left"
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -6 }}
+                    transition={{ duration: 0.18 }}
+                    className={`overflow-hidden rounded-lg border bg-white ${notice.isPinned ? "border-[#b8c8e8] shadow-[0_4px_16px_rgba(30,58,138,0.08)]" : "border-[#dfe5ec]"}`}
                   >
-                    <div className="flex items-start justify-between gap-3 mb-2">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className={`px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px] uppercase ${getCategoryColor(notice.category)}`}>
-                            {getCategoryLabel(notice.category)}
-                          </span>
-                          {isNew(notice.createdAt) && (
-                            <span className="bg-[#ef4444] text-white px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px] uppercase">
-                              NEW
-                            </span>
-                          )}
+                    <button type="button" onClick={() => setExpandedNotice(expanded ? null : notice.id)} className="w-full px-4 py-4 text-left active:bg-[#f8fafc]">
+                      <div className="flex items-start gap-3">
+                        <span className={`mt-1 size-2.5 shrink-0 rounded-full ${style.dot}`} />
+                        <div className="min-w-0 flex-1">
+                          <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                            <span className={`rounded px-1.5 py-0.5 font-['Public_Sans'] text-[10px] font-bold ${style.badge}`}>{categoryLabel(notice.category)}</span>
+                            {notice.isPinned && <span className="flex items-center gap-1 rounded bg-[#edf2ff] px-1.5 py-0.5 font-['Public_Sans'] text-[10px] font-bold text-[#1e3a8a]"><Pin size={10} fill="currentColor" />{t("중요", "Pinned")}</span>}
+                            {isNew(notice.createdAt) && <span className="rounded bg-[#ef4444] px-1.5 py-0.5 font-['Public_Sans'] text-[10px] font-bold text-white">NEW</span>}
+                          </div>
+                          <h2 className="font-['Public_Sans'] text-[15px] font-bold leading-6 text-[#0f172a]">{notice.title}</h2>
+                          <div className="mt-1 flex items-center gap-2 font-['Public_Sans'] text-[11px] text-[#94a3b8]">
+                            <span>{formatDate(notice.createdAt)}</span>
+                            {notice.imageUrls && notice.imageUrls.length > 0 && <span className="flex items-center gap-1"><ImageIcon size={12} />{notice.imageUrls.length}</span>}
+                          </div>
                         </div>
-                        <h3 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] leading-[24px] mb-1">
-                          {notice.title}
-                        </h3>
-                        <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[12px] leading-[16px]">
-                          {formatDate(notice.createdAt)}
-                        </p>
+                        <ChevronDown size={18} className={`mt-1 shrink-0 text-[#94a3b8] transition-transform ${expanded ? "rotate-180" : ""}`} />
                       </div>
-                      <motion.svg
-                        animate={{ rotate: expandedNotice === notice.id ? 180 : 0 }}
-                        transition={{ duration: 0.2 }}
-                        className="w-5 h-5 text-[#64748b] shrink-0"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </motion.svg>
-                    </div>
+                    </button>
 
-                    <AnimatePresence>
-                      {expandedNotice === notice.id && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.2, ease: "easeInOut" }}
-                          className="overflow-hidden"
-                        >
-                          <div className="mt-3 pt-3 border-t border-[#f1f5f9]">
-                            <p className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[16px] leading-[26px]">
-                              {notice.content}
-                            </p>
+                    <AnimatePresence initial={false}>
+                      {expanded && (
+                        <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.2 }} className="overflow-hidden">
+                          <div className="mx-4 border-t border-[#edf1f5] pb-5 pt-4">
+                            <p className="whitespace-pre-wrap font-['Public_Sans'] text-[14px] leading-6 text-[#334155]">{notice.content}</p>
                             {notice.imageUrls && notice.imageUrls.length > 0 && (
-                              <div className="grid grid-cols-2 gap-2 mt-3">
-                                {notice.imageUrls.map((url, i) => (
-                                  <img
-                                    key={i}
-                                    src={url}
-                                    alt={`공지 이미지 ${i + 1}`}
-                                    className="w-full rounded-lg object-cover border border-[#e2e8f0] cursor-pointer active:scale-95 transition-transform"
-                                    onClick={(e) => { e.stopPropagation(); setLightboxImage(url); }}
-                                  />
+                              <div className={`mt-4 grid gap-2 ${notice.imageUrls.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}>
+                                {notice.imageUrls.map((url, index) => (
+                                  <button key={url} type="button" onClick={() => setLightboxImage(url)} className="overflow-hidden rounded-lg border border-[#e2e8f0] bg-[#f1f5f9]">
+                                    <img src={url} alt={t(`공지 첨부 이미지 ${index + 1}`, `Notice image ${index + 1}`)} loading="lazy" className="aspect-[4/3] w-full object-cover" />
+                                  </button>
                                 ))}
                               </div>
                             )}
-                            {notice.contentBelow && (
-                              <p className="font-['Public_Sans'] font-normal text-[#475569] text-[14px] leading-[22px] mt-3">
-                                {notice.contentBelow}
-                              </p>
-                            )}
+                            {notice.contentBelow && <p className="mt-4 whitespace-pre-wrap font-['Public_Sans'] text-[14px] leading-6 text-[#475569]">{notice.contentBelow}</p>}
                           </div>
                         </motion.div>
                       )}
                     </AnimatePresence>
-                  </motion.button>
-                ))}
-              </motion.div>
+                  </motion.article>
+                );
+              })}
+            </AnimatePresence>
+          )}
 
-              {filteredNotices.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-12">
-                  <div className="bg-[#f1f5f9] rounded-full p-6 mb-4">
-                    <svg className="w-12 h-12 text-[#94a3b8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" />
-                    </svg>
-                  </div>
-                  <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] mb-1">{t("공지사항 없음", "No notices")}</p>
-                  <p className="font-['Public_Sans'] font-normal text-[#94a3b8] text-[14px]">
-                    {t("현재 공지사항이 없습니다", "No notices at the moment")}
-                  </p>
-                </div>
-              )}
-            </>
+          {!loading && !error && filteredNotices.length === 0 && (
+            <div className="rounded-lg border border-dashed border-[#cbd5e1] bg-white px-6 py-14 text-center">
+              <Inbox size={30} className="mx-auto mb-3 text-[#94a3b8]" />
+              <p className="font-['Public_Sans'] text-[15px] font-bold text-[#0f172a]">{t("아직 공지가 없습니다", "No notices yet")}</p>
+              <p className="mt-1 font-['Public_Sans'] text-[12px] text-[#64748b]">{t("새 소식이 등록되면 이곳에 표시됩니다", "New updates will appear here")}</p>
+            </div>
           )}
         </div>
-      </div>
+      </main>
 
-      {/* Lightbox */}
       <AnimatePresence>
         {lightboxImage && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
-            onClick={() => setLightboxImage(null)}
-          >
-            <motion.img
-              initial={{ scale: 0.85 }}
-              animate={{ scale: 1 }}
-              exit={{ scale: 0.85 }}
-              src={lightboxImage}
-              alt="확대 이미지"
-              className="max-w-full max-h-full rounded-lg object-contain"
-              onClick={(e) => e.stopPropagation()}
-            />
-            <button
-              className="absolute top-4 right-4 text-white bg-black/50 rounded-full p-2"
-              onClick={() => setLightboxImage(null)}
-            >
-              <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} role="dialog" aria-modal="true" className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4" onClick={() => setLightboxImage(null)}>
+            <motion.img initial={{ scale: 0.96 }} animate={{ scale: 1 }} src={lightboxImage} alt={t("확대된 공지 이미지", "Expanded notice image")} className="max-h-full max-w-full rounded-lg object-contain" onClick={(event) => event.stopPropagation()} />
+            <button type="button" aria-label={t("닫기", "Close")} onClick={() => setLightboxImage(null)} className="absolute right-4 top-[max(16px,env(safe-area-inset-top))] flex size-11 items-center justify-center rounded-lg bg-white/15 text-white backdrop-blur"><X size={22} /></button>
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Bottom Navigation */}
       <BottomNav />
     </div>
   );
