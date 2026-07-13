@@ -487,7 +487,7 @@ export default function CampusShuttleWrapper() {
           </div>
         </div>
 
-        <div className="absolute right-4 top-[84px] z-20 flex overflow-hidden rounded-xl border border-white/90 bg-white/94 p-1 shadow-[0_8px_22px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+        <div className="absolute right-4 top-[calc(env(safe-area-inset-top)+88px)] z-20 flex overflow-hidden rounded-xl border border-white/90 bg-white/94 p-1 shadow-[0_8px_22px_rgba(15,23,42,0.14)] backdrop-blur-xl">
           {([
             { key: "2d", label: "2D 지도", icon: MapIcon },
             { key: "3d", label: "3D 캠퍼스", icon: Box },

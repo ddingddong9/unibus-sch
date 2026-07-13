@@ -266,29 +266,29 @@ export default function RouteManagement() {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
+        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[32px] mb-2">
+            <h1 className="mb-2 font-['Public_Sans'] text-[26px] font-bold text-[#0f172a] sm:text-[32px]">
               버스 노선 관리
             </h1>
             <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">
               총 {routes.length}개의 노선 (운행중: {routes.filter((r) => r.isActive).length}개)
             </p>
           </div>
-          <div className="flex gap-3">
+          <div className="grid grid-cols-2 gap-2 sm:flex sm:gap-3">
             <button
               onClick={fetchRoutes}
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-3 border border-[#cbd5e1] text-[#64748b] font-['Public_Sans'] font-semibold text-[15px] rounded-lg hover:bg-gray-50 transition-colors"
+              className="flex items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] px-3 py-3 font-['Public_Sans'] text-[14px] font-semibold text-[#64748b] transition-colors hover:bg-gray-50 sm:px-4 sm:text-[15px]"
             >
               <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
               새로고침
             </button>
             <button
               onClick={handleCreate}
-              className="flex items-center gap-2 px-6 py-3 bg-[#1e3b8a] text-white font-['Public_Sans'] font-semibold text-[15px] rounded-lg hover:bg-[#1e3b8a]/90 transition-colors shadow-sm"
+              className="flex items-center justify-center gap-2 rounded-lg bg-[#1e3b8a] px-3 py-3 font-['Public_Sans'] text-[14px] font-semibold text-white shadow-sm transition-colors hover:bg-[#1e3b8a]/90 sm:px-6 sm:text-[15px]"
             >
               <Plus className="w-5 h-5" />
               새 노선 추가
@@ -389,16 +389,16 @@ export default function RouteManagement() {
 
       {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-2xl w-full max-w-3xl max-h-[90vh] overflow-auto">
-            <div className="p-6 border-b border-gray-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-0 sm:p-4">
+          <div className="h-dvh w-full max-w-3xl overflow-auto bg-white sm:h-auto sm:max-h-[90vh] sm:rounded-2xl">
+            <div className="border-b border-gray-200 p-4 sm:p-6">
               <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[24px]">
                 {editingRoute ? "노선 수정" : "새 노선 추가"}
               </h2>
             </div>
-            <div className="p-6 space-y-5">
+            <div className="space-y-5 p-4 sm:p-6">
               {/* 노선명 + 유형 */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
                     노선명 *
@@ -433,7 +433,7 @@ export default function RouteManagement() {
                   <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
                     셔틀 운행 방식
                   </label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {SHUTTLE_VARIANT_OPTIONS.map((option) => (
                       <button
                         key={option.value}
@@ -454,7 +454,7 @@ export default function RouteManagement() {
               )}
 
               {/* 지역 + 요금 */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
                     지역/분류
@@ -482,7 +482,7 @@ export default function RouteManagement() {
               </div>
 
               {/* 소요시간 + 색상 */}
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                   <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
                     소요 시간 / 출발 기준
@@ -690,7 +690,7 @@ interface RouteCardProps {
 
 function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: RouteCardProps) {
   return (
-    <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+    <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-6">
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
@@ -733,6 +733,7 @@ function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: Route
         <div className="flex gap-2">
           <button
             onClick={() => onMapEdit(route)}
+            aria-label={`${route.name} 지도에서 경로 편집`}
             className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
             title="지도에서 경로 편집"
           >
@@ -740,6 +741,7 @@ function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: Route
           </button>
           <button
             onClick={() => onEdit(route)}
+            aria-label={`${route.name} 수정`}
             className="p-2 text-[#1e3b8a] hover:bg-[#1e3b8a]/10 rounded-lg transition-colors"
             title="수정"
           >
@@ -747,6 +749,7 @@ function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: Route
           </button>
           <button
             onClick={() => onDelete(route.id)}
+            aria-label={`${route.name} 삭제`}
             className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
             title="삭제"
           >
@@ -1136,19 +1139,19 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-      <div className="bg-white rounded-2xl w-full max-w-6xl max-h-[92vh] overflow-hidden flex flex-col">
-        <div className="p-5 border-b border-gray-200 flex items-center justify-between gap-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-0 sm:p-4">
+      <div className="flex h-dvh w-full max-w-6xl flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[92vh] sm:rounded-2xl">
+        <div className="flex items-start justify-between gap-3 border-b border-gray-200 p-4 sm:items-center sm:p-5">
           <div>
-            <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[22px]">{route.name} 지도 경로 편집</h2>
+            <h2 className="font-['Public_Sans'] text-[18px] font-bold text-[#0f172a] sm:text-[22px]">{route.name} 지도 경로 편집</h2>
             <p className="font-['Public_Sans'] text-[#64748b] text-[13px] mt-1">정류장과 보정점을 드래그해서 실제 운행 경로를 조정합니다.</p>
           </div>
           <button onClick={onClose} className="p-2 text-[#64748b] hover:bg-gray-100 rounded-lg">
             <X className="w-5 h-5" />
           </button>
         </div>
-        <div className="grid grid-cols-[1fr_300px] min-h-[620px]">
-          <div className="relative min-h-[620px] bg-[#e2e8f0]">
+        <div className="grid min-h-0 flex-1 grid-cols-1 overflow-y-auto lg:grid-cols-[1fr_300px] lg:overflow-hidden">
+          <div className="relative min-h-[48dvh] bg-[#e2e8f0] sm:min-h-[520px] lg:min-h-[620px]">
             <div ref={mapRef} className="absolute inset-0 w-full h-full" />
             {loading && (
               <div className="absolute inset-0 bg-white/80 flex items-center justify-center">
@@ -1156,7 +1159,7 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
               </div>
             )}
           </div>
-          <aside className="border-l border-gray-200 p-5 overflow-auto">
+          <aside className="border-t border-gray-200 p-4 lg:overflow-auto lg:border-l lg:border-t-0 lg:p-5">
             <div className="space-y-3 mb-5">
               <label className="block">
                 <span className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[13px] mb-1.5">보정점 추가 구간</span>

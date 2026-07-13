@@ -271,17 +271,17 @@ export default function BusDemo() {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         <div className="mb-8">
-          <h1 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[32px] mb-2">운행 데모</h1>
+          <h1 className="mb-2 font-['Public_Sans'] text-[26px] font-bold text-[#0f172a] sm:text-[32px]">운행 데모</h1>
           <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">
             학술제 발표용으로 여러 버스가 동시에 움직이는 상황을 재생합니다.
           </p>
         </div>
 
         <div className="grid grid-cols-1 xl:grid-cols-[1fr_360px] gap-6">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <div className="flex items-center justify-between gap-4 mb-6">
+          <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6">
+            <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
               <div>
                 <h2 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[20px]">발표용 시뮬레이션</h2>
                 <p className="font-['Public_Sans'] text-[#94a3b8] text-[13px] mt-1">

@@ -283,17 +283,17 @@ export default function AdminDashboard() {
 
   return (
     <AdminLayout>
-      <div className="p-8">
+      <div className="p-4 sm:p-6 lg:p-8">
         {/* Header */}
-        <div className="flex items-start justify-between mb-8">
+        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h1 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[32px] mb-2">대시보드</h1>
+            <h1 className="mb-2 font-['Public_Sans'] text-[26px] font-bold text-[#0f172a] sm:text-[32px]">대시보드</h1>
             <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">UNIBUS SCH 시스템 현황을 한눈에 확인하세요</p>
           </div>
           <button
             onClick={() => fetchData()}
             disabled={loading}
-            className="flex items-center gap-2 px-4 py-2.5 border border-[#cbd5e1] text-[#64748b] rounded-lg hover:bg-gray-50 transition-colors text-[14px] font-['Public_Sans'] font-medium"
+            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] px-4 py-2.5 font-['Public_Sans'] text-[14px] font-medium text-[#64748b] transition-colors hover:bg-gray-50 sm:w-auto"
           >
             <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
             {lastUpdated ? `${timeAgo(lastUpdated.toISOString())} 업데이트` : "새로고침"}
@@ -301,7 +301,7 @@ export default function AdminDashboard() {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-8">
+        <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
           {loading ? (
             Array.from({ length: 4 }).map((_, i) => (
               <div key={i} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse">
@@ -312,15 +312,15 @@ export default function AdminDashboard() {
             ))
           ) : (
             statCards.map((stat, index) => (
-              <div key={index} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+              <div key={index} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-6">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <p className="font-['Public_Sans'] text-[#64748b] text-[14px] mb-2">{stat.label}</p>
-                    <h3 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[36px] leading-none mb-1">{stat.value}</h3>
+                    <h3 className="mb-1 font-['Public_Sans'] text-[30px] font-bold leading-none text-[#0f172a] sm:text-[36px]">{stat.value}</h3>
                     <span className="font-['Public_Sans'] text-[#94a3b8] text-[12px]">{stat.sub}</span>
                   </div>
-                  <div className={`${stat.color} w-12 h-12 rounded-lg flex items-center justify-center shrink-0`}>
-                    <stat.icon className="w-6 h-6 text-white" />
+                  <div className={`${stat.color} flex h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:h-12 sm:w-12`}>
+                    <stat.icon className="h-5 w-5 text-white sm:h-6 sm:w-6" />
                   </div>
                 </div>
               </div>
@@ -330,7 +330,7 @@ export default function AdminDashboard() {
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           {/* Quick Links */}
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6">
             <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px] mb-4">빠른 작업</h2>
             <div className="space-y-3">
               {quickLinks.map((link, index) => (
@@ -347,7 +347,7 @@ export default function AdminDashboard() {
           </div>
 
           {/* Recent Notices */}
-          <div className="xl:col-span-2 bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6 xl:col-span-2">
             <div className="flex items-center justify-between mb-4">
               <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px] flex items-center gap-2">
                 <Activity className="w-5 h-5" />
@@ -454,7 +454,7 @@ export default function AdminDashboard() {
 
         {/* 데모 시뮬레이션 패널 */}
         <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="flex items-center justify-between p-6 border-b border-gray-100">
+          <div className="flex flex-col gap-4 border-b border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
             <div>
               <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px]">데모 시뮬레이션</h2>
               <p className="font-['Public_Sans'] text-[#64748b] text-[13px] mt-0.5">학술제용 가상 다중 버스 운행 시뮬레이션</p>
