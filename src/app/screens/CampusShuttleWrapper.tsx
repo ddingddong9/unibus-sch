@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { Box, Bus, Map as MapIcon, MapPin, Route as RouteIcon, Train } from "lucide-react";
+import { Box, Bus, ChevronDown, ChevronUp, Map as MapIcon, MapPin, Route as RouteIcon, Train } from "lucide-react";
 import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import NaverMapComponent from "../components/NaverMapComponent";
@@ -135,7 +135,7 @@ export default function CampusShuttleWrapper() {
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [campusStops, setCampusStops] = useState<ShuttleStop[]>(CAMPUS_STOPS);
   const [stationStops, setStationStops] = useState<ShuttleStop[]>([]);
-  const [sheetVisible, setSheetVisible] = useState(true);
+  const [sheetExpanded, setSheetExpanded] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [clockTick, setClockTick] = useState(() => Date.now());
   const isDragging = useRef(false);
@@ -408,17 +408,20 @@ export default function CampusShuttleWrapper() {
   };
   const handleDragMove = (e: React.PointerEvent) => {
     if (!isDragging.current) return;
-    const delta = Math.max(0, e.clientY - dragStartY.current);
+    const rawDelta = e.clientY - dragStartY.current;
+    const delta = sheetExpanded ? Math.max(0, rawDelta) : Math.min(0, rawDelta);
     currentDragY.current = delta;
     setDragY(delta);
   };
   const handleDragEnd = () => {
     if (!isDragging.current) return;
     isDragging.current = false;
-    if (currentDragY.current > 80) setSheetVisible(false);
+    if (sheetExpanded && currentDragY.current > 60) setSheetExpanded(false);
+    if (!sheetExpanded && currentDragY.current < -40) setSheetExpanded(true);
     currentDragY.current = 0;
     setDragY(0);
   };
+  const compact3d = mapMode === "3d" && !sheetExpanded;
 
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
@@ -469,7 +472,7 @@ export default function CampusShuttleWrapper() {
                       setStationRouteId(stationDepartureRoute.id);
                     }
                     setFitBoundsKey((key) => key + 1);
-                    setSheetVisible(mapMode === "2d");
+                    setSheetExpanded(false);
                   }}
                   className={`h-10 rounded-[14px] font-['Public_Sans'] text-[13px] font-bold transition-all ${
                     mode === item.key
@@ -497,7 +500,7 @@ export default function CampusShuttleWrapper() {
               aria-pressed={mapMode === item.key}
               onClick={() => {
                 setMapMode(item.key);
-                setSheetVisible(item.key === "2d");
+                setSheetExpanded(false);
               }}
               className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${mapMode === item.key ? "bg-[#1e3a8a] text-white" : "text-[#64748b] hover:bg-[#f1f5f9]"}`}
             >
@@ -506,34 +509,53 @@ export default function CampusShuttleWrapper() {
           ))}
         </div>
 
-        {!sheetVisible && (
-          <button
-            onClick={() => setSheetVisible(true)}
-            className="absolute bottom-[104px] left-1/2 z-30 -translate-x-1/2 rounded-full bg-[#1e3a8a] px-4 py-2 text-white text-[13px] font-bold shadow-lg"
-          >
-            정류장 보기
-          </button>
-        )}
-
         <div
-          className="absolute bg-white bottom-0 content-stretch flex flex-col items-start left-0 right-0 rounded-tl-[32px] rounded-tr-[32px] shadow-[0px_-12px_40px_0px_rgba(0,0,0,0.12)] max-h-[66vh] overflow-hidden z-20"
+          className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-start overflow-hidden rounded-t-[24px] bg-white shadow-[0px_-12px_40px_0px_rgba(0,0,0,0.12)]"
           style={{
-            transform: sheetVisible ? `translateY(${dragY}px)` : "translateY(120%)",
-            transition: isDragging.current ? "none" : "transform 0.35s cubic-bezier(0.32,0.72,0,1)",
+            height: sheetExpanded ? "68dvh" : compact3d ? "164px" : "320px",
+            transform: `translateY(${dragY}px)`,
+            transition: isDragging.current
+              ? "none"
+              : "height 0.38s cubic-bezier(0.32,0.72,0,1), transform 0.32s cubic-bezier(0.32,0.72,0,1)",
           }}
         >
           <div
-            className="content-stretch flex h-[36px] items-center justify-center py-[18px] relative shrink-0 w-full cursor-grab active:cursor-grabbing touch-none"
+            className="relative flex h-8 w-full shrink-0 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
             onPointerDown={handleDragStart}
             onPointerMove={handleDragMove}
             onPointerUp={handleDragEnd}
             onPointerCancel={handleDragEnd}
           >
-            <div className="bg-[#e2e8f0] h-[5px] rounded-[9999px] shrink-0 w-[48px]" />
+            <div className="h-1 w-10 shrink-0 rounded-full bg-[#cbd5e1]" />
           </div>
 
-          <div className="relative shrink-0 w-full overflow-auto">
-            <div className="content-stretch flex flex-col gap-[16px] items-start pb-[104px] px-[22px] relative w-full">
+          {compact3d ? (
+            <button
+              type="button"
+              aria-label="상세 안내 펼치기"
+              aria-expanded={false}
+              onClick={() => setSheetExpanded(true)}
+              className="mx-4 flex h-12 w-[calc(100%-2rem)] shrink-0 items-center gap-3 rounded-lg border border-[#dbe3ef] bg-[#f8fafc] px-3 text-left shadow-sm"
+            >
+              <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${mode === "station" ? "bg-[#43c7e8] text-[#102a66]" : "bg-[#1e3a8a] text-white"}`}>
+                {mode === "station" ? <MapPin className="size-4" /> : <Bus className="size-4" />}
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate text-[12px] font-extrabold text-[#0f172a]">
+                  {mode === "station"
+                    ? `${selectedStationDirection === "to-station" ? "김승우 라운지" : "신창역"} ${stationCountdown}`
+                    : "학내순환 운행 중"}
+                </span>
+                <span className="block truncate text-[10px] font-semibold text-[#64748b]">
+                  {mode === "station"
+                    ? `${selectedStationDirection === "to-station" ? "열차 출발" : "열차 도착"} ${selectedStationEventTime || "--:--"}`
+                    : campusLoopRoute ? getServiceRuleSummary(campusLoopRoute) : "10분 간격 출발"}
+                </span>
+              </span>
+              <ChevronUp className="size-4 shrink-0 text-[#1e3a8a]" />
+            </button>
+          ) : <div className="relative min-h-0 w-full flex-1 overflow-auto overscroll-contain">
+            <div className="relative flex w-full flex-col items-start gap-3 px-[22px] pb-[104px]">
               <div className="content-stretch flex items-center justify-between relative shrink-0 w-full">
                 <div>
                   <p className="font-['Public_Sans'] font-extrabold text-[#0f172a] text-[20px] tracking-[-0.4px] leading-[28px]">
@@ -545,12 +567,24 @@ export default function CampusShuttleWrapper() {
                       : campusLoopRoute ? getServiceRuleSummary(campusLoopRoute) : "교내 정류장을 순환하는 셔틀입니다"}
                   </p>
                 </div>
-                <button
-                  onClick={() => setFitBoundsKey((key) => key + 1)}
-                  className="bg-[rgba(30,58,138,0.05)] px-[12px] py-[7px] rounded-[9999px] hover:bg-[rgba(30,58,138,0.1)] active:scale-95 transition-all"
-                >
-                  <p className="font-['Public_Sans'] font-bold text-[#1e3a8a] text-[12px] leading-[16px]">{t("전체보기", "View All")}</p>
-                </button>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={() => setFitBoundsKey((key) => key + 1)}
+                    className="rounded-full bg-[rgba(30,58,138,0.05)] px-3 py-[7px] transition-all hover:bg-[rgba(30,58,138,0.1)] active:scale-95"
+                  >
+                    <span className="font-['Public_Sans'] text-[12px] font-bold leading-4 text-[#1e3a8a]">{t("전체보기", "View All")}</span>
+                  </button>
+                  <button
+                    type="button"
+                    title={sheetExpanded ? "안내 접기" : "상세 안내 펼치기"}
+                    aria-label={sheetExpanded ? "안내 접기" : "상세 안내 펼치기"}
+                    aria-expanded={sheetExpanded}
+                    onClick={() => setSheetExpanded((expanded) => !expanded)}
+                    className="grid size-8 place-items-center rounded-lg bg-[#eef2ff] text-[#1e3a8a] transition-colors hover:bg-[#e0e7ff]"
+                  >
+                    {sheetExpanded ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
+                  </button>
+                </div>
               </div>
 
               {locationError && (
@@ -591,7 +625,7 @@ export default function CampusShuttleWrapper() {
                     </div>
                   </div>
 
-                  {selectedStationRoute && (
+                  {sheetExpanded && selectedStationRoute && (
                     <p className="px-1 text-[11px] font-semibold text-[#64748b]">
                       {selectedStationDirection === "to-station"
                         ? `열차 출발 ${stationOffset}분 전에 김승우 라운지에서 출발합니다`
@@ -599,7 +633,7 @@ export default function CampusShuttleWrapper() {
                     </p>
                   )}
 
-                  {stationRoutes.length > 0 && (
+                  {sheetExpanded && stationRoutes.length > 0 && (
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                       {stationRoutes.map((route) => (
                         <button
@@ -619,7 +653,29 @@ export default function CampusShuttleWrapper() {
                 </div>
               )}
 
-              <div className="content-stretch flex flex-col gap-[12px] items-start max-h-[280px] overflow-y-auto scrollbar-hide relative shrink-0 w-full">
+              {mode === "campus" && !sheetExpanded && (
+                <button
+                  type="button"
+                  onClick={() => setSheetExpanded(true)}
+                  className="flex w-full items-center gap-3 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-left transition-colors hover:bg-[#f1f5f9]"
+                >
+                  <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#1e3a8a] text-white">
+                    <Bus className="size-5" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[14px] font-extrabold text-[#0f172a]">학내순환 운행 안내</span>
+                    <span className="block truncate text-[11px] font-semibold text-[#64748b]">
+                      {campusLoopRoute ? getServiceRuleSummary(campusLoopRoute) : "10분 간격 출발"}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block text-[10px] font-bold text-[#94a3b8]">정류장</span>
+                    <span className="block text-[16px] font-black text-[#1e3a8a]">{activeStops.length}개</span>
+                  </span>
+                </button>
+              )}
+
+              {sheetExpanded && <div className="relative flex w-full shrink-0 flex-col items-start gap-3 scrollbar-hide">
                 {stopsWithArrival.length === 0 ? (
                   <div className="w-full rounded-[18px] border border-dashed border-[#cbd5e1] p-6 text-center">
                     <MapPin className="mx-auto mb-2 h-6 w-6 text-[#94a3b8]" />
@@ -685,10 +741,10 @@ export default function CampusShuttleWrapper() {
                     </button>
                   ))
                 )}
-              </div>
+              </div>}
 
             </div>
-          </div>
+          </div>}
         </div>
 
         <BottomNav />
