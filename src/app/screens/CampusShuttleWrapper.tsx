@@ -20,6 +20,13 @@ const CAMPUS_STOPS = [
 ];
 
 const CAMPUS_CENTER = { lat: 36.7694, lng: 126.9322 };
+const CAMPUS_FIT_BOUNDS_OPTIONS = {
+  top: 140,
+  right: 44,
+  bottom: 344,
+  left: 44,
+  maxZoom: 16,
+};
 
 interface BusMarker {
   id: string;
@@ -436,6 +443,8 @@ export default function CampusShuttleWrapper() {
               userLocation={userLocation}
               focusLocation={focusLocation}
               fitBoundsKey={fitBoundsKey}
+              autoFitBounds={mode === "campus"}
+              fitBoundsOptions={mode === "campus" ? CAMPUS_FIT_BOUNDS_OPTIONS : undefined}
               routePath={routePath}
               onBusClick={handleBusClick}
               onLocateRequest={enableUserLocation}
@@ -500,6 +509,9 @@ export default function CampusShuttleWrapper() {
               aria-pressed={mapMode === item.key}
               onClick={() => {
                 setMapMode(item.key);
+                if (item.key === "2d" && mode === "campus") {
+                  setFitBoundsKey((key) => key + 1);
+                }
                 setSheetExpanded(false);
               }}
               className={`grid h-9 w-9 place-items-center rounded-lg transition-colors ${mapMode === item.key ? "bg-[#1e3a8a] text-white" : "text-[#64748b] hover:bg-[#f1f5f9]"}`}
