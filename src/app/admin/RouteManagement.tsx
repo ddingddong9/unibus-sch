@@ -12,6 +12,11 @@ interface BusRoute {
   color?: string;
   region?: string;
   schedule?: string;
+  scheduleBasis?: "bus_departure" | "train_departure" | "train_arrival" | null;
+  intervalMinutes?: number | null;
+  departureOffsetMinutes?: number | null;
+  boardingWaitMinutes?: number | null;
+  continuationRouteId?: string | null;
   duration?: string;
   fare?: string;
   stops: Array<{ id: string; name: string; order: number; lat?: number | null; lng?: number | null }>;
@@ -50,6 +55,9 @@ const validateRouteForm = (formData: {
   shuttleVariant: ShuttleVariant;
   schedule: string;
   stops: string;
+  intervalMinutes: number;
+  departureOffsetMinutes: number;
+  boardingWaitMinutes: number;
 }) => {
   const errors: string[] = [];
   const stopNames = parseStopNames(formData.stops);
@@ -59,7 +67,7 @@ const validateRouteForm = (formData: {
     .split(/[,\n]/)
     .map((time) => time.trim())
     .filter(Boolean);
-  const invalidSchedule = scheduleTokens.find((time) => !/^\d{1,2}:\d{2}$/.test(time));
+  const invalidSchedule = scheduleTokens.find((time) => !/^([01]?\d|2[0-3]):[0-5]\d$/.test(time));
 
   if (!formData.name.trim()) errors.push("노선명을 입력해 주세요.");
   if (stopNames.length < 2) errors.push("정류장은 최소 2개 이상 입력해 주세요.");
@@ -68,8 +76,20 @@ const validateRouteForm = (formData: {
   if (formData.type === "campus" && formData.shuttleVariant !== "campus_loop" && !hasStationStop(stopNames)) {
     errors.push("신창역 셔틀 유형은 정류장에 신창역 또는 순천향대역이 포함되어야 합니다.");
   }
+  if (formData.type === "campus" && formData.shuttleVariant !== "campus_loop" && scheduleTokens.length === 0) {
+    errors.push("신창역 셔틀은 기준이 되는 지하철 도착 또는 출발 시각이 필요합니다.");
+  }
   if (formData.type === "campus" && formData.shuttleVariant === "campus_loop" && hasStationStop(stopNames)) {
     errors.push("신창역 정류장이 포함된 셔틀은 학내순환이 아닌 신창역 셔틀 유형으로 선택해 주세요.");
+  }
+  if (formData.type === "campus" && formData.shuttleVariant === "campus_loop" && (formData.intervalMinutes < 1 || formData.intervalMinutes > 180)) {
+    errors.push("학내순환 출발 간격은 1~180분으로 입력해 주세요.");
+  }
+  if (formData.type === "campus" && formData.shuttleVariant === "campus_to_station" && (formData.departureOffsetMinutes < 0 || formData.departureOffsetMinutes > 120)) {
+    errors.push("지하철 출발 전 시간은 0~120분으로 입력해 주세요.");
+  }
+  if (formData.type === "campus" && ["station_to_campus", "station_to_campus_loop"].includes(formData.shuttleVariant) && (formData.boardingWaitMinutes < 0 || formData.boardingWaitMinutes > 120)) {
+    errors.push("탑승 대기 시간은 0~120분으로 입력해 주세요.");
   }
 
   return { errors, stopNames };
@@ -93,6 +113,9 @@ export default function RouteManagement() {
     color: "#1e3a8a",
     region: "",
     schedule: "",
+    intervalMinutes: 10,
+    departureOffsetMinutes: 10,
+    boardingWaitMinutes: 5,
     duration: "",
     fare: "",
     stops: "",
@@ -127,6 +150,9 @@ export default function RouteManagement() {
       color: "#1e3a8a",
       region: "",
       schedule: "",
+      intervalMinutes: 10,
+      departureOffsetMinutes: 10,
+      boardingWaitMinutes: 5,
       duration: "",
       fare: "",
       stops: "",
@@ -146,6 +172,9 @@ export default function RouteManagement() {
       color: route.color || "#1e3a8a",
       region: route.region || "",
       schedule: route.schedule || "",
+      intervalMinutes: route.intervalMinutes ?? 10,
+      departureOffsetMinutes: route.departureOffsetMinutes ?? 10,
+      boardingWaitMinutes: route.boardingWaitMinutes ?? 5,
       duration: route.duration || "",
       fare: route.fare || "",
       stops: route.stops?.map((s) => s.name).join(", ") || "",
@@ -165,6 +194,11 @@ export default function RouteManagement() {
     setSaving(true);
     try {
       const stopsList = stopNames.map((name, index) => ({ name, order: index + 1 }));
+      const scheduleBasis: BusRoute["scheduleBasis"] = formData.type === "campus"
+        ? formData.shuttleVariant === "campus_to_station"
+          ? "train_departure"
+          : formData.shuttleVariant === "campus_loop" ? "bus_departure" : "train_arrival"
+        : null;
 
       const payload = {
         name: formData.name.trim(),
@@ -174,6 +208,14 @@ export default function RouteManagement() {
         color: formData.color,
         region: formData.region || undefined,
         schedule: formData.schedule || undefined,
+        scheduleBasis,
+        intervalMinutes: formData.type === "campus" && formData.shuttleVariant === "campus_loop"
+          ? Number(formData.intervalMinutes) : null,
+        departureOffsetMinutes: formData.type === "campus" && formData.shuttleVariant === "campus_to_station"
+          ? Number(formData.departureOffsetMinutes) : 0,
+        boardingWaitMinutes: formData.type === "campus" && (
+          formData.shuttleVariant === "station_to_campus" || formData.shuttleVariant === "station_to_campus_loop"
+        ) ? Number(formData.boardingWaitMinutes) : 0,
         duration: formData.duration || undefined,
         fare: formData.fare || undefined,
         isActive: formData.isActive,
@@ -494,10 +536,62 @@ export default function RouteManagement() {
                 />
               </div>
 
+              {formData.type === "campus" && formData.shuttleVariant === "campus_loop" && (
+                <div>
+                  <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
+                    출발 간격 (분)
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={180}
+                    value={formData.intervalMinutes}
+                    onChange={(e) => setFormData({ ...formData, intervalMinutes: Number(e.target.value) })}
+                    className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
+                  />
+                  <p className="mt-1.5 text-[12px] text-[#64748b]">학내순환은 설정한 간격으로 반복 출발합니다.</p>
+                </div>
+              )}
+
+              {formData.type === "campus" && formData.shuttleVariant === "campus_to_station" && (
+                <div>
+                  <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
+                    지하철 출발 전 선출발 시간 (분)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={120}
+                    value={formData.departureOffsetMinutes}
+                    onChange={(e) => setFormData({ ...formData, departureOffsetMinutes: Number(e.target.value) })}
+                    className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
+                  />
+                </div>
+              )}
+
+              {formData.type === "campus" && (formData.shuttleVariant === "station_to_campus" || formData.shuttleVariant === "station_to_campus_loop") && (
+                <div>
+                  <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
+                    지하철 도착 후 탑승 대기 (분)
+                  </label>
+                  <input
+                    type="number"
+                    min={0}
+                    max={120}
+                    value={formData.boardingWaitMinutes}
+                    onChange={(e) => setFormData({ ...formData, boardingWaitMinutes: Number(e.target.value) })}
+                    className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
+                  />
+                  <p className="mt-1.5 text-[12px] text-[#64748b]">열차 도착 뒤 학생 탑승 시간을 확보한 후 후문으로 출발합니다.</p>
+                </div>
+              )}
+
               {/* 운행 시간 */}
-              <div>
+              {(formData.type !== "campus" || formData.shuttleVariant !== "campus_loop") && <div>
                 <label className="block font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">
-                  운행/지하철 시간 (쉼표로 구분)
+                  {formData.type === "campus" && formData.shuttleVariant === "campus_to_station"
+                    ? "신창역 지하철 출발 시각"
+                    : formData.type === "campus" ? "신창역 지하철 도착 시각" : "운행 시간"} (쉼표로 구분)
                 </label>
                 <input
                   type="text"
@@ -506,7 +600,7 @@ export default function RouteManagement() {
                   className="w-full h-[48px] px-4 bg-white border border-[#cbd5e1] rounded-lg font-['Public_Sans'] text-[16px] text-[#0f172a] focus:outline-none focus:border-[#1e3b8a] focus:ring-2 focus:ring-[#1e3b8a]/20"
                   placeholder="예: 08:20, 09:20, 10:20"
                 />
-              </div>
+              </div>}
 
               {/* 설명 */}
               <div>
@@ -688,7 +782,7 @@ function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: Route
             <div className="flex items-center gap-2 mb-2">
               <Clock className="w-4 h-4 text-[#64748b]" />
               <h4 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px]">
-                운행/지하철 시간
+                {route.scheduleBasis === "train_arrival" ? "지하철 도착 시각" : route.scheduleBasis === "train_departure" ? "지하철 출발 시각" : "운행 시간"}
               </h4>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -701,6 +795,12 @@ function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: Route
                 </span>
               ))}
             </div>
+          </div>
+        )}
+        {route.type === "campus" && route.shuttleVariant === "campus_loop" && (
+          <div className="flex items-center gap-2 text-[13px] font-semibold text-[#1e3b8a]">
+            <Clock className="h-4 w-4" />
+            {route.intervalMinutes ?? 10}분 간격 출발
           </div>
         )}
 

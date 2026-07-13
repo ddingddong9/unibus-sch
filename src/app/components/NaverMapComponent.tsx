@@ -385,11 +385,24 @@ export default function NaverMapComponent({
 
   // 지도 초기화
   useEffect(() => {
+    let disposed = false;
+    let retryTimer: number | null = null;
+    let retryCount = 0;
     const initializeMap = () => {
-      if (!mapRef.current || mapInstance.current) return;
+      if (disposed || !mapRef.current || mapInstance.current) return;
+      const maps = window.naver?.maps;
+      if (typeof maps?.Map !== "function" || typeof maps?.LatLng !== "function") {
+        if (retryCount < 80) {
+          retryCount += 1;
+          retryTimer = window.setTimeout(initializeMap, 100);
+        } else {
+          console.error("네이버 지도 SDK 초기화 시간이 초과되었습니다.");
+        }
+        return;
+      }
       try {
-        mapInstance.current = new window.naver.maps.Map(mapRef.current, {
-          center: new window.naver.maps.LatLng(initialCenterRef.current.lat, initialCenterRef.current.lng),
+        mapInstance.current = new maps.Map(mapRef.current, {
+          center: new maps.LatLng(initialCenterRef.current.lat, initialCenterRef.current.lng),
           zoom: initialZoomRef.current,
           zoomControl: false,
           mapTypeControl: false,
@@ -397,7 +410,7 @@ export default function NaverMapComponent({
           logoControl: false,
           mapDataControl: false,
         });
-        window.naver.maps.Event.addListener(mapInstance.current, 'idle', () => {
+        maps.Event.addListener(mapInstance.current, 'idle', () => {
           updateBusMarkersRef.current();
           updateStopMarkersRef.current();
           if (routePathRef.current?.length) updatePolylineRef.current(routePathRef.current);
@@ -405,7 +418,7 @@ export default function NaverMapComponent({
       } catch (e) { console.error("네이버 지도 초기화 오류:", e); }
     };
 
-    if (window.naver?.maps) {
+    if (typeof window.naver?.maps?.Map === "function" && typeof window.naver?.maps?.LatLng === "function") {
       initializeMap();
     } else if (!scriptLoadedRef.current) {
       scriptLoadedRef.current = true;
@@ -413,12 +426,13 @@ export default function NaverMapComponent({
       const existingScript = document.querySelector<HTMLScriptElement>("script[data-naver-map-sdk='true']");
       if (existingScript) {
         existingScript.addEventListener("load", initializeMap, { once: true });
+        initializeMap();
       } else {
         const script = document.createElement("script");
         script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${clientId}&submodules=geocoder`;
         script.async = true;
         script.dataset.naverMapSdk = "true";
-        script.onload = () => { if (window.naver?.maps) initializeMap(); };
+        script.onload = initializeMap;
         script.onerror = () => console.error("네이버 지도 API 로드 실패. Client ID를 확인하세요.");
         document.head.appendChild(script);
       }
@@ -426,6 +440,8 @@ export default function NaverMapComponent({
 
     // [변경] cleanup: 모든 RAF 취소
     return () => {
+      disposed = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
       busMarkersRef.current.forEach(m => {
         if (m.__animRafId) {
           cancelAnimationFrame(m.__animRafId);
@@ -435,6 +451,7 @@ export default function NaverMapComponent({
       });
       stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
       if (polylineRef.current) { try { polylineRef.current.setMap(null); } catch (_) {} }
+      mapInstance.current = null;
     };
   }, [clientId]);
 

@@ -21,6 +21,67 @@ const normalizeShuttleVariant = (type: string, variant?: string | null) => {
   return 'campus_loop';
 };
 
+const normalizeServiceRules = (type: string, variant?: string | null, input: any = {}) => {
+  const boundedNumber = (value: unknown, fallback: number, min: number, max: number) => {
+    const number = Number(value);
+    return Number.isFinite(number) ? Math.max(min, Math.min(max, number)) : fallback;
+  };
+  if (toDbRouteType(type) !== 'shuttle') {
+    return {
+      schedule_basis: input.scheduleBasis ?? null,
+      interval_minutes: input.intervalMinutes ?? null,
+      departure_offset_minutes: input.departureOffsetMinutes ?? 0,
+      boarding_wait_minutes: input.boardingWaitMinutes ?? 0,
+      continuation_route_id: input.continuationRouteId ?? null,
+    };
+  }
+
+  const normalizedVariant = normalizeShuttleVariant(type, variant);
+  return {
+    schedule_basis: normalizedVariant === 'campus_to_station'
+      ? 'train_departure'
+      : normalizedVariant === 'campus_loop' ? 'bus_departure' : 'train_arrival',
+    interval_minutes: normalizedVariant === 'campus_loop'
+      ? boundedNumber(input.intervalMinutes, 10, 1, 180) : null,
+    departure_offset_minutes: normalizedVariant === 'campus_to_station'
+      ? boundedNumber(input.departureOffsetMinutes, 10, 0, 120) : 0,
+    boarding_wait_minutes: normalizedVariant === 'station_to_campus' || normalizedVariant === 'station_to_campus_loop'
+      ? boundedNumber(input.boardingWaitMinutes, 5, 0, 120) : 0,
+    continuation_route_id: normalizedVariant === 'station_to_campus_loop'
+      ? input.continuationRouteId ?? null : null,
+  };
+};
+
+const validateServiceRules = (type: string, variant: string | null | undefined, input: any, requireSchedule = false) => {
+  const errors: string[] = [];
+  if (toDbRouteType(type) !== 'shuttle') return errors;
+  const normalizedVariant = normalizeShuttleVariant(type, variant);
+  const scheduleTokens = String(input.schedule || '').split(/[,\n]/).map((value) => value.trim()).filter(Boolean);
+  if (input.schedule !== undefined && scheduleTokens.some((value) => !/^([01]?\d|2[0-3]):[0-5]\d$/.test(value))) {
+    errors.push('시간표는 08:20과 같은 24시간 형식으로 입력해 주세요.');
+  }
+  if (requireSchedule && normalizedVariant !== 'campus_loop' && scheduleTokens.length === 0) {
+    errors.push('신창역 셔틀은 기준이 되는 지하철 도착 또는 출발 시각이 필요합니다.');
+  }
+  const checkNumber = (value: unknown, min: number, max: number, label: string) => {
+    if (value === undefined || value === null) return;
+    const number = Number(value);
+    if (!Number.isFinite(number) || number < min || number > max) errors.push(`${label}은 ${min}~${max}분으로 입력해 주세요.`);
+  };
+  checkNumber(input.intervalMinutes, 1, 180, '출발 간격');
+  checkNumber(input.departureOffsetMinutes, 0, 120, '선출발 시간');
+  checkNumber(input.boardingWaitMinutes, 0, 120, '탑승 대기 시간');
+  return errors;
+};
+
+const formatServiceRules = (route: any) => ({
+  scheduleBasis: route.schedule_basis,
+  intervalMinutes: route.interval_minutes,
+  departureOffsetMinutes: route.departure_offset_minutes,
+  boardingWaitMinutes: route.boarding_wait_minutes,
+  continuationRouteId: route.continuation_route_id,
+});
+
 const validateRouteDetailsInput = (
   type: string,
   shuttleVariant?: string | null,
@@ -131,6 +192,12 @@ const buildDirectionsPoints = (stops: any[], shapePoints: any[]) => {
   return points;
 };
 
+const routeInputHash = async (points: Array<{ lat: number; lng: number }>) => {
+  const input = points.map((point) => [Number(point.lng).toFixed(7), Number(point.lat).toFixed(7)]);
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(input)));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+};
+
 const buildNaverPath = async (
   routePoints: Array<{ lat: number; lng: number }>,
   clientId?: string | null,
@@ -205,6 +272,7 @@ routes.get("/", async (c) => {
           color: route.color,
           region: route.region,
           schedule: route.schedule,
+          ...formatServiceRules(route),
           duration: route.duration,
           fare: route.fare,
           isActive: route.is_active,
@@ -287,10 +355,33 @@ routes.get("/:id/path", async (c) => {
     }
 
     const routePoints = buildDirectionsPoints(validStops, shapePoints);
+    const inputHash = await routeInputHash(routePoints);
+    const { data: cachedPath } = await db
+      .from('route_path_cache')
+      .select('input_hash, path')
+      .eq('route_id', id)
+      .maybeSingle();
+
+    if (cachedPath?.input_hash === inputHash && Array.isArray(cachedPath.path) && cachedPath.path.length > 1) {
+      return c.json({
+        success: true,
+        data: { stops: resolved, shapePoints: shapePoints.map(formatShapePoint), path: cachedPath.path, cached: true },
+      });
+    }
 
     const path = await buildNaverPath(routePoints, clientId, secretKey);
 
-    return c.json({ success: true, data: { stops: resolved, shapePoints: shapePoints.map(formatShapePoint), path } });
+    if (path.length > 1) {
+      const { error: cacheError } = await db.from('route_path_cache').upsert({
+        route_id: id,
+        input_hash: inputHash,
+        path,
+        generated_at: new Date().toISOString(),
+      });
+      if (cacheError) console.warn('Route path cache write failed:', cacheError.message);
+    }
+
+    return c.json({ success: true, data: { stops: resolved, shapePoints: shapePoints.map(formatShapePoint), path, cached: false } });
   } catch (err: any) {
     console.error("❌ Route path error:", err);
     return c.json({ success: false, error: "Failed to build route path" }, 500);
@@ -362,6 +453,7 @@ routes.get("/:id", async (c) => {
       color: route.color,
       region: route.region,
       schedule: route.schedule,
+      ...formatServiceRules(route),
       duration: route.duration,
       fare: route.fare,
       isActive: route.is_active,
@@ -390,13 +482,17 @@ routes.get("/:id", async (c) => {
 // Create route (admin only)
 routes.post("/", requireAdmin, async (c) => {
   try {
-    const { name, type, shuttleVariant, description, color, region, schedule, duration, fare, isActive, stops, shapePoints } = await c.req.json();
+    const payload = await c.req.json();
+    const { name, type, shuttleVariant, description, color, region, schedule, duration, fare, isActive, stops, shapePoints } = payload;
 
     if (!name || !type) {
       return c.json({ success: false, error: "Missing required fields" }, 400);
     }
 
-    const detailErrors = validateRouteDetailsInput(type, shuttleVariant, stops, shapePoints);
+    const detailErrors = [
+      ...validateRouteDetailsInput(type, shuttleVariant, stops, shapePoints),
+      ...validateServiceRules(type, shuttleVariant, payload, true),
+    ];
     if (detailErrors.length > 0) {
       return c.json({ success: false, error: detailErrors.join(" ") }, 400);
     }
@@ -415,6 +511,7 @@ routes.post("/", requireAdmin, async (c) => {
         duration: duration || null,
         fare: fare || null,
         is_active: isActive ?? true,
+        ...normalizeServiceRules(type, shuttleVariant, payload),
       })
       .select()
       .single();
@@ -452,6 +549,7 @@ routes.post("/", requireAdmin, async (c) => {
         color: route.color,
         region: route.region,
         schedule: route.schedule,
+        ...formatServiceRules(route),
         duration: route.duration,
         fare: route.fare,
         isActive: route.is_active,
@@ -468,7 +566,8 @@ routes.post("/", requireAdmin, async (c) => {
 routes.put("/:id", requireAdmin, async (c) => {
   try {
     const id = c.req.param("id");
-    const { name, type, shuttleVariant, description, color, isActive, region, schedule, duration, fare, stops, shapePoints } = await c.req.json();
+    const payload = await c.req.json();
+    const { name, type, shuttleVariant, description, color, isActive, region, schedule, duration, fare, stops, shapePoints } = payload;
 
     if (!id) {
       return c.json({ success: false, error: "Route id is required" }, 400);
@@ -477,7 +576,7 @@ routes.put("/:id", requireAdmin, async (c) => {
     // 노선 존재 여부 확인
     const { data: existingRoute } = await db
       .from('routes')
-      .select('id, type')
+      .select('id, type, shuttle_variant')
       .eq('id', id)
       .single();
 
@@ -489,7 +588,10 @@ routes.put("/:id", requireAdmin, async (c) => {
     const nextShuttleVariant = shuttleVariant !== undefined
       ? shuttleVariant
       : undefined;
-    const detailErrors = validateRouteDetailsInput(nextType, nextShuttleVariant, stops, shapePoints);
+    const detailErrors = [
+      ...validateRouteDetailsInput(nextType, nextShuttleVariant, stops, shapePoints),
+      ...validateServiceRules(nextType, nextShuttleVariant ?? existingRoute.shuttle_variant, payload),
+    ];
     if (detailErrors.length > 0) {
       return c.json({ success: false, error: detailErrors.join(" ") }, 400);
     }
@@ -508,6 +610,9 @@ routes.put("/:id", requireAdmin, async (c) => {
     if (schedule !== undefined) dbUpdates.schedule = schedule;
     if (duration !== undefined) dbUpdates.duration = duration;
     if (fare !== undefined) dbUpdates.fare = fare;
+    if (type || shuttleVariant !== undefined || payload.scheduleBasis !== undefined || payload.intervalMinutes !== undefined || payload.departureOffsetMinutes !== undefined || payload.boardingWaitMinutes !== undefined || payload.continuationRouteId !== undefined) {
+      Object.assign(dbUpdates, normalizeServiceRules(nextType, nextShuttleVariant ?? existingRoute.shuttle_variant, payload));
+    }
 
     let updatedRoute = null;
     if (Object.keys(dbUpdates).length > 0) {
@@ -564,6 +669,7 @@ routes.put("/:id", requireAdmin, async (c) => {
         color: updatedRoute.color,
         region: updatedRoute.region,
         schedule: updatedRoute.schedule,
+        ...formatServiceRules(updatedRoute),
         duration: updatedRoute.duration,
         fare: updatedRoute.fare,
         isActive: updatedRoute.is_active,
