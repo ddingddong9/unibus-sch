@@ -25,7 +25,7 @@ import {
   X,
 } from "lucide-react";
 import Campus3DScene, { campusData, type CampusWeather, type RenderQuality } from "./Campus3DScene";
-import { applyCampusRouteRules, buildingCategory, projectCoordinate } from "./campus-geometry";
+import { buildingCategory, projectCoordinate } from "./campus-geometry";
 import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
 import type { CampusBuilding, CampusStop, Point2D } from "./types";
 import { terrainData } from "./terrain";
@@ -138,7 +138,7 @@ export default function Campus3DPage({ embedded = false }: Campus3DPageProps) {
         const first = projected[0];
         const last = projected[projected.length - 1];
         if (Math.hypot(first[0] - last[0], first[1] - last[1]) > 1) projected.push(first);
-        setRemoteRoute(applyCampusRouteRules(projected, campusData));
+        setRemoteRoute(projected);
         const validStops = stops
           .filter((stop) => Number.isFinite(stop.lat) && Number.isFinite(stop.lng))
           .map((stop, index) => ({
