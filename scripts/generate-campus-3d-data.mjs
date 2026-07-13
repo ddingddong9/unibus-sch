@@ -14,6 +14,8 @@ way(${CAMPUS_WAY_ID})->.campusWay;
   way(area.campus)[highway];
   way(area.campus)[leisure];
   way(area.campus)[natural=water];
+  way(area.campus)[amenity=parking];
+  way(area.campus)[amenity=bus_station];
 );
 out geom;`;
 
@@ -58,7 +60,8 @@ const deterministicHeight = (element) => {
   const name = tags.name ?? "";
   if (/생활관|학성사|글로벌빌리지/.test(name)) return 28 + (element.id % 3) * 3;
   if (/도서관|유니토피아|의료과학|공과대학/.test(name)) return 20 + (element.id % 3) * 2;
-  if (/체육관|공연장/.test(name)) return 12;
+  if (/야외 공연장/.test(name)) return 3;
+  if (/체육관/.test(name)) return 12;
   return 10 + (element.id % 4) * 2.2;
 };
 
@@ -94,12 +97,12 @@ const roads = elements
   .filter((road) => road.points.length >= 2);
 
 const areas = elements
-  .filter((element) => element.tags?.leisure || element.tags?.natural === "water")
+  .filter((element) => element.tags?.leisure || element.tags?.natural === "water" || ["parking", "bus_station"].includes(element.tags?.amenity))
   .map((element) => ({
     id: String(element.id),
     name: element.tags.name ?? null,
     points: cleanGeometry(element),
-    kind: element.tags.natural === "water" ? "water" : element.tags.leisure,
+    kind: element.tags.natural === "water" ? "water" : element.tags.leisure ?? element.tags.amenity,
   }))
   .filter((area) => area.points.length >= 3);
 

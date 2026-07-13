@@ -11,6 +11,7 @@ import {
   projectCoordinate,
 } from "./campus-geometry";
 import type { CampusArea, CampusBuilding, CampusData, Point2D } from "./types";
+import CampusStructures from "./CampusStructures";
 
 const campusData = campusDataSource as CampusData;
 const MAJOR_BUILDINGS = new Set([
@@ -78,9 +79,11 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
     ? isNight ? "#123d52" : "#65b7d1"
     : area.kind === "pitch"
       ? isNight ? "#173e2b" : "#4f995e"
-      : area.kind === "track"
-        ? isNight ? "#5b2d27" : "#bc6558"
-        : isNight ? "#233527" : "#8fb17b";
+      : area.kind === "parking"
+        ? isNight ? "#252e33" : "#afb6b6"
+        : area.kind === "bus_station"
+          ? isNight ? "#183546" : "#8fc0d5"
+          : isNight ? "#233527" : "#8fb17b";
 
   return (
     <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.18, 0]} receiveShadow>
@@ -379,6 +382,7 @@ function CampusWorld(props: Campus3DSceneProps) {
           onSelect={props.onSelectBuilding}
         />
       ))}
+      <CampusStructures data={campusData} route={route} isNight={props.isNight} />
       {props.showRoute ? (
         <group>
           <Line points={route.map(([x, z]) => [x, 2, z])} color="#f59e0b" lineWidth={5.5} transparent opacity={0.94} />

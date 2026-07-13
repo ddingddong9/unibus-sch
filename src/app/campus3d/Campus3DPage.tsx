@@ -222,6 +222,7 @@ export default function Campus3DPage() {
         <div className="pointer-events-auto flex items-stretch border border-white/14 bg-slate-950/80 shadow-xl backdrop-blur-xl">
           {[
             { icon: Building2, value: campusData.buildings.length, label: "건물" },
+            { icon: Layers3, value: campusData.areas.length, label: "시설 영역" },
             { icon: Route, value: 5, label: "정류장" },
             { icon: BusFront, value: 3, label: "운행 차량" },
           ].map((item, index) => (
