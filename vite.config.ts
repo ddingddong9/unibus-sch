@@ -100,6 +100,7 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         importScripts: ['push-handler.js'],
+        globIgnores: ['**/Campus3DPage-*.js', '**/campus-3d-vendor-*.js'],
         // 캐싱 전략: API 요청은 network-first, 정적 파일은 cache-first
         runtimeCaching: [
           {
@@ -141,6 +142,9 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return;
+          if (id.includes('/three/') || id.includes('/three-stdlib/') || id.includes('/@react-three/')) {
+            return 'campus-3d-vendor';
+          }
           if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/react-router') || id.includes('/scheduler/')) {
             return 'react-vendor';
           }

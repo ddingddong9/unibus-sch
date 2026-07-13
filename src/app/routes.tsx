@@ -26,8 +26,12 @@ const BusManagement = lazy(() => import("./admin/BusManagement"));
 const BusDemo = lazy(() => import("./admin/BusDemo"));
 const NotificationSender = lazy(() => import("./admin/NotificationSender"));
 const UserManagement = lazy(() => import("./admin/UserManagement"));
+const Campus3DPage = lazy(() => import("./campus3d/Campus3DPage"));
 
 export const router = createBrowserRouter([
+  // ── 독립 3D 캠퍼스 프로토타입 ──
+  { path: "/campus-3d", element: <Campus3DPage /> },
+
   // ── 모바일 앱 라우트 ──
   {
     element: <AnimatedMobileLayout />,
