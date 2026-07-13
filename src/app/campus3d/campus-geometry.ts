@@ -18,6 +18,27 @@ export const CAMPUS_STOPS: CampusStop[] = [
   { id: "main-gate", name: "정문", latitude: 36.769014, longitude: 126.927978 },
 ];
 
+// East-campus road centerline checked against Google/TMap and Naver maps in July 2026.
+const ROUTE_SEGMENT_OVERRIDES: Record<string, Pick<CampusStop, "latitude" | "longitude">[]> = {
+  "rear-gate:hyang-3": [
+    { latitude: 36.7726108, longitude: 126.9340996 },
+    { latitude: 36.7721243, longitude: 126.9344026 },
+    { latitude: 36.7717476, longitude: 126.9346231 },
+    { latitude: 36.7715051, longitude: 126.9347296 },
+    { latitude: 36.7711003, longitude: 126.9347818 },
+    { latitude: 36.7708549, longitude: 126.9348346 },
+    { latitude: 36.7704282, longitude: 126.934925 },
+    { latitude: 36.7697665, longitude: 126.9351504 },
+    { latitude: 36.7694796, longitude: 126.9353292 },
+    { latitude: 36.7692444, longitude: 126.935475 },
+    { latitude: 36.7690092, longitude: 126.9356096 },
+    { latitude: 36.7688101, longitude: 126.9357329 },
+    { latitude: 36.7686965, longitude: 126.935788 },
+    { latitude: 36.76856, longitude: 126.935722 },
+    { latitude: 36.7684558, longitude: 126.9354662 },
+  ],
+};
+
 export function projectCoordinate(
   latitude: number,
   longitude: number,
@@ -123,14 +144,27 @@ export function createCampusRoute(data: CampusData) {
   const graph = buildRoadGraph(data.roads);
   const keys = [...graph.keys()];
   const stopPoints = CAMPUS_STOPS.map((stop) => projectCoordinate(stop.latitude, stop.longitude, data.origin));
-  const orderedStops = [...stopPoints, stopPoints[0]];
+  const orderedStops = [...CAMPUS_STOPS, CAMPUS_STOPS[0]];
   const route: Point2D[] = [];
 
   for (let index = 1; index < orderedStops.length; index += 1) {
-    const start = closestNode(orderedStops[index - 1], keys);
-    const end = closestNode(orderedStops[index], keys);
-    const segment = shortestPath(graph, start, end);
-    route.push(...(route.length > 0 ? segment.slice(1) : segment));
+    const fromStop = orderedStops[index - 1];
+    const toStop = orderedStops[index];
+    const fromPoint = stopPoints[(index - 1) % stopPoints.length];
+    const toPoint = stopPoints[index % stopPoints.length];
+    const override = ROUTE_SEGMENT_OVERRIDES[`${fromStop.id}:${toStop.id}`];
+    const segment = override
+      ? [
+          fromPoint,
+          ...override.map((point) => projectCoordinate(point.latitude, point.longitude, data.origin)),
+          toPoint,
+        ]
+      : shortestPath(graph, closestNode(fromPoint, keys), closestNode(toPoint, keys));
+    const segmentStartsAtRouteEnd = route.length > 0 && distanceSquared(route[route.length - 1], segment[0]) < 0.01;
+    route.push(...(segmentStartsAtRouteEnd ? segment.slice(1) : segment));
+  }
+  if (route.length > 1 && distanceSquared(route[route.length - 1], route[0]) >= 0.01) {
+    route.push(route[0]);
   }
   return route;
 }
