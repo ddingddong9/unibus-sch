@@ -77,8 +77,57 @@ body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   /* iOS PWA: 상태표시줄 배경이 앱과 동일하게 보이도록 */
-  background-color: #ffffff;
+  background-color: var(--background);
+  color: var(--foreground);
 }
+
+html.dark {
+  color-scheme: dark;
+}
+
+/* 기존 화면의 직접 지정 색상을 테마 토큰으로 연결한다. */
+.dark .unibus-theme [class~="bg-white"] { background-color: #1c1c1e; }
+.dark .unibus-theme [class*="bg-white/"] { background-color: rgb(28 28 30 / 0.94); }
+.dark .unibus-theme [class*="bg-[rgba(255,255,255"] { background-color: rgb(28 28 30 / 0.92); }
+.dark .unibus-theme [class~="bg-[#f6f6f8]"] { background-color: #000000; }
+.dark .unibus-theme [class~="bg-gray-50"] { background-color: #000000; }
+.dark .unibus-theme [class~="bg-[#f8fafc]"],
+.dark .unibus-theme [class~="bg-[#f1f5f9]"],
+.dark .unibus-theme [class~="bg-[#e8edf1]"] { background-color: #2c2c2e; }
+.dark .unibus-theme [class~="bg-[#e2e8f0]"],
+.dark .unibus-theme [class~="bg-[#cbd5e1]"],
+.dark .unibus-theme [class~="bg-gray-100"] { background-color: #3a3a3c; }
+.dark .unibus-theme [class~="bg-[#eef3ff]"],
+.dark .unibus-theme [class~="bg-[#eaf4ff]"],
+.dark .unibus-theme [class~="bg-[#f0f4ff]"],
+.dark .unibus-theme [class~="bg-[#eef2ff]"],
+.dark .unibus-theme [class~="bg-[#e0e7ff]"],
+.dark .unibus-theme [class~="bg-[#dbeafe]"] { background-color: #172554; }
+.dark .unibus-theme [class~="bg-[#ecfdf5]"] { background-color: #052e2b; }
+.dark .unibus-theme [class~="bg-[#fee2e2]"] { background-color: #451a1a; }
+
+.dark .unibus-theme [class~="text-[#0f172a]"],
+.dark .unibus-theme [class~="text-[#1e293b]"],
+.dark .unibus-theme [class~="text-[#334155]"] { color: #f8fafc; }
+.dark .unibus-theme [class~="text-[#64748b]"],
+.dark .unibus-theme [class~="text-[#475569]"] { color: #aeaeb2; }
+.dark .unibus-theme [class~="text-[#94a3b8]"] { color: #8e8e93; }
+.dark .unibus-theme [class~="text-[#1e3a8a]"],
+.dark .unibus-theme [class~="text-[#1e3b8a]"] { color: #64a8ff; }
+
+.dark .unibus-theme [class~="border-[#f1f5f9]"],
+.dark .unibus-theme [class~="border-[#e2e8f0]"],
+.dark .unibus-theme [class~="border-[#cbd5e1]"],
+.dark .unibus-theme [class~="border-[#dbe4ef]"],
+.dark .unibus-theme [class~="border-[#dbe3ef]"],
+.dark .unibus-theme [class~="border-gray-100"],
+.dark .unibus-theme [class~="border-white"] { border-color: rgba(84, 84, 88, 0.65); }
+.dark .unibus-theme [class*="border-white/"] { border-color: rgba(84, 84, 88, 0.65); }
+
+.dark .unibus-theme [class~="hover:bg-gray-50"]:hover,
+.dark .unibus-theme [class~="hover:bg-gray-100"]:hover,
+.dark .unibus-theme [class~="hover:bg-[#e2e8f0]"]:hover { background-color: #2c2c2e; }
+.dark .unibus-theme [class~="bg-white"][class~="rounded-full"] { background-color: #ffffff; }
 
 /* iOS Safe Area 유틸리티 클래스 */
 .pt-safe {

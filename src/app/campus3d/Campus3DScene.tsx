@@ -265,6 +265,7 @@ const BuildingMesh = memo(function BuildingMesh({
   isNight: boolean;
   onSelect: (building: CampusBuilding) => void;
 }) {
+  const viewportWidth = useThree((state) => state.size.width);
   const geometry = useMemo(
     () => new THREE.ExtrudeGeometry(shapeFromPoints(building.points), {
       depth: building.height + 5,
@@ -355,14 +356,19 @@ const BuildingMesh = memo(function BuildingMesh({
         />
       )) : null}
       {(selected || MAJOR_BUILDINGS.has(building.name)) ? (
-        <Html position={[center[0], baseHeight + building.height + 5, center[1]]} center distanceFactor={selected ? 300 : 420} zIndexRange={[20, 0]}>
+        <Html
+          position={[center[0], baseHeight + building.height + 5, center[1]]}
+          center
+          distanceFactor={selected ? (viewportWidth < 640 ? 460 : 300) : (viewportWidth < 640 ? 640 : 420)}
+          zIndexRange={[20, 0]}
+        >
           <button
             type="button"
             onClick={(event) => {
               event.stopPropagation();
               onSelect(building);
             }}
-            className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl border px-2.5 py-1.5 text-[11px] font-extrabold shadow-[0_6px_18px_rgba(15,23,42,0.14)] backdrop-blur-xl transition-all ${
+            className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl border px-3 py-2 text-[13px] font-extrabold shadow-[0_6px_18px_rgba(15,23,42,0.14)] backdrop-blur-xl transition-all sm:px-2.5 sm:py-1.5 sm:text-[11px] ${
               selected
                 ? "border-[#1e3a8a] bg-[#1e3a8a] text-white shadow-[0_8px_22px_rgba(30,58,138,0.26)]"
                 : "border-white/80 bg-white/94 text-[#0f172a] hover:border-[#1e3a8a]/30 hover:text-[#1e3a8a]"
@@ -491,6 +497,7 @@ function ShuttleBus({
 }) {
   const group = useRef<THREE.Group>(null);
   const camera = useThree((state) => state.camera);
+  const viewportWidth = useThree((state) => state.size.width);
   const distance = useRef(offset);
   const targetQuaternion = useMemo(() => new THREE.Quaternion(), []);
   const targetEuler = useMemo(() => new THREE.Euler(), []);
@@ -520,7 +527,7 @@ function ShuttleBus({
   });
 
   return (
-    <group ref={group} scale={1.5} onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : label); }}>
+    <group ref={group} scale={viewportWidth < 640 ? 1.82 : 1.5} onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : label); }}>
       <mesh castShadow position={[0, 1.55, 0]}>
         <boxGeometry args={[3.1, 2.5, 7.4]} />
         <meshStandardMaterial color="#f8fafc" roughness={0.5} metalness={0.08} />
@@ -544,7 +551,7 @@ function ShuttleBus({
         </mesh>
       )))}
       <Html position={[0, 6.6, 0]} center distanceFactor={330} zIndexRange={[16, 0]}>
-        <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : label); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
+        <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : label); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
           <span className={`h-2 w-2 rounded-full ring-2 ring-white ${running ? "animate-pulse bg-[#22c55e]" : "bg-[#94a3b8]"}`} />
           {label}
         </button>
@@ -562,6 +569,7 @@ const LiveShuttleBus = memo(function LiveShuttleBus({ bus, track, followed, cont
 }) {
   const group = useRef<THREE.Group>(null);
   const camera = useThree((state) => state.camera);
+  const viewportWidth = useThree((state) => state.size.width);
   const routeDistance = useRef(bus.routeProgress ?? 0);
   const target = useMemo(
     () => new THREE.Vector3(bus.position[0], getTerrainHeight(bus.position[0], bus.position[1]) + 0.8, bus.position[1]),
@@ -598,7 +606,7 @@ const LiveShuttleBus = memo(function LiveShuttleBus({ bus, track, followed, cont
       ref={group}
       position={target}
       rotation={[0, rotation, 0]}
-      scale={1.45}
+      scale={viewportWidth < 640 ? 1.76 : 1.45}
       onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }}
     >
       <mesh castShadow position={[0, 1.55, 0]}>
@@ -624,7 +632,7 @@ const LiveShuttleBus = memo(function LiveShuttleBus({ bus, track, followed, cont
         </mesh>
       )))}
       <Html position={[0, 6.6, 0]} center distanceFactor={330} zIndexRange={[16, 0]}>
-        <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
+        <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
           <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
           {bus.label}
         </button>
@@ -862,7 +870,7 @@ function CampusWorld(props: Campus3DSceneProps) {
                 <meshStandardMaterial color={props.selectedStopId === stop.id ? "#1e3a8a" : "#f59e0b"} />
               </mesh>
               <Html position={[0, 7, 0]} center zIndexRange={[12, 0]}>
-                <button type="button" onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl border py-1.5 pl-1.5 pr-2.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl ${props.selectedStopId === stop.id ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#0f172a]"}`}>
+                <button type="button" onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl border py-2 pl-2 pr-3 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:py-1.5 sm:pl-1.5 sm:pr-2.5 sm:text-[10px] ${props.selectedStopId === stop.id ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#0f172a]"}`}>
                   <span className="grid h-5 w-5 place-items-center rounded-lg bg-[#1e3a8a] text-[9px] font-extrabold text-white">{index + 1}</span>
                   {stop.name}
                 </button>

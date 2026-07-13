@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Plus, Edit, Trash2, ToggleLeft, ToggleRight, MapPin, Clock, Search, RefreshCw, Route as RouteIcon, Save, X } from "lucide-react";
+import { Plus, Edit, Trash2, ToggleLeft, ToggleRight, MapPin, Clock, Search, RefreshCw, Route as RouteIcon, Save, X, MousePointer2 } from "lucide-react";
 import AdminLayout from "./AdminLayout";
 import { api } from "../services/api";
 
@@ -193,7 +193,20 @@ export default function RouteManagement() {
     setFormError(null);
     setSaving(true);
     try {
-      const stopsList = stopNames.map((name, index) => ({ name, order: index + 1 }));
+      const stopsList = stopNames.map((name, index) => {
+        const normalizedName = name.replace(/\s+/g, "").toLowerCase();
+        const existingStop = editingRoute?.stops.find((stop) =>
+          stop.name.replace(/\s+/g, "").toLowerCase() === normalizedName,
+        ) ?? editingRoute?.stops[index];
+
+        return {
+          id: existingStop?.id,
+          name,
+          order: index + 1,
+          lat: existingStop?.lat ?? null,
+          lng: existingStop?.lng ?? null,
+        };
+      });
       const scheduleBasis: BusRoute["scheduleBasis"] = formData.type === "campus"
         ? formData.shuttleVariant === "campus_to_station"
           ? "train_departure"
@@ -262,6 +275,8 @@ export default function RouteManagement() {
     r.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
   const campusRoutes = filteredRoutes.filter((r) => r.type === "campus");
+  const campusLoopRoutes = campusRoutes.filter((route) => route.shuttleVariant === "campus_loop");
+  const stationShuttleRoutes = campusRoutes.filter((route) => route.shuttleVariant !== "campus_loop");
   const commuterRoutes = filteredRoutes.filter((r) => r.type === "commuter");
 
   return (
@@ -338,23 +353,39 @@ export default function RouteManagement() {
           <>
             <div className="mb-8">
               <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px] mb-4">
-                셔틀버스 ({campusRoutes.length})
+                셔틀버스 노선별 정류장 ({campusRoutes.length})
               </h2>
+              <p className="mb-4 text-[13px] leading-5 text-[#64748b]">
+                학내순환과 신창역 셔틀은 노선별로 정류장 위치가 따로 저장됩니다. 각 카드의 정류장·경로 편집을 눌러 수정하세요.
+              </p>
               {campusRoutes.length === 0 ? (
                 <p className="text-[#94a3b8] font-['Public_Sans'] text-[14px] py-4">
                   셔틀버스 노선이 없습니다.
                 </p>
               ) : (
-                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-                  {campusRoutes.map((route) => (
-                    <RouteCard
-                      key={route.id}
-                      route={route}
-                      onEdit={handleEdit}
-                      onMapEdit={setMapEditingRoute}
-                      onDelete={handleDelete}
-                      onToggleActive={toggleActive}
-                    />
+                <div className="space-y-7">
+                  {[
+                    { title: "학내순환", routes: campusLoopRoutes },
+                    { title: "신창역 셔틀", routes: stationShuttleRoutes },
+                  ].map((group) => group.routes.length > 0 && (
+                    <section key={group.title}>
+                      <h3 className="mb-3 flex items-center gap-2 text-[15px] font-bold text-[#334155]">
+                        <span className="h-2 w-2 rounded-full bg-[#1e3b8a]" />
+                        {group.title} ({group.routes.length})
+                      </h3>
+                      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-3">
+                        {group.routes.map((route) => (
+                          <RouteCard
+                            key={route.id}
+                            route={route}
+                            onEdit={handleEdit}
+                            onMapEdit={setMapEditingRoute}
+                            onDelete={handleDelete}
+                            onToggleActive={toggleActive}
+                          />
+                        ))}
+                      </div>
+                    </section>
                   ))}
                 </div>
               )}
@@ -691,7 +722,7 @@ interface RouteCardProps {
 function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: RouteCardProps) {
   return (
     <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-6">
-      <div className="flex items-start justify-between mb-4">
+      <div className="flex items-start justify-between gap-3 mb-4">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-2">
             {route.color && (
@@ -730,15 +761,7 @@ function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: Route
             {route.isActive ? "운행중" : "중지"}
           </button>
         </div>
-        <div className="flex gap-2">
-          <button
-            onClick={() => onMapEdit(route)}
-            aria-label={`${route.name} 지도에서 경로 편집`}
-            className="p-2 text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
-            title="지도에서 경로 편집"
-          >
-            <RouteIcon className="w-5 h-5" />
-          </button>
+        <div className="flex shrink-0 gap-1">
           <button
             onClick={() => onEdit(route)}
             aria-label={`${route.name} 수정`}
@@ -757,6 +780,15 @@ function RouteCard({ route, onEdit, onMapEdit, onDelete, onToggleActive }: Route
           </button>
         </div>
       </div>
+
+      <button
+        type="button"
+        onClick={() => onMapEdit(route)}
+        className="mb-4 flex w-full items-center justify-center gap-2 rounded-lg border border-[#1e3b8a]/25 bg-[#1e3b8a]/5 px-3 py-2.5 text-[13px] font-bold text-[#1e3b8a] transition-colors hover:bg-[#1e3b8a]/10"
+      >
+        <RouteIcon className="h-4 w-4" />
+        정류장·경로 편집
+      </button>
 
       <div className="space-y-4">
         {route.stops && route.stops.length > 0 && (
@@ -885,6 +917,7 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
   const mapInstance = useRef<any>(null);
   const markerRefs = useRef<any[]>([]);
   const polylineRef = useRef<any>(null);
+  const hasFitBoundsRef = useRef(false);
   const [stops, setStops] = useState<BusRoute["stops"]>(route.stops || []);
   const [shapePoints, setShapePoints] = useState<NonNullable<BusRoute["shapePoints"]>>(route.shapePoints || []);
   const [path, setPath] = useState<[number, number][]>([]);
@@ -892,6 +925,7 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("마커를 드래그하면 네이버 경로가 다시 계산됩니다.");
   const [newShapeAfterStopOrder, setNewShapeAfterStopOrder] = useState<number | null>(null);
+  const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
 
   const clearMapObjects = () => {
     markerRefs.current.forEach(marker => { try { marker.setMap(null); } catch (_) {} });
@@ -980,6 +1014,7 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
           lat: stop.lat,
           lng: stop.lng,
         })));
+        setSelectedStopId(routePath.stops[0]?.id ?? null);
         setShapePoints(routePath.shapePoints || []);
         setPath(routePath.path || []);
         const selectableStops = routePath.stops.filter(stop => stop.lat != null && stop.lng != null);
@@ -1009,6 +1044,7 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
     return () => {
       disposed = true;
       clearMapObjects();
+      hasFitBoundsRef.current = false;
     };
   }, [route.id, route.type]);
 
@@ -1047,6 +1083,10 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
         setStops(nextStops);
         refreshPreview(nextStops, shapePoints);
       });
+      window.naver.maps.Event.addListener(marker, "click", () => {
+        setSelectedStopId(stop.id);
+        setMessage(`${stop.name} 정류장을 선택했습니다. 마커를 끌거나 지도의 원하는 위치를 누르세요.`);
+      });
       markerRefs.current.push(marker);
       bounds.extend(marker.getPosition());
       boundsPointCount += 1;
@@ -1075,10 +1115,34 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
       boundsPointCount += 1;
     });
 
-    if (boundsPointCount > 0) {
+    if (boundsPointCount > 0 && !hasFitBoundsRef.current) {
       mapInstance.current.fitBounds(bounds);
+      hasFitBoundsRef.current = true;
     }
   }, [loading, path, stops, shapePoints, refreshPreview, route.color]);
+
+  useEffect(() => {
+    if (!mapInstance.current || !window.naver || loading) return;
+
+    const listener = window.naver.maps.Event.addListener(mapInstance.current, "click", (event: any) => {
+      if (!selectedStopId) {
+        setMessage("먼저 오른쪽 목록에서 옮길 정류장을 선택해 주세요.");
+        return;
+      }
+
+      const latLng = event.coord;
+      const selectedStop = stops.find((stop) => stop.id === selectedStopId);
+      if (!selectedStop || !latLng) return;
+      const nextStops = stops.map((stop) => stop.id === selectedStopId
+        ? { ...stop, lat: latLng.lat(), lng: latLng.lng() }
+        : stop);
+      setStops(nextStops);
+      setMessage(`${selectedStop.name} 정류장 위치를 변경했습니다. 저장 전 경로를 확인해 주세요.`);
+      refreshPreview(nextStops, shapePoints);
+    });
+
+    return () => window.naver.maps.Event.removeListener(listener);
+  }, [loading, refreshPreview, selectedStopId, shapePoints, stops]);
 
   const addShapePoint = () => {
     const drawableStops = stops.filter(stop => stop.lat != null && stop.lng != null);
@@ -1143,8 +1207,14 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
       <div className="flex h-dvh w-full max-w-6xl flex-col overflow-hidden bg-white sm:h-auto sm:max-h-[92vh] sm:rounded-2xl">
         <div className="flex items-start justify-between gap-3 border-b border-gray-200 p-4 sm:items-center sm:p-5">
           <div>
-            <h2 className="font-['Public_Sans'] text-[18px] font-bold text-[#0f172a] sm:text-[22px]">{route.name} 지도 경로 편집</h2>
-            <p className="font-['Public_Sans'] text-[#64748b] text-[13px] mt-1">정류장과 보정점을 드래그해서 실제 운행 경로를 조정합니다.</p>
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="rounded-full bg-[#1e3b8a]/10 px-2.5 py-1 text-[11px] font-bold text-[#1e3b8a]">
+                {route.type === "campus" ? getShuttleVariantLabel(route.shuttleVariant) : "통학버스"}
+              </span>
+              <span className="text-[11px] font-medium text-[#64748b]">이 노선에만 적용</span>
+            </div>
+            <h2 className="font-['Public_Sans'] text-[18px] font-bold text-[#0f172a] sm:text-[22px]">{route.name} 정류장·경로 편집</h2>
+            <p className="font-['Public_Sans'] text-[#64748b] text-[13px] mt-1">정류장을 선택한 뒤 지도를 누르거나 마커를 드래그해 위치를 바꿉니다.</p>
           </div>
           <button onClick={onClose} className="p-2 text-[#64748b] hover:bg-gray-100 rounded-lg">
             <X className="w-5 h-5" />
@@ -1194,12 +1264,40 @@ function RouteMapEditor({ route, onClose, onSaved }: RouteMapEditorProps) {
               <p className="font-['Public_Sans'] text-blue-900 text-[12px] leading-5">{message}</p>
             </div>
             <div className="mb-5">
-              <h3 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px] mb-2">정류장</h3>
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <h3 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[14px]">정류장 위치</h3>
+                <span className="text-[11px] text-[#94a3b8]">선택 후 지도 클릭</span>
+              </div>
               <div className="space-y-2">
                 {stops.map((stop) => (
-                  <div key={stop.id} className="px-3 py-2 rounded-lg bg-gray-50 font-['Public_Sans'] text-[12px] text-[#64748b]">
-                    {stop.order}. {stop.name}
-                  </div>
+                  <button
+                    key={stop.id}
+                    type="button"
+                    onClick={() => {
+                      setSelectedStopId(stop.id);
+                      setMessage(`${stop.name} 정류장을 선택했습니다. 지도의 원하는 위치를 누르세요.`);
+                      if (stop.lat != null && stop.lng != null) {
+                        mapInstance.current?.panTo(new window.naver.maps.LatLng(stop.lat, stop.lng));
+                      }
+                    }}
+                    className={`flex w-full items-center gap-2 rounded-lg border px-3 py-2.5 text-left font-['Public_Sans'] text-[12px] transition-colors ${
+                      selectedStopId === stop.id
+                        ? "border-[#1e3b8a] bg-[#1e3b8a]/5 text-[#1e3b8a]"
+                        : "border-transparent bg-gray-50 text-[#64748b] hover:border-[#cbd5e1]"
+                    }`}
+                  >
+                    <span className={`grid h-6 w-6 shrink-0 place-items-center rounded-full text-[11px] font-extrabold ${
+                      selectedStopId === stop.id ? "bg-[#1e3b8a] text-white" : "bg-[#e2e8f0] text-[#64748b]"
+                    }`}>{stop.order}</span>
+                    <span className="min-w-0 flex-1 truncate font-semibold">{stop.name}</span>
+                    {stop.lat == null || stop.lng == null ? (
+                      <span className="flex items-center gap-1 text-[10px] font-bold text-orange-600">
+                        <MousePointer2 className="h-3 w-3" /> 위치 지정
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-medium text-emerald-700">설정됨</span>
+                    )}
+                  </button>
                 ))}
               </div>
             </div>
