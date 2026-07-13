@@ -156,7 +156,7 @@ const HyangseolEastGate = memo(function HyangseolEastGate({
         <boxGeometry args={[4.2, 9.4, 11]} />
         <meshStandardMaterial color={isNight ? "#d6e1e5" : "#f2f3ef"} roughness={0.5} />
       </mesh>
-      <mesh position={[-31, 3.8, -18]} castShadow>
+      <mesh position={[-31, 3.8, 18]} castShadow>
         <boxGeometry args={[4, 7.6, 14]} />
         <meshStandardMaterial color={isNight ? "#d6e1e5" : "#f2f3ef"} roughness={0.5} />
       </mesh>
@@ -172,7 +172,7 @@ const HyangseolEastGate = memo(function HyangseolEastGate({
       {[-1.8, 0, 1.8].map((offset) => (
         <SegmentedBeam
           key={`side-rib-${offset}`}
-          points={[[-9 + offset, 9.7, 0], [-15 + offset, 9.5, -7], [-23 + offset, 8.9, -13], [-31 + offset, 7.7, -18]]}
+          points={[[-9 + offset, 9.7, 0], [-15 + offset, 9.5, 7], [-23 + offset, 8.9, 13], [-31 + offset, 7.7, 18]]}
           width={0.68}
           depth={0.65}
           isNight={isNight}

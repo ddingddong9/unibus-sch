@@ -8,7 +8,7 @@ interface StationMapStop {
 }
 
 const isStation = (name: string) => /신창|순천향대역|순천향대학교역/.test(name);
-const isRearGate = (name: string) => /후문/.test(name);
+const isRearGate = (name: string) => /후문|김승우\s*라운지/.test(name);
 
 function squaredDistance(point: [number, number], stop: StationMapStop) {
   const longitudeScale = Math.cos((stop.lat * Math.PI) / 180);
@@ -39,6 +39,8 @@ export function getStationShuttleMap(
   const station = orderedStops.find((stop) => isStation(stop.nameKo));
   const rearGate = orderedStops.find((stop) => isRearGate(stop.nameKo));
   if (!station || !rearGate) return { path: [], stops: [] as StationMapStop[] };
+  // Keep the admin-edited coordinates as the single source of truth. Older
+  // routes call this stop "후문", so only normalize its passenger-facing name.
   const lounge = { ...rearGate, nameKo: "김승우 라운지", nameEn: "Kim Seung-woo Lounge" };
 
   const endpoints = (direction === "to-station" ? [lounge, station] : [station, lounge])

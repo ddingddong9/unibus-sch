@@ -15,7 +15,9 @@ export const CAMPUS_LANDMARKS = {
     label: "향설동문",
     latitude: 36.77314,
     longitude: 126.93348,
-    rotation: 0.8,
+    // The main canopy crosses the north-east access road; the third arm opens
+    // toward the campus rather than following the road centerline.
+    rotation: -0.91,
     height: 13,
   },
 } as const;
