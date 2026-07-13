@@ -3,6 +3,7 @@ import { Html, Line } from "@react-three/drei";
 import * as THREE from "three";
 import { CAMPUS_STOPS, polygonCenter, projectCoordinate } from "./campus-geometry";
 import type { CampusArea, CampusData, Point2D } from "./types";
+import { getTerrainHeight } from "./terrain";
 
 interface CampusStructuresProps {
   data: CampusData;
@@ -96,7 +97,7 @@ const CampusGate = memo(function CampusGate({
 
   const structureColor = isNight ? "#d8e5f0" : "#f8fafc";
   return (
-    <group position={[position[0], 0.5, position[1]]} rotation={[0, rotation, 0]}>
+    <group position={[position[0], getTerrainHeight(position[0], position[1]) + 0.5, position[1]]} rotation={[0, rotation, 0]}>
       {isMain && archGeometry ? (
         <>
           <mesh geometry={archGeometry} position={[0, 0, -2.3]} castShadow>
@@ -140,11 +141,101 @@ const CampusGate = memo(function CampusGate({
           </group>
         </>
       )}
-      <Html position={[0, height + 4.5, 0]} center distanceFactor={330} zIndexRange={[14, 0]}>
-        <div className="whitespace-nowrap border border-white/30 bg-slate-950/82 px-2 py-1 text-[10px] font-black text-white shadow-md backdrop-blur-md">
-          {isMain ? "순천향대학교 정문" : "순천향대학교 후문"}
-        </div>
-      </Html>
+    </group>
+  );
+});
+
+interface BridgePathProps {
+  points: [number, number, number][];
+  width?: number;
+  isNight: boolean;
+}
+
+const BridgePath = memo(function BridgePath({ points, width = 6.5, isNight }: BridgePathProps) {
+  const segments = useMemo(() => {
+    const curve = new THREE.CatmullRomCurve3(points.map((point) => new THREE.Vector3(...point)), false, "centripetal");
+    const samples = curve.getPoints(28);
+    return samples.slice(1).map((to, index) => {
+      const from = samples[index];
+      const midpoint = from.clone().add(to).multiplyScalar(0.5);
+      return {
+        midpoint,
+        length: from.distanceTo(to) + 0.7,
+        angle: Math.atan2(to.x - from.x, to.z - from.z),
+      };
+    });
+  }, [points]);
+  const railGeometries = useMemo(() => [-width / 2, width / 2].map((offset) => {
+    const railPoints = points.map(([x, y, z]) => new THREE.Vector3(x + offset, y + 1.45, z));
+    return new THREE.TubeGeometry(new THREE.CatmullRomCurve3(railPoints, false, "centripetal"), 48, 0.17, 6, false);
+  }), [points, width]);
+
+  return (
+    <group>
+      {segments.map((segment, index) => (
+        <mesh key={index} position={segment.midpoint} rotation={[0, segment.angle, 0]} castShadow receiveShadow>
+          <boxGeometry args={[width, 0.75, segment.length]} />
+          <meshStandardMaterial color={isNight ? "#dbe8ef" : "#f7f9f8"} metalness={0.12} roughness={0.42} />
+        </mesh>
+      ))}
+      {railGeometries.map((geometry, index) => (
+        <mesh key={index} geometry={geometry} castShadow>
+          <meshStandardMaterial color={isNight ? "#c9dbe5" : "#edf3f3"} metalness={0.34} roughness={0.34} />
+        </mesh>
+      ))}
+    </group>
+  );
+});
+
+const RearGateSkywalk = memo(function RearGateSkywalk({
+  position,
+  rotation,
+  isNight,
+}: {
+  position: Point2D;
+  rotation: number;
+  isNight: boolean;
+}) {
+  const baseHeight = getTerrainHeight(position[0], position[1]);
+  const paths = useMemo(() => [
+    [[-44, 8, -13], [-24, 8.4, -7], [-7, 8.8, -2], [10, 8.5, 2], [29, 7.8, 8], [47, 7.2, 17]],
+    [[-7, 8.8, -2], [-9, 8.7, 14], [-4, 8.2, 31]],
+    [[8, 8.5, 1], [19, 8, -14], [32, 7.3, -28]],
+  ] as [number, number, number][][], []);
+
+  return (
+    <group position={[position[0], baseHeight, position[1]]} rotation={[0, rotation, 0]}>
+      <mesh position={[0, 4.2, 0]} castShadow>
+        <cylinderGeometry args={[5.4, 6.2, 8.4, 32]} />
+        <meshStandardMaterial color={isNight ? "#dae5eb" : "#f3f5f3"} roughness={0.48} />
+      </mesh>
+      <mesh position={[0, 8.45, 0]} castShadow receiveShadow>
+        <cylinderGeometry args={[10.5, 10.5, 0.9, 48]} />
+        <meshStandardMaterial color={isNight ? "#dce9ef" : "#fbfcfb"} metalness={0.12} roughness={0.38} />
+      </mesh>
+      {paths.map((points, index) => <BridgePath key={index} points={points} isNight={isNight} />)}
+      {[
+        [-31, 3.8, -9],
+        [37, 3.5, 12],
+        [-6, 3.8, 23],
+        [25, 3.5, -21],
+      ].map(([x, y, z], index) => (
+        <mesh key={index} position={[x, y, z]} castShadow>
+          <cylinderGeometry args={[0.75, 1.05, y * 2, 10]} />
+          <meshStandardMaterial color={isNight ? "#c8d7df" : "#eef2f0"} roughness={0.55} />
+        </mesh>
+      ))}
+      <group position={[47, 0, 18]} rotation={[0, -0.3, 0]}>
+        <mesh position={[0, 6, 0]} castShadow>
+          <boxGeometry args={[3.2, 12, 15]} />
+          <meshStandardMaterial color={isNight ? "#d9e5ea" : "#f5f7f5"} roughness={0.58} />
+        </mesh>
+        <Html position={[1.8, 6.5, 0]} center transform distanceFactor={8}>
+          <div className="whitespace-nowrap text-center text-[12px] font-black leading-tight text-slate-700">
+            SOONCHUNHYANG<br /><span className="text-blue-700">SCH</span>
+          </div>
+        </Html>
+      </group>
     </group>
   );
 });
@@ -152,7 +243,7 @@ const CampusGate = memo(function CampusGate({
 const FountainFeature = memo(function FountainFeature({ area, isNight }: { area: CampusArea; isNight: boolean }) {
   const center = useMemo(() => polygonCenter(area.points), [area.points]);
   return (
-    <group position={[center[0], 0.45, center[1]]}>
+    <group position={[center[0], getTerrainHeight(center[0], center[1]) + 0.45, center[1]]}>
       <mesh position={[0, 0.65, 0]} castShadow>
         <cylinderGeometry args={[4.8, 5.7, 1.3, 28]} />
         <meshStandardMaterial color={isNight ? "#5d6f79" : "#d8ddd9"} roughness={0.66} />
@@ -179,7 +270,7 @@ const ShuttleCanopy = memo(function ShuttleCanopy({ area, isNight }: { area: Cam
   const metrics = useMemo(() => getAreaMetrics(area.points), [area.points]);
   const width = Math.min(Math.max(metrics.width * 0.56, 20), 34);
   return (
-    <group position={[metrics.center[0], 0.4, metrics.center[1]]} rotation={[0, metrics.rotation, 0]}>
+    <group position={[metrics.center[0], getTerrainHeight(metrics.center[0], metrics.center[1]) + 0.4, metrics.center[1]]} rotation={[0, metrics.rotation, 0]}>
       <mesh position={[0, 5.8, 0]} castShadow>
         <boxGeometry args={[width, 0.75, 7.5]} />
         <meshStandardMaterial color={isNight ? "#9ec7de" : "#d9edf5"} metalness={0.34} roughness={0.32} />
@@ -200,7 +291,7 @@ const ShuttleCanopy = memo(function ShuttleCanopy({ area, isNight }: { area: Cam
 
 const OutdoorTheater = memo(function OutdoorTheater({ position, isNight }: { position: Point2D; isNight: boolean }) {
   return (
-    <group position={[position[0], 0.5, position[1]]} rotation={[0, -0.85, 0]}>
+    <group position={[position[0], getTerrainHeight(position[0], position[1]) + 0.5, position[1]]} rotation={[0, -0.85, 0]}>
       {[12, 16, 20].map((radius, index) => (
         <mesh key={radius} position={[0, index * 0.72, 2]} rotation={[Math.PI / 2, 0, 0]} receiveShadow>
           <torusGeometry args={[radius, 1.25, 6, 48, Math.PI]} />
@@ -256,7 +347,7 @@ const FieldDetails = memo(function FieldDetails({ area, isNight }: { area: Campu
   ] as [number, number, number][];
 
   return (
-    <group position={[metrics.center[0], 0, metrics.center[1]]} rotation={[0, metrics.rotation, 0]}>
+    <group position={[metrics.center[0], getTerrainHeight(metrics.center[0], metrics.center[1]), metrics.center[1]]} rotation={[0, metrics.rotation, 0]}>
       <Line points={rectangle} color={lineColor} lineWidth={1.25} transparent opacity={0.82} />
       {isMajor ? (
         <>
@@ -287,7 +378,7 @@ const AreaOutline = memo(function AreaOutline({ area, isNight }: { area: CampusA
   if (!['parking', 'bus_station'].includes(area.kind)) return null;
   return (
     <Line
-      points={[...area.points, area.points[0]].map(([x, z]) => [x, 0.46, z])}
+      points={[...area.points, area.points[0]].map(([x, z]) => [x, getTerrainHeight(x, z) + 0.46, z])}
       color={area.kind === "bus_station" ? "#4ea4d1" : isNight ? "#6f7c83" : "#f8fafc"}
       lineWidth={area.kind === "bus_station" ? 2 : 0.75}
       transparent
@@ -306,7 +397,7 @@ export default function CampusStructures({ data, route, isNight }: CampusStructu
   return (
     <group>
       <CampusGate position={mainGate} rotation={routeHeading(route, mainGate)} variant="main" isNight={isNight} />
-      <CampusGate position={rearGate} rotation={routeHeading(route, rearGate)} variant="rear" isNight={isNight} />
+      <RearGateSkywalk position={rearGate} rotation={routeHeading(route, rearGate)} isNight={isNight} />
       {fountain ? <FountainFeature area={fountain} isNight={isNight} /> : null}
       {shuttleStation ? <ShuttleCanopy area={shuttleStation} isNight={isNight} /> : null}
       {theater ? <OutdoorTheater position={polygonCenter(theater.points)} isNight={isNight} /> : null}

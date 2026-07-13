@@ -18,8 +18,14 @@ import {
   X,
 } from "lucide-react";
 import Campus3DScene, { campusData } from "./Campus3DScene";
-import { buildingCategory } from "./campus-geometry";
+import { buildingCategory, CAMPUS_STOPS, projectCoordinate } from "./campus-geometry";
 import type { CampusBuilding } from "./types";
+import { terrainData } from "./terrain";
+
+const LANDMARKS = [
+  { id: "main-gate", label: "정문 아치", point: projectCoordinate(CAMPUS_STOPS[4].latitude, CAMPUS_STOPS[4].longitude, campusData.origin), height: 16 },
+  { id: "rear-gate", label: "후문 보행 데크", point: projectCoordinate(CAMPUS_STOPS[0].latitude, CAMPUS_STOPS[0].longitude, campusData.origin), height: 16 },
+] as const;
 
 function SceneLoading() {
   return (
@@ -31,7 +37,7 @@ function SceneLoading() {
         </div>
         <div className="text-center">
           <p className="text-sm font-bold">캠퍼스 디지털 트윈 구성 중</p>
-          <p className="mt-1 text-xs text-slate-600">건물 29동과 도로망을 불러오고 있습니다</p>
+          <p className="mt-1 text-xs text-slate-600">건물·도로·실제 고도 지형을 불러오고 있습니다</p>
         </div>
       </div>
     </div>
@@ -70,6 +76,7 @@ function IconButton({
 export default function Campus3DPage() {
   const shellRef = useRef<HTMLDivElement>(null);
   const [selectedBuilding, setSelectedBuilding] = useState<CampusBuilding | null>(null);
+  const [focusTarget, setFocusTarget] = useState<{ x: number; z: number; height: number; label: string } | null>(null);
   const [isNight, setIsNight] = useState(false);
   const [isRunning, setIsRunning] = useState(true);
   const [autoRotate, setAutoRotate] = useState(false);
@@ -88,7 +95,6 @@ export default function Campus3DPage() {
     if (!normalized) return buildings;
     return buildings.filter((building) => building.name.toLocaleLowerCase("ko").includes(normalized));
   }, [buildings, query]);
-
   useEffect(() => {
     const updateFullscreen = () => setIsFullscreen(Boolean(document.fullscreenElement));
     document.addEventListener("fullscreenchange", updateFullscreen);
@@ -100,6 +106,7 @@ export default function Campus3DPage() {
       if (event.key !== "Escape") return;
       setDirectoryOpen(false);
       setSelectedBuilding(null);
+      setFocusTarget(null);
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
@@ -107,6 +114,7 @@ export default function Campus3DPage() {
 
   const resetView = () => {
     setSelectedBuilding(null);
+    setFocusTarget(null);
     setAutoRotate(false);
     setResetVersion((version) => version + 1);
   };
@@ -118,6 +126,14 @@ export default function Campus3DPage() {
 
   const selectFromDirectory = (building: CampusBuilding) => {
     setSelectedBuilding(building);
+    setFocusTarget(null);
+    setDirectoryOpen(false);
+    setAutoRotate(false);
+  };
+
+  const selectLandmark = (landmark: (typeof LANDMARKS)[number]) => {
+    setSelectedBuilding(null);
+    setFocusTarget({ x: landmark.point[0], z: landmark.point[1], height: landmark.height, label: landmark.label });
     setDirectoryOpen(false);
     setAutoRotate(false);
   };
@@ -131,8 +147,12 @@ export default function Campus3DPage() {
           autoRotate={autoRotate}
           showRoute={showRoute}
           selectedBuildingId={selectedBuilding?.id ?? null}
+          focusTarget={focusTarget}
           resetVersion={resetVersion}
-          onSelectBuilding={setSelectedBuilding}
+          onSelectBuilding={(building) => {
+            setSelectedBuilding(building);
+            if (building) setFocusTarget(null);
+          }}
         />
       </Suspense>
 
@@ -193,7 +213,19 @@ export default function Campus3DPage() {
             className="h-11 w-full border border-white/12 bg-white/6 pl-10 pr-3 text-sm text-white placeholder:text-slate-500 focus:border-amber-400 focus:outline-none"
           />
         </label>
-        <div className="mt-4 h-[calc(100dvh-190px)] space-y-1 overflow-y-auto pr-1 [scrollbar-color:#475569_transparent] [scrollbar-width:thin]">
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          {LANDMARKS.map((landmark) => (
+            <button
+              key={landmark.id}
+              type="button"
+              onClick={() => selectLandmark(landmark)}
+              className="border border-white/12 bg-white/6 px-3 py-2.5 text-left text-xs font-bold text-slate-200 transition-colors hover:border-amber-400/60 hover:bg-amber-400/10"
+            >
+              {landmark.label}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3 h-[calc(100dvh-242px)] space-y-1 overflow-y-auto pr-1 [scrollbar-color:#475569_transparent] [scrollbar-width:thin]">
           {filteredBuildings.map((building) => (
             <button
               key={building.id}
@@ -266,6 +298,18 @@ export default function Campus3DPage() {
         </aside>
       ) : null}
 
+      {focusTarget && !selectedBuilding ? (
+        <aside className="absolute bottom-[76px] right-3 z-30 w-[min(280px,calc(100%-24px))] border border-white/14 bg-slate-950/88 p-4 shadow-2xl backdrop-blur-xl sm:bottom-20 sm:right-5">
+          <span className="inline-block bg-sky-400 px-2 py-0.5 text-[9px] font-black text-slate-950">주요 구조물</span>
+          <div className="mt-2 flex items-center justify-between gap-3">
+            <h2 className="text-lg font-black">{focusTarget.label}</h2>
+            <button type="button" aria-label="구조물 정보 닫기" onClick={() => setFocusTarget(null)} className="grid h-9 w-9 shrink-0 place-items-center border border-white/12 text-slate-400 hover:bg-white/8 hover:text-white">
+              <X className="h-4 w-4" aria-hidden="true" />
+            </button>
+          </div>
+        </aside>
+      ) : null}
+
       <div className="absolute bottom-3 left-1/2 z-30 flex -translate-x-1/2 items-center gap-1.5 border border-white/14 bg-slate-950/84 p-1.5 shadow-2xl backdrop-blur-xl sm:bottom-5">
         <IconButton label="건물 탐색" active={directoryOpen} onClick={() => setDirectoryOpen((open) => !open)}>
           <Layers3 className="h-4.5 w-4.5" aria-hidden="true" />
@@ -293,7 +337,7 @@ export default function Campus3DPage() {
 
       <div className="pointer-events-none absolute bottom-5 right-5 hidden items-center gap-2 text-[9px] font-semibold text-slate-600 lg:flex">
         <Expand className="h-3.5 w-3.5" aria-hidden="true" />
-        <span>{campusData.attribution}</span>
+        <span>{campusData.attribution} · {terrainData.attribution}</span>
       </div>
     </main>
   );

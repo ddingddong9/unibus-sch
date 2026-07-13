@@ -12,6 +12,8 @@ import {
 } from "./campus-geometry";
 import type { CampusArea, CampusBuilding, CampusData, Point2D } from "./types";
 import CampusStructures from "./CampusStructures";
+import TerrainSurface from "./TerrainSurface";
+import { getTerrainHeight } from "./terrain";
 
 const campusData = campusDataSource as CampusData;
 const MAJOR_BUILDINGS = new Set([
@@ -29,6 +31,7 @@ interface Campus3DSceneProps {
   autoRotate: boolean;
   showRoute: boolean;
   selectedBuildingId: string | null;
+  focusTarget: { x: number; z: number; height: number } | null;
   resetVersion: number;
   onSelectBuilding: (building: CampusBuilding | null) => void;
 }
@@ -44,35 +47,23 @@ function shapeFromPoints(points: Point2D[]) {
   return shape;
 }
 
-const Ground = memo(function Ground({ isNight }: { isNight: boolean }) {
-  const geometry = useMemo(
-    () => new THREE.ExtrudeGeometry(shapeFromPoints(campusData.boundary), {
-      depth: 2.5,
-      bevelEnabled: true,
-      bevelSize: 1.2,
-      bevelThickness: 0.8,
-      bevelSegments: 2,
-    }),
-    [],
-  );
-
-  useEffect(() => () => geometry.dispose(), [geometry]);
-
-  return (
-    <>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -2.4, 0]} geometry={geometry} receiveShadow>
-        <meshStandardMaterial color={isNight ? "#16251f" : "#7c9a68"} roughness={0.95} />
-      </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -3.8, 0]} receiveShadow>
-        <planeGeometry args={[1800, 1800]} />
-        <meshStandardMaterial color={isNight ? "#08110f" : "#e9edeb"} roughness={1} />
-      </mesh>
-    </>
-  );
-});
-
 const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; isNight: boolean }) {
-  const geometry = useMemo(() => new THREE.ShapeGeometry(shapeFromPoints(area.points)), [area.points]);
+  const geometry = useMemo(() => {
+    const contour = area.points.map(([x, z]) => new THREE.Vector2(x, z));
+    const faces = THREE.ShapeUtils.triangulateShape(contour, []);
+    const positions = new Float32Array(area.points.length * 3);
+    area.points.forEach(([x, z], index) => {
+      const offset = index * 3;
+      positions[offset] = x;
+      positions[offset + 1] = getTerrainHeight(x, z) + 0.34;
+      positions[offset + 2] = z;
+    });
+    const surface = new THREE.BufferGeometry();
+    surface.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    surface.setIndex(faces.flat());
+    surface.computeVertexNormals();
+    return surface;
+  }, [area.points]);
   useEffect(() => () => geometry.dispose(), [geometry]);
 
   const color = area.kind === "water"
@@ -86,7 +77,7 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
           : isNight ? "#233527" : "#8fb17b";
 
   return (
-    <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.18, 0]} receiveShadow>
+    <mesh geometry={geometry} receiveShadow>
       <meshStandardMaterial color={color} roughness={0.88} metalness={area.kind === "water" ? 0.15 : 0} />
     </mesh>
   );
@@ -105,7 +96,7 @@ const BuildingMesh = memo(function BuildingMesh({
 }) {
   const geometry = useMemo(
     () => new THREE.ExtrudeGeometry(shapeFromPoints(building.points), {
-      depth: building.height,
+      depth: building.height + 5,
       bevelEnabled: true,
       bevelSize: 0.65,
       bevelThickness: 0.7,
@@ -115,6 +106,7 @@ const BuildingMesh = memo(function BuildingMesh({
   );
   const edges = useMemo(() => new THREE.EdgesGeometry(geometry, 32), [geometry]);
   const center = useMemo(() => polygonCenter(building.points), [building.points]);
+  const baseHeight = useMemo(() => getTerrainHeight(center[0], center[1]), [center]);
 
   useEffect(() => () => {
     geometry.dispose();
@@ -130,7 +122,7 @@ const BuildingMesh = memo(function BuildingMesh({
       <mesh
         geometry={geometry}
         rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, 0.2, 0]}
+        position={[0, baseHeight - 4.8, 0]}
         castShadow
         receiveShadow
         onClick={(event) => {
@@ -159,7 +151,7 @@ const BuildingMesh = memo(function BuildingMesh({
       {building.height >= 12 ? [0.28, 0.52, 0.76].map((level) => (
         <Line
           key={level}
-          points={[...building.points, building.points[0]].map(([x, z]) => [x, building.height * level, z])}
+          points={[...building.points, building.points[0]].map(([x, z]) => [x, baseHeight + building.height * level, z])}
           color={isNight ? "#f6c76d" : "#8fa2a7"}
           lineWidth={selected ? 1.35 : 0.7}
           transparent
@@ -167,7 +159,7 @@ const BuildingMesh = memo(function BuildingMesh({
         />
       )) : null}
       {(selected || MAJOR_BUILDINGS.has(building.name)) ? (
-        <Html position={[center[0], building.height + 5, center[1]]} center distanceFactor={selected ? 300 : 420} zIndexRange={[20, 0]}>
+        <Html position={[center[0], baseHeight + building.height + 5, center[1]]} center distanceFactor={selected ? 300 : 420} zIndexRange={[20, 0]}>
           <button
             type="button"
             onClick={(event) => {
@@ -222,11 +214,9 @@ function sampleRoute(track: RouteTrack, distance: number, position: THREE.Vector
   const progress = (wrappedDistance - segmentStart) / segmentLength;
   const from = points[index];
   const to = points[index + 1];
-  position.set(
-    THREE.MathUtils.lerp(from[0], to[0], progress),
-    0.75,
-    THREE.MathUtils.lerp(from[1], to[1], progress),
-  );
+  const x = THREE.MathUtils.lerp(from[0], to[0], progress);
+  const z = THREE.MathUtils.lerp(from[1], to[1], progress);
+  position.set(x, getTerrainHeight(x, z) + 0.75, z);
   return {
     angle: Math.atan2(to[0] - from[0], to[1] - from[1]),
   };
@@ -286,21 +276,26 @@ function ShuttleBus({ track, offset, running, label }: { track: RouteTrack; offs
 function CameraDirector({
   controls,
   selectedBuildingId,
+  focusTarget,
   resetVersion,
 }: {
   controls: React.RefObject<OrbitControlsImpl | null>;
   selectedBuildingId: string | null;
+  focusTarget: { x: number; z: number; height: number } | null;
   resetVersion: number;
 }) {
   const camera = useThree((state) => state.camera);
 
   useEffect(() => {
     const selected = campusData.buildings.find((building) => building.id === selectedBuildingId);
-    const target = selected ? polygonCenter(selected.points) : [0, 0];
-    const targetPosition = selected
-      ? new THREE.Vector3(target[0] + 105, Math.max(selected.height + 72, 90), target[1] + 125)
+    const target = selected ? polygonCenter(selected.points) : focusTarget ? [focusTarget.x, focusTarget.z] : [0, 0];
+    const terrainHeight = getTerrainHeight(target[0], target[1]);
+    const subjectHeight = selected?.height ?? focusTarget?.height ?? 0;
+    const hasSubject = Boolean(selected || focusTarget);
+    const targetPosition = hasSubject
+      ? new THREE.Vector3(target[0] + 105, terrainHeight + Math.max(subjectHeight + 72, 90), target[1] + 125)
       : new THREE.Vector3(560, 900, 720);
-    const targetLookAt = new THREE.Vector3(target[0], selected ? selected.height * 0.25 : 0, target[1]);
+    const targetLookAt = new THREE.Vector3(target[0], terrainHeight + (hasSubject ? subjectHeight * 0.3 : 0), target[1]);
     const startPosition = camera.position.clone();
     const startTarget = controls.current?.target.clone() ?? new THREE.Vector3();
     const startedAt = performance.now();
@@ -316,7 +311,7 @@ function CameraDirector({
     };
     frame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frame);
-  }, [camera, controls, resetVersion, selectedBuildingId]);
+  }, [camera, controls, focusTarget, resetVersion, selectedBuildingId]);
 
   return null;
 }
@@ -336,7 +331,7 @@ function CampusWorld(props: Campus3DSceneProps) {
   return (
     <>
       <color attach="background" args={[props.isNight ? "#07111f" : "#cfe2ef"]} />
-      <fog attach="fog" args={[props.isNight ? "#07111f" : "#cfe2ef", 680, 1500]} />
+      <fog attach="fog" args={[props.isNight ? "#07111f" : "#cfe2ef", 900, 2600]} />
       {props.isNight ? <Stars radius={650} depth={180} count={1600} factor={4} saturation={0.2} fade speed={0.35} /> : <Sky distance={1800} sunPosition={[250, 420, -300]} turbidity={5} rayleigh={1.7} />}
       <ambientLight intensity={props.isNight ? 0.55 : 1.55} color={props.isNight ? "#7799c9" : "#f6fbff"} />
       <hemisphereLight
@@ -356,7 +351,14 @@ function CampusWorld(props: Campus3DSceneProps) {
         shadow-camera-bottom={-520}
         shadow-bias={-0.0003}
       />
-      <Ground isNight={props.isNight} />
+      <TerrainSurface isNight={props.isNight} />
+      <Line
+        points={[...campusData.boundary, campusData.boundary[0]].map(([x, z]) => [x, getTerrainHeight(x, z) + 0.65, z])}
+        color={props.isNight ? "#6f857b" : "#748276"}
+        lineWidth={0.8}
+        transparent
+        opacity={0.42}
+      />
       {campusData.areas.map((area) => <AreaMesh key={area.id} area={area} isNight={props.isNight} />)}
       <group position={[0, 0.55, 0]}>
         {campusData.roads.map((road) => {
@@ -364,7 +366,7 @@ function CampusWorld(props: Campus3DSceneProps) {
           return (
             <Line
               key={road.id}
-              points={road.points.map(([x, z]) => [x, 0, z])}
+              points={road.points.map(([x, z]) => [x, getTerrainHeight(x, z), z])}
               color={pedestrian ? props.isNight ? "#59665f" : "#d8cfba" : props.isNight ? "#27323a" : "#5b6265"}
               lineWidth={pedestrian ? 1.2 : Math.min(road.width, 5.5)}
               transparent
@@ -385,10 +387,10 @@ function CampusWorld(props: Campus3DSceneProps) {
       <CampusStructures data={campusData} route={route} isNight={props.isNight} />
       {props.showRoute ? (
         <group>
-          <Line points={route.map(([x, z]) => [x, 2, z])} color="#f59e0b" lineWidth={5.5} transparent opacity={0.94} />
-          <Line points={route.map(([x, z]) => [x, 2.05, z])} color="#fff7d6" lineWidth={1.25} transparent opacity={0.85} />
+          <Line points={route.map(([x, z]) => [x, getTerrainHeight(x, z) + 2, z])} color="#f59e0b" lineWidth={5.5} transparent opacity={0.94} />
+          <Line points={route.map(([x, z]) => [x, getTerrainHeight(x, z) + 2.05, z])} color="#fff7d6" lineWidth={1.25} transparent opacity={0.85} />
           {stopPositions.map((stop, index) => (
-            <group key={stop.id} position={[stop.position[0], 2.2, stop.position[1]]}>
+            <group key={stop.id} position={[stop.position[0], getTerrainHeight(stop.position[0], stop.position[1]) + 2.2, stop.position[1]]}>
               <mesh castShadow>
                 <cylinderGeometry args={[3.5, 3.5, 1.5, 24]} />
                 <meshStandardMaterial color="#ffffff" emissive="#f59e0b" emissiveIntensity={0.15} />
@@ -397,7 +399,7 @@ function CampusWorld(props: Campus3DSceneProps) {
                 <cylinderGeometry args={[2.25, 2.25, 1.7, 24]} />
                 <meshStandardMaterial color="#f59e0b" />
               </mesh>
-              <Html position={[0, 7, 0]} center distanceFactor={360} zIndexRange={[12, 0]}>
+              <Html position={[0, 7, 0]} center zIndexRange={[12, 0]}>
                 <div className="flex items-center gap-1.5 whitespace-nowrap border border-white/30 bg-slate-950/78 px-2 py-1 text-[10px] font-semibold text-white shadow-sm backdrop-blur-md">
                   <span className="grid h-4 w-4 place-items-center bg-amber-400 text-[9px] font-bold text-slate-950">{index + 1}</span>
                   {stop.name}
@@ -418,12 +420,12 @@ function CampusWorld(props: Campus3DSceneProps) {
         autoRotate={props.autoRotate}
         autoRotateSpeed={0.45}
         minDistance={70}
-        maxDistance={1120}
+        maxDistance={1900}
         minPolarAngle={0.18}
         maxPolarAngle={Math.PI / 2.08}
         screenSpacePanning={false}
       />
-      <CameraDirector controls={controls} selectedBuildingId={props.selectedBuildingId} resetVersion={props.resetVersion} />
+      <CameraDirector controls={controls} selectedBuildingId={props.selectedBuildingId} focusTarget={props.focusTarget} resetVersion={props.resetVersion} />
     </>
   );
 }
@@ -433,7 +435,7 @@ export default function Campus3DScene(props: Campus3DSceneProps) {
     <Canvas
       shadows
       dpr={[1, 1.75]}
-      camera={{ position: [560, 900, 720], fov: 42, near: 1, far: 2400 }}
+      camera={{ position: [560, 900, 720], fov: 42, near: 1, far: 4200 }}
       gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
       onPointerMissed={() => props.onSelectBuilding(null)}
     >
