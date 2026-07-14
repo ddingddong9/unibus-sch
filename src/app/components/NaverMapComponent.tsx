@@ -15,7 +15,7 @@ interface NaverMapProps {
   focusLocation?: { lat: number; lng: number; zoom?: number; key?: number } | null;
   fitBoundsKey?: number;
   autoFitBounds?: boolean;
-  fitBoundsOptions?: { top: number; right: number; bottom: number; left: number; maxZoom?: number };
+  fitBoundsOptions?: { top: number; right: number; bottom: number; left: number; maxZoom?: number; zoomOffset?: number };
   routePath?: [number, number][]; // [[lng, lat], ...] from Naver Directions API
   onBusClick?: (busId: string) => void;
   onLocateRequest?: () => void;
@@ -150,7 +150,15 @@ export default function NaverMapComponent({
     });
     if (pointCount === 0) return;
 
-    mapInstance.current.fitBounds(bounds, fitBoundsOptionsRef.current);
+    const { zoomOffset = 0, ...naverFitOptions } = fitBoundsOptionsRef.current;
+    mapInstance.current.fitBounds(bounds, naverFitOptions);
+    if (zoomOffset !== 0) {
+      const currentZoom = mapInstance.current.getZoom();
+      const nextZoom = currentZoom + zoomOffset;
+      mapInstance.current.setZoom(
+        naverFitOptions.maxZoom == null ? nextZoom : Math.min(naverFitOptions.maxZoom, nextZoom),
+      );
+    }
   }, []);
 
   const requestFitMapToContent = useCallback(() => {

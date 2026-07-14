@@ -26,7 +26,8 @@ const CAMPUS_FIT_BOUNDS_OPTIONS = {
   right: 44,
   bottom: 344,
   left: 44,
-  maxZoom: 16,
+  maxZoom: 17,
+  zoomOffset: 1,
 };
 
 interface BusMarker {

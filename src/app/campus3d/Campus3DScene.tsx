@@ -669,8 +669,10 @@ function CameraDirector({
     const terrainHeight = getTerrainHeight(target[0], target[1]);
     const subjectHeight = selected?.height ?? focusTarget?.height ?? 0;
     const hasSubject = Boolean(selected || focusTarget);
-    const targetPosition = hasSubject
-      ? new THREE.Vector3(target[0] + 105, terrainHeight + Math.max(subjectHeight + 72, 90), target[1] + 125)
+    const targetPosition = focusTarget && !selected
+      ? new THREE.Vector3(target[0] + 300, terrainHeight + Math.max(subjectHeight + 215, 240), target[1] + 340)
+      : hasSubject
+        ? new THREE.Vector3(target[0] + 105, terrainHeight + Math.max(subjectHeight + 72, 90), target[1] + 125)
       : initialView?.cameraPosition
         ? new THREE.Vector3(
             initialView.cameraPosition[0],

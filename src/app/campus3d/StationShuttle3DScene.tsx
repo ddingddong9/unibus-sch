@@ -300,13 +300,44 @@ function ShuttleBusModel({ bus, track, followed, controls, onFollow }: {
   );
 }
 
-function StationCamera({ controls, initialView, resetVersion }: {
+function StationCamera({ controls, initialView, focusLatitude, focusLongitude, resetVersion }: {
   controls: React.RefObject<OrbitControlsImpl | null>;
   initialView: CampusInitialView | null;
+  focusLatitude?: number;
+  focusLongitude?: number;
   resetVersion: number;
 }) {
   const camera = useThree((state) => state.camera);
   useEffect(() => {
+    if (focusLatitude != null && focusLongitude != null) {
+      const [x, z] = projectCoordinate(focusLatitude, focusLongitude, stationCorridorData.origin);
+      const terrain = getStationTerrainHeight(x, z);
+      const targetPosition = new THREE.Vector3(x + 300, terrain + 240, z + 340);
+      const targetLookAt = new THREE.Vector3(x, terrain + 4, z);
+      const startPosition = camera.position.clone();
+      const startTarget = controls.current?.target.clone() ?? new THREE.Vector3();
+      const animatedTarget = new THREE.Vector3();
+      const startedAt = performance.now();
+      let frame = 0;
+
+      const animate = (now: number) => {
+        const rawProgress = Math.min((now - startedAt) / 780, 1);
+        const progress = 1 - (1 - rawProgress) ** 3;
+        camera.position.lerpVectors(startPosition, targetPosition, progress);
+        animatedTarget.lerpVectors(startTarget, targetLookAt, progress);
+        if (controls.current) {
+          controls.current.target.copy(animatedTarget);
+          controls.current.update();
+        } else {
+          camera.lookAt(animatedTarget);
+        }
+        if (rawProgress < 1) frame = requestAnimationFrame(animate);
+      };
+
+      frame = requestAnimationFrame(animate);
+      return () => cancelAnimationFrame(frame);
+    }
+
     const initialTarget = initialView?.target ?? [0, 0];
     if (initialView?.cameraPosition) {
       const targetTerrain = getStationTerrainHeight(initialTarget[0], initialTarget[1]);
@@ -335,7 +366,7 @@ function StationCamera({ controls, initialView, resetVersion }: {
     camera.lookAt(target[0], terrain, target[1]);
     controls.current?.target.set(target[0], terrain, target[1]);
     controls.current?.update();
-  }, [camera, controls, initialView, resetVersion]);
+  }, [camera, controls, focusLatitude, focusLongitude, initialView, resetVersion]);
   return null;
 }
 
@@ -347,6 +378,7 @@ function StationWorld(props: StationShuttle3DSceneProps) {
     ...stop,
     position: projectCoordinate(stop.latitude, stop.longitude, stationCorridorData.origin),
   })), [props.routeStops]);
+  const focusedStop = props.routeStops.find((stop) => stop.id === props.selectedStopId);
 
   return (
     <>
@@ -376,7 +408,12 @@ function StationWorld(props: StationShuttle3DSceneProps) {
             <meshStandardMaterial color={props.selectedStopId === stop.id ? "#1e3a8a" : "#f59e0b"} />
           </mesh>
           <Html position={[0, 7, 0]} center zIndexRange={[14, 0]}>
-            <button type="button" className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg border py-1.5 pl-1.5 pr-2.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${props.selectedStopId === stop.id ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#0f172a]"}`}>
+            <button
+              type="button"
+              aria-pressed={props.selectedStopId === stop.id}
+              onClick={() => props.onSelectStop(stop)}
+              className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg border py-1.5 pl-1.5 pr-2.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${props.selectedStopId === stop.id ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#0f172a]"}`}
+            >
               <span className="grid h-5 w-5 place-items-center rounded-lg bg-[#1e3a8a] text-[9px] text-white">{index + 1}</span>
               <span className="flex flex-col text-left leading-tight">
                 <span>{stop.name}</span>
@@ -410,7 +447,13 @@ function StationWorld(props: StationShuttle3DSceneProps) {
           TWO: THREE.TOUCH.DOLLY_PAN,
         }}
       />
-      <StationCamera controls={controls} initialView={props.initialView} resetVersion={props.resetVersion} />
+      <StationCamera
+        controls={controls}
+        initialView={props.initialView}
+        focusLatitude={focusedStop?.latitude}
+        focusLongitude={focusedStop?.longitude}
+        resetVersion={props.resetVersion}
+      />
       <Html position={[0, -200, 0]}>
         <span className="sr-only">{stationTerrainData.attribution}</span>
       </Html>

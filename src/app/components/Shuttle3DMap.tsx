@@ -107,19 +107,33 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
     }),
     [buses, stationProjectedRoute],
   );
+  const rearGateStop = stops.find((stop) => /후문|김승우/.test(stop.name));
+  const hyang3Stop = stops.find((stop) => /향3|향설생활관\s*3/.test(stop.name));
+  const mainGateStop = stops.find((stop) => /정문/.test(stop.name));
+  const selectedStop = stops.find((stop) => stop.id === selectedStopId);
+  const rearGateLat = rearGateStop?.position.lat;
+  const rearGateLng = rearGateStop?.position.lng;
+  const hyang3Lat = hyang3Stop?.position.lat;
+  const hyang3Lng = hyang3Stop?.position.lng;
+  const mainGateLat = mainGateStop?.position.lat;
+  const mainGateLng = mainGateStop?.position.lng;
+  const selectedStopLat = selectedStop?.position.lat;
+  const selectedStopLng = selectedStop?.position.lng;
+  const campusStopFocus = useMemo(() => {
+    if (selectedStopLat == null || selectedStopLng == null) return null;
+    const point = projectCoordinate(selectedStopLat, selectedStopLng, campusData.origin);
+    return { x: point[0], z: point[1], height: 0 };
+  }, [selectedStopLat, selectedStopLng]);
   const initialView = useMemo<CampusInitialView | null>(() => {
     if (sceneMode === "campus") {
-      const rearGate = projectedStops.find((stop) => /후문|김승우/.test(stop.name));
-      const hyang3 = projectedStops.find((stop) => /향3|향설생활관\s*3/.test(stop.name));
-      const mainGate = projectedStops.find((stop) => /정문/.test(stop.name));
-      const rearGatePoint = rearGate
-        ? projectCoordinate(rearGate.latitude, rearGate.longitude, campusData.origin)
+      const rearGatePoint = rearGateLat != null && rearGateLng != null
+        ? projectCoordinate(rearGateLat, rearGateLng, campusData.origin)
         : projectCoordinate(36.77276, 126.933816, campusData.origin);
-      const hyang3Point = hyang3
-        ? projectCoordinate(hyang3.latitude, hyang3.longitude, campusData.origin)
+      const hyang3Point = hyang3Lat != null && hyang3Lng != null
+        ? projectCoordinate(hyang3Lat, hyang3Lng, campusData.origin)
         : projectCoordinate(36.768228, 126.935383, campusData.origin);
-      const mainGatePoint = mainGate
-        ? projectCoordinate(mainGate.latitude, mainGate.longitude, campusData.origin)
+      const mainGatePoint = mainGateLat != null && mainGateLng != null
+        ? projectCoordinate(mainGateLat, mainGateLng, campusData.origin)
         : projectCoordinate(36.769014, 126.927978, campusData.origin);
       const framingPoints = [rearGatePoint, hyang3Point, mainGatePoint];
       const xs = framingPoints.map(([x]) => x);
@@ -145,9 +159,8 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
       };
     }
 
-    const lounge = projectedStops.find((stop) => /김승우|후문/.test(stop.name));
-    if (lounge) {
-      const target = projectCoordinate(lounge.latitude, lounge.longitude, campusData.origin);
+    if (rearGateLat != null && rearGateLng != null) {
+      const target = projectCoordinate(rearGateLat, rearGateLng, campusData.origin);
       const eastGate = projectCoordinate(36.77314, 126.93348, campusData.origin);
       const gateSideX = eastGate[0] - target[0];
       const gateSideZ = eastGate[1] - target[1];
@@ -177,7 +190,16 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
       target: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...zs) + Math.max(...zs)) / 2],
       distance: Math.max(680, Math.min(5600, span * (span > 1200 ? 2.6 : 1.12))),
     };
-  }, [projectedRoute, projectedStops, sceneMode]);
+  }, [
+    hyang3Lat,
+    hyang3Lng,
+    mainGateLat,
+    mainGateLng,
+    projectedRoute,
+    rearGateLat,
+    rearGateLng,
+    sceneMode,
+  ]);
   const stationJourneyView = useMemo<CampusInitialView | null>(() => {
     if (stationProjectedRoute.length === 0) return null;
     const xs = stationProjectedRoute.map(([x]) => x);
@@ -230,7 +252,7 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
           autoRotate={false}
           showRoute
           selectedBuildingId={null}
-          focusTarget={null}
+          focusTarget={campusStopFocus}
           routePath={projectedRoute}
           routeStops={projectedStops}
           liveBuses={liveBuses}
