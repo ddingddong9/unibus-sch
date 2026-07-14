@@ -1,4 +1,5 @@
-import { useMemo, useState } from "react";
+import { lazy, Suspense, useMemo, useState } from "react";
+import { MapPin, Route } from "lucide-react";
 import Campus3DScene, {
   campusData,
   type CampusInitialView,
@@ -6,6 +7,9 @@ import Campus3DScene, {
 } from "../campus3d/Campus3DScene";
 import { projectCoordinate } from "../campus3d/campus-geometry";
 import type { CampusStop, Point2D } from "../campus3d/types";
+import { stationCorridorData } from "../campus3d/station-corridor";
+
+const StationShuttle3DScene = lazy(() => import("../campus3d/StationShuttle3DScene"));
 
 interface Shuttle3DMapProps {
   sceneMode: "campus" | "station";
@@ -53,6 +57,7 @@ function projectBusToRoute(point: Point2D, path: Point2D[]) {
 export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSelectStop }: Shuttle3DMapProps) {
   const [followBusId, setFollowBusId] = useState<string | null>(null);
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
+  const [stationView, setStationView] = useState<"campus" | "journey">("journey");
   const projectionOrigin = campusData.origin;
   const projectedRoute = useMemo<Point2D[]>(
     () => routePath.map(([lng, lat]) => projectCoordinate(lat, lng, projectionOrigin)),
@@ -68,6 +73,10 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
     })),
     [stops],
   );
+  const stationProjectedRoute = useMemo<Point2D[]>(
+    () => routePath.map(([lng, lat]) => projectCoordinate(lat, lng, stationCorridorData.origin)),
+    [routePath],
+  );
   const liveBuses = useMemo<CampusLiveBus[]>(
     () => buses.map((bus) => {
       const rawPosition = projectCoordinate(bus.position.lat, bus.position.lng, projectionOrigin);
@@ -82,6 +91,21 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
       };
     }),
     [buses, projectedRoute, projectionOrigin],
+  );
+  const stationLiveBuses = useMemo<CampusLiveBus[]>(
+    () => buses.map((bus) => {
+      const rawPosition = projectCoordinate(bus.position.lat, bus.position.lng, stationCorridorData.origin);
+      const projected = projectBusToRoute(rawPosition, stationProjectedRoute);
+      return {
+        id: bus.id,
+        label: bus.label,
+        position: projected.point,
+        heading: bus.heading,
+        routeProgress: projected.progress,
+        etaLabel: bus.etaLabel,
+      };
+    }),
+    [buses, stationProjectedRoute],
   );
   const initialView = useMemo<CampusInitialView | null>(() => {
     if (sceneMode === "campus") {
@@ -154,6 +178,17 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
       distance: Math.max(680, Math.min(5600, span * (span > 1200 ? 2.6 : 1.12))),
     };
   }, [projectedRoute, projectedStops, sceneMode]);
+  const stationJourneyView = useMemo<CampusInitialView | null>(() => {
+    if (stationProjectedRoute.length === 0) return null;
+    const xs = stationProjectedRoute.map(([x]) => x);
+    const zs = stationProjectedRoute.map(([, z]) => z);
+    const width = Math.max(...xs) - Math.min(...xs);
+    const depth = Math.max(...zs) - Math.min(...zs);
+    return {
+      target: [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...zs) + Math.max(...zs)) / 2],
+      distance: Math.max(1900, Math.max(width, depth) * 1.55),
+    };
+  }, [stationProjectedRoute]);
 
   if (projectedRoute.length < 2) {
     return (
@@ -173,28 +208,68 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
   };
 
   return (
-    <Campus3DScene
-      isNight={false}
-      isRunning
-      autoRotate={false}
-      showRoute
-      selectedBuildingId={null}
-      focusTarget={null}
-      routePath={projectedRoute}
-      routeStops={projectedStops}
-      liveBuses={liveBuses}
-      fallbackBusLabels={sceneMode === "station" ? ["신창역 셔틀"] : undefined}
-      initialView={initialView}
-      followBusId={followBusId}
-      simulationSpeed={1}
-      weather="clear"
-      renderQuality="balanced"
-      isTouring={false}
-      onFollowBus={setFollowBusId}
-      selectedStopId={selectedStopId}
-      onSelectStop={handleSelectStop}
-      resetVersion={0}
-      onSelectBuilding={() => undefined}
-    />
+    <div className="relative h-full w-full">
+      {sceneMode === "station" && stationView === "journey" ? (
+        <Suspense fallback={<div className="grid h-full place-items-center bg-[#e8edf1] text-xs font-bold text-[#1e3a8a]">신창역 노선을 준비 중입니다</div>}>
+          <StationShuttle3DScene
+            routePath={stationProjectedRoute}
+            routeStops={projectedStops}
+            liveBuses={stationLiveBuses}
+            initialView={stationJourneyView}
+            followBusId={followBusId}
+            selectedStopId={selectedStopId}
+            onFollowBus={setFollowBusId}
+            onSelectStop={handleSelectStop}
+            resetVersion={0}
+          />
+        </Suspense>
+      ) : (
+        <Campus3DScene
+          isNight={false}
+          isRunning
+          autoRotate={false}
+          showRoute
+          selectedBuildingId={null}
+          focusTarget={null}
+          routePath={projectedRoute}
+          routeStops={projectedStops}
+          liveBuses={liveBuses}
+          initialView={initialView}
+          followBusId={followBusId}
+          simulationSpeed={1}
+          weather="clear"
+          renderQuality="balanced"
+          isTouring={false}
+          onFollowBus={setFollowBusId}
+          selectedStopId={selectedStopId}
+          onSelectStop={handleSelectStop}
+          resetVersion={0}
+          onSelectBuilding={() => undefined}
+        />
+      )}
+
+      {sceneMode === "station" ? (
+        <div className="absolute left-4 top-[136px] z-10 grid grid-cols-2 rounded-lg border border-white/85 bg-white/95 p-1 shadow-[0_8px_22px_rgba(15,23,42,0.14)] backdrop-blur-xl">
+          <button
+            type="button"
+            aria-pressed={stationView === "campus"}
+            onClick={() => { setStationView("campus"); setFollowBusId(null); }}
+            className={`flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[10px] font-extrabold ${stationView === "campus" ? "bg-[#1e3a8a] text-white" : "text-[#64748b]"}`}
+          >
+            <MapPin className="h-3.5 w-3.5" aria-hidden="true" />
+            후문
+          </button>
+          <button
+            type="button"
+            aria-pressed={stationView === "journey"}
+            onClick={() => { setStationView("journey"); setFollowBusId(null); }}
+            className={`flex h-8 items-center gap-1.5 rounded-md px-2.5 text-[10px] font-extrabold ${stationView === "journey" ? "bg-[#1e3a8a] text-white" : "text-[#64748b]"}`}
+          >
+            <Route className="h-3.5 w-3.5" aria-hidden="true" />
+            신창역 노선
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }

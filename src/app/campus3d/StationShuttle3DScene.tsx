@@ -288,9 +288,12 @@ function ShuttleBusModel({ bus, track, followed, controls, onFollow }: {
         </mesh>
       )))}
       <Html position={[0, 6.6, 0]} center distanceFactor={330} zIndexRange={[16, 0]}>
-        <button type="button" className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
+        <button type="button" className={`flex items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-left text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
           <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
-          {bus.label}
+          <span className="flex flex-col leading-tight">
+            <span>{bus.label}</span>
+            {bus.etaLabel ? <span className={`mt-0.5 text-[9px] font-bold ${followed ? "text-white/75" : "text-[#64748b]"}`}>{bus.etaLabel} 도착 예정</span> : null}
+          </span>
         </button>
       </Html>
     </group>
@@ -375,7 +378,10 @@ function StationWorld(props: StationShuttle3DSceneProps) {
           <Html position={[0, 7, 0]} center zIndexRange={[14, 0]}>
             <button type="button" className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg border py-1.5 pl-1.5 pr-2.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${props.selectedStopId === stop.id ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#0f172a]"}`}>
               <span className="grid h-5 w-5 place-items-center rounded-lg bg-[#1e3a8a] text-[9px] text-white">{index + 1}</span>
-              {stop.name}
+              <span className="flex flex-col text-left leading-tight">
+                <span>{stop.name}</span>
+                {stop.departureLabel ? <span className={`mt-0.5 text-[9px] font-bold ${props.selectedStopId === stop.id ? "text-white/75" : "text-[#64748b]"}`}>{stop.departureLabel} 예정</span> : null}
+              </span>
             </button>
           </Html>
         </group>
