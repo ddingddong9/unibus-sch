@@ -294,13 +294,16 @@ function ShuttleBusModel({ bus, track, followed, controls, onFollow }: {
         </mesh>
       )))}
       <Html position={[0, 6.6, 0]} center zIndexRange={[16, 0]}>
-        <button type="button" className={`flex items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-left text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
-          <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
-          <span className="flex flex-col leading-tight">
-            <span>{bus.label}</span>
-            {bus.etaLabel ? <span className={`mt-0.5 text-[9px] font-bold ${followed ? "text-white/75" : "text-[#64748b]"}`}>{bus.etaLabel} 도착 예정</span> : null}
-          </span>
-        </button>
+        <div className="flex -translate-y-8 flex-col items-center">
+          <button type="button" className={`flex items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-left text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
+            <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
+            <span className="flex flex-col leading-tight">
+              <span>{bus.label}</span>
+              {bus.etaLabel ? <span className={`mt-0.5 text-[9px] font-bold ${followed ? "text-white/75" : "text-[#64748b]"}`}>{bus.etaLabel} 도착 예정</span> : null}
+            </span>
+          </button>
+          <span className="pointer-events-none h-8 w-px bg-[#1e3a8a]/45" aria-hidden="true" />
+        </div>
       </Html>
     </group>
   );

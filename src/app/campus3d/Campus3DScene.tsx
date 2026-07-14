@@ -570,10 +570,13 @@ function ShuttleBus({
         </mesh>
       )))}
       <Html position={[0, 6.6, 0]} center zIndexRange={[16, 0]}>
-        <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : label); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
-          <span className={`h-2 w-2 rounded-full ring-2 ring-white ${running ? "animate-pulse bg-[#22c55e]" : "bg-[#94a3b8]"}`} />
-          {label}
-        </button>
+        <div className="flex -translate-y-8 flex-col items-center">
+          <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : label); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
+            <span className={`h-2 w-2 rounded-full ring-2 ring-white ${running ? "animate-pulse bg-[#22c55e]" : "bg-[#94a3b8]"}`} />
+            {label}
+          </button>
+          <span className="pointer-events-none h-8 w-px bg-[#1e3a8a]/45" aria-hidden="true" />
+        </div>
       </Html>
     </group>
   );
@@ -651,13 +654,16 @@ const LiveShuttleBus = memo(function LiveShuttleBus({ bus, track, followed, cont
         </mesh>
       )))}
       <Html position={[0, 6.6, 0]} center zIndexRange={[16, 0]}>
-        <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }} className={`flex items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-left text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
-          <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
-          <span className="flex flex-col leading-tight">
-            <span>{bus.label}</span>
-            {bus.etaLabel ? <span className={`mt-0.5 text-[10px] font-bold sm:text-[9px] ${followed ? "text-white/75" : "text-[#64748b]"}`}>{bus.etaLabel} 도착 예정</span> : null}
-          </span>
-        </button>
+        <div className="flex -translate-y-8 flex-col items-center">
+          <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }} className={`flex items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-left text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
+            <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
+            <span className="flex flex-col leading-tight">
+              <span>{bus.label}</span>
+              {bus.etaLabel ? <span className={`mt-0.5 text-[10px] font-bold sm:text-[9px] ${followed ? "text-white/75" : "text-[#64748b]"}`}>{bus.etaLabel} 도착 예정</span> : null}
+            </span>
+          </button>
+          <span className="pointer-events-none h-8 w-px bg-[#1e3a8a]/45" aria-hidden="true" />
+        </div>
       </Html>
     </group>
   );
