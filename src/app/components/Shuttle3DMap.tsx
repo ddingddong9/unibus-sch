@@ -10,12 +10,13 @@ import type { CampusStop, Point2D } from "../campus3d/types";
 interface Shuttle3DMapProps {
   sceneMode: "campus" | "station";
   routePath: [number, number][];
-  stops: Array<{ id: string; name: string; position: { lat: number; lng: number } }>;
+  stops: Array<{ id: string; name: string; position: { lat: number; lng: number }; departureLabel?: string }>;
   buses: Array<{
     id: string;
     label: string;
     position: { lat: number; lng: number };
     heading?: number;
+    etaLabel?: string;
   }>;
   onSelectStop?: (stopId: string) => void;
 }
@@ -63,6 +64,7 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
       name: stop.name,
       latitude: stop.position.lat,
       longitude: stop.position.lng,
+      departureLabel: stop.departureLabel,
     })),
     [stops],
   );
@@ -76,6 +78,7 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
         position: projected.point,
         heading: bus.heading,
         routeProgress: projected.progress,
+        etaLabel: bus.etaLabel,
       };
     }),
     [buses, projectedRoute, projectionOrigin],
@@ -179,7 +182,7 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
       focusTarget={null}
       routePath={projectedRoute}
       routeStops={projectedStops}
-      liveBuses={liveBuses.length > 0 ? liveBuses : undefined}
+      liveBuses={sceneMode === "campus" ? liveBuses : liveBuses.length > 0 ? liveBuses : undefined}
       fallbackBusLabels={sceneMode === "station" ? ["신창역 셔틀"] : undefined}
       initialView={initialView}
       followBusId={followBusId}

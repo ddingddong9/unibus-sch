@@ -6,6 +6,7 @@ import NaverMapComponent from "../components/NaverMapComponent";
 import { api } from "../services/api";
 import { supabase } from "../services/supabase";
 import { estimateStopArrivals } from "../utils/shuttleEta";
+import { simulateCampusLoop } from "../utils/campusLoopSimulation";
 import { formatServiceTime, getNextShuttleService, getServiceRuleSummary } from "../utils/shuttleSchedule";
 import { getStationShuttleMap } from "../utils/stationShuttleMap";
 
@@ -37,6 +38,8 @@ interface BusMarker {
   timestamp: string;
   servicePhase?: string | null;
   plannedDepartureAt?: string | null;
+  etaLabel?: string;
+  isSimulation?: boolean;
 }
 
 interface FocusLocation {
@@ -145,6 +148,7 @@ export default function CampusShuttleWrapper() {
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [clockTick, setClockTick] = useState(() => Date.now());
+  const [simulationTick, setSimulationTick] = useState(() => Date.now());
   const isDragging = useRef(false);
   const dragStartY = useRef(0);
   const currentDragY = useRef(0);
@@ -173,11 +177,22 @@ export default function CampusShuttleWrapper() {
     () => new Set(stationRoutes.map((route) => route.id)),
     [stationRoutes]
   );
+  const campusLoopRoute = useMemo(
+    () => campusRoutes.find((route) => route.shuttleVariant === "campus_loop") || null,
+    [campusRoutes],
+  );
 
   useEffect(() => {
     const timer = window.setInterval(() => setClockTick(Date.now()), 15_000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!pageVisible || mode !== "campus") return;
+    setSimulationTick(Date.now());
+    const timer = window.setInterval(() => setSimulationTick(Date.now()), 500);
+    return () => window.clearInterval(timer);
+  }, [mode, pageVisible]);
 
   useEffect(() => {
     const fetchRoutes = async () => {
@@ -360,32 +375,59 @@ export default function CampusShuttleWrapper() {
     [campusStops, mode, stationStops],
   );
   const selectedStationDirection = selectedStationRoute ? routeDirection(selectedStationRoute) : "to-station";
+  const campusSimulation = useMemo(
+    () => mode === "campus"
+      ? simulateCampusLoop(
+          routePath,
+          campusStops.map((stop) => ({
+            id: stop.id,
+            name: stop.nameKo,
+            lat: stop.lat,
+            lng: stop.lng,
+            order: stop.order,
+          })),
+          simulationTick,
+          campusLoopRoute?.intervalMinutes ?? 10,
+        )
+      : { buses: [], stopDepartures: new Map<string, string>() },
+    [campusLoopRoute?.intervalMinutes, campusStops, mode, routePath, simulationTick],
+  );
+  const usingCampusSimulation = mode === "campus" && visibleBuses.length === 0;
+  const effectiveBuses = useMemo<BusMarker[]>(
+    () => usingCampusSimulation ? campusSimulation.buses : visibleBuses,
+    [campusSimulation.buses, usingCampusSimulation, visibleBuses],
+  );
   const mapStops = useMemo(() => activeStops.map((stop) => ({
     id: stop.id,
     name: stop.nameKo,
     position: { lat: stop.lat, lng: stop.lng },
-  })), [activeStops]);
+    departureLabel: usingCampusSimulation ? campusSimulation.stopDepartures.get(stop.id) : undefined,
+  })), [activeStops, campusSimulation.stopDepartures, usingCampusSimulation]);
   const mapCenter = activeStops[0] ? { lat: activeStops[0].lat, lng: activeStops[0].lng } : CAMPUS_CENTER;
   const arrivalEstimates = useMemo(
     () => estimateStopArrivals(
       routePath,
       activeStops.map((stop) => ({ id: stop.id, order: stop.order, lat: stop.lat, lng: stop.lng })),
-      visibleBuses,
-      { loop: mode === "campus", fallbackSpeedMps: mode === "campus" ? 6.2 : 9.5, nowMs: clockTick },
+      effectiveBuses,
+      {
+        loop: mode === "campus",
+        fallbackSpeedMps: mode === "campus" ? 6.2 : 9.5,
+        nowMs: usingCampusSimulation ? simulationTick : clockTick,
+      },
     ),
-    [activeStops, mode, routePath, visibleBuses, clockTick],
+    [activeStops, clockTick, effectiveBuses, mode, routePath, simulationTick, usingCampusSimulation],
   );
   const displayBuses = useMemo(() => {
-    if (mode !== "station") return visibleBuses;
+    if (mode !== "station") return effectiveBuses;
     const destination = activeStops[activeStops.length - 1];
     const destinationEstimate = destination ? arrivalEstimates.get(destination.id) : null;
-    return visibleBuses.map((bus) => ({
+    return effectiveBuses.map((bus) => ({
       ...bus,
       label: destinationEstimate?.busId === bus.id && destinationEstimate.minutes
         ? `${destination?.nameKo === "신창역" ? "신창역" : "라운지"} 약 ${destinationEstimate.minutes}분`
         : bus.label,
     }));
-  }, [activeStops, arrivalEstimates, mode, visibleBuses]);
+  }, [activeStops, arrivalEstimates, effectiveBuses, mode]);
   const stopsWithArrival = useMemo(() => activeStops.map((stop) => ({
     ...stop,
     estimate: arrivalEstimates.get(stop.id) ?? null,
@@ -399,13 +441,12 @@ export default function CampusShuttleWrapper() {
   const stationDeparture = selectedStationService
     ? formatServiceTime(selectedStationService.departureAt, selectedStationService.dayOffset) : null;
   const stationCountdown = formatDepartureCountdown(selectedStationService?.departureAt, clockTick);
-  const campusLoopRoute = campusRoutes.find((route) => route.shuttleVariant === "campus_loop") || null;
 
   const handleBusClick = useCallback((busId: string) => {
-    const bus = visibleBuses.find((item) => item.id === busId);
+    const bus = displayBuses.find((item) => item.id === busId);
     if (!bus) return;
     setFocusLocation({ lat: bus.position.lat, lng: bus.position.lng, zoom: 18, key: Date.now() });
-  }, [visibleBuses]);
+  }, [displayBuses]);
 
   const handleDragStart = (e: React.PointerEvent) => {
     isDragging.current = true;
@@ -538,7 +579,7 @@ export default function CampusShuttleWrapper() {
             onPointerUp={handleDragEnd}
             onPointerCancel={handleDragEnd}
           >
-            <div className="h-1 w-10 shrink-0 rounded-full bg-[#cbd5e1]" />
+            <div className="h-1 w-10 shrink-0 rounded-full bg-[rgba(30,58,138,0.24)]" />
           </div>
 
           {compact3d ? (
@@ -547,18 +588,18 @@ export default function CampusShuttleWrapper() {
               aria-label="상세 안내 펼치기"
               aria-expanded={false}
               onClick={() => setSheetExpanded(true)}
-              className="mx-4 flex h-12 w-[calc(100%-2rem)] shrink-0 items-center gap-3 rounded-lg border border-[#dbe3ef] bg-[#f8fafc] px-3 text-left shadow-sm"
+              className="mx-4 flex h-12 w-[calc(100%-2rem)] shrink-0 items-center gap-3 rounded-lg border border-[rgba(30,58,138,0.16)] bg-white px-3 text-left shadow-sm"
             >
-              <span className={`grid size-8 shrink-0 place-items-center rounded-lg ${mode === "station" ? "bg-[#43c7e8] text-[#102a66]" : "bg-[#1e3a8a] text-white"}`}>
+              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#1e3a8a] text-white">
                 {mode === "station" ? <MapPin className="size-4" /> : <Bus className="size-4" />}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px] font-extrabold text-[#0f172a]">
+                <span className="block truncate text-[12px] font-extrabold text-[#1e3a8a]">
                   {mode === "station"
                     ? `${selectedStationDirection === "to-station" ? "김승우 라운지" : "신창역"} ${stationCountdown}`
                     : "학내순환 운행 중"}
                 </span>
-                <span className="block truncate text-[10px] font-semibold text-[#64748b]">
+                <span className="block truncate text-[10px] font-semibold text-[rgba(30,58,138,0.65)]">
                   {mode === "station"
                     ? `${selectedStationDirection === "to-station" ? "열차 출발" : "열차 도착"} ${selectedStationEventTime || "--:--"}`
                     : campusLoopRoute ? getServiceRuleSummary(campusLoopRoute) : "10분 간격 출발"}
@@ -570,10 +611,10 @@ export default function CampusShuttleWrapper() {
             <div className="relative flex w-full flex-col items-start gap-3 px-[22px] pb-[104px]">
               <div className="content-stretch flex items-center justify-between relative shrink-0 w-full">
                 <div>
-                  <p className="font-['Public_Sans'] font-extrabold text-[#0f172a] text-[20px] tracking-[-0.4px] leading-[28px]">
+                  <p className="font-['Public_Sans'] font-extrabold text-[#1e3a8a] text-[20px] tracking-[-0.4px] leading-[28px]">
                     {mode === "station" ? "신창역 셔틀" : "학내순환"}
                   </p>
-                  <p className="font-['Public_Sans'] text-[#64748b] text-[12px] leading-[18px]">
+                  <p className="font-['Public_Sans'] text-[rgba(30,58,138,0.65)] text-[12px] leading-[18px]">
                     {mode === "station"
                       ? "김승우 라운지와 신창역을 오가는 셔틀입니다"
                       : campusLoopRoute ? getServiceRuleSummary(campusLoopRoute) : "교내 정류장을 순환하는 셔틀입니다"}
@@ -592,7 +633,7 @@ export default function CampusShuttleWrapper() {
                     aria-label={sheetExpanded ? "안내 접기" : "상세 안내 펼치기"}
                     aria-expanded={sheetExpanded}
                     onClick={() => setSheetExpanded((expanded) => !expanded)}
-                    className="grid size-8 place-items-center rounded-lg bg-[#eef2ff] text-[#1e3a8a] transition-colors hover:bg-[#e0e7ff]"
+                    className="grid size-8 place-items-center rounded-lg border border-[rgba(30,58,138,0.18)] bg-white text-[#1e3a8a] transition-colors hover:bg-[rgba(30,58,138,0.05)]"
                   >
                     {sheetExpanded ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
                   </button>
@@ -600,7 +641,7 @@ export default function CampusShuttleWrapper() {
               </div>
 
               {locationError && (
-                <div className="w-full rounded-[14px] border border-red-100 bg-red-50 px-4 py-3 text-[12px] font-semibold text-red-600">
+                <div className="w-full rounded-[14px] bg-[#1e3a8a] px-4 py-3 text-[12px] font-semibold text-white">
                   {locationError}
                 </div>
               )}
@@ -609,17 +650,17 @@ export default function CampusShuttleWrapper() {
                 <div className="w-full space-y-3">
                   <div className="overflow-hidden rounded-lg bg-[#1e3a8a] text-white shadow-[0_12px_30px_rgba(30,58,138,0.2)]">
                     <div className="flex items-start gap-3 p-4">
-                      <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#43c7e8] text-[#102a66]">
+                      <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-white text-[#1e3a8a]">
                         {selectedStationDirection === "to-station" ? <MapPin className="h-5 w-5" /> : <Train className="h-5 w-5" />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="text-[11px] font-bold text-[#b9d5ff]">
+                        <p className="text-[11px] font-bold text-white/70">
                           {selectedStationDirection === "to-station" ? "김승우 라운지 출발" : "신창역 출발"}
                         </p>
                         <p className="mt-0.5 text-[24px] font-black leading-8">{stationCountdown}</p>
                       </div>
                       <div className="shrink-0 text-right">
-                        <p className="text-[10px] font-bold text-[#b9d5ff]">
+                        <p className="text-[10px] font-bold text-white/70">
                           {selectedStationDirection === "to-station" ? "열차 출발" : "열차 도착"}
                         </p>
                         <p className="mt-1 text-[17px] font-black">
@@ -627,18 +668,18 @@ export default function CampusShuttleWrapper() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex items-center justify-between border-t border-white/15 bg-[#173477] px-4 py-2.5 text-[11px]">
+                    <div className="flex items-center justify-between border-t border-white/20 bg-[#1e3a8a] px-4 py-2.5 text-[11px]">
                       <span className="truncate pr-3 font-bold text-white/90">
                         {selectedStationRoute ? formatStationRouteName(selectedStationRoute.name) : "신창역 셔틀 노선을 추가해 주세요"}
                       </span>
-                      <span className="shrink-0 font-extrabold text-[#80e1f5]">
+                      <span className="shrink-0 font-extrabold text-white">
                         {stationDeparture || "--:--"} 출발
                       </span>
                     </div>
                   </div>
 
                   {sheetExpanded && selectedStationRoute && (
-                    <p className="px-1 text-[11px] font-semibold text-[#64748b]">
+                    <p className="px-1 text-[11px] font-semibold text-[rgba(30,58,138,0.68)]">
                       {selectedStationDirection === "to-station"
                         ? `열차 출발 ${stationOffset}분 전에 김승우 라운지에서 출발합니다`
                         : `열차 도착 ${stationWait}분 후 출발 · ${continuesCampusLoop(selectedStationRoute) ? "후문 도착 후 학내순환 1회" : "김승우 라운지 종착"}`}
@@ -654,7 +695,7 @@ export default function CampusShuttleWrapper() {
                           className={`shrink-0 rounded-full px-4 py-2 font-['Public_Sans'] text-[12px] font-bold transition-all ${
                             selectedStationRoute?.id === route.id
                               ? "bg-[#1e3a8a] text-white"
-                              : "bg-[#f1f5f9] text-[#64748b]"
+                              : "border border-[rgba(30,58,138,0.18)] bg-white text-[#1e3a8a]"
                           }`}
                         >
                           {formatStationRouteName(route.name)}
@@ -669,19 +710,19 @@ export default function CampusShuttleWrapper() {
                 <button
                   type="button"
                   onClick={() => setSheetExpanded(true)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] p-3 text-left transition-colors hover:bg-[#f1f5f9]"
+                  className="flex w-full items-center gap-3 rounded-lg border border-[rgba(30,58,138,0.16)] bg-white p-3 text-left transition-colors hover:bg-[rgba(30,58,138,0.04)]"
                 >
                   <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#1e3a8a] text-white">
                     <Bus className="size-5" />
                   </span>
                   <span className="min-w-0 flex-1">
-                    <span className="block text-[14px] font-extrabold text-[#0f172a]">학내순환 운행 안내</span>
-                    <span className="block truncate text-[11px] font-semibold text-[#64748b]">
+                    <span className="block text-[14px] font-extrabold text-[#1e3a8a]">학내순환 운행 안내</span>
+                    <span className="block truncate text-[11px] font-semibold text-[rgba(30,58,138,0.65)]">
                       {campusLoopRoute ? getServiceRuleSummary(campusLoopRoute) : "10분 간격 출발"}
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
-                    <span className="block text-[10px] font-bold text-[#94a3b8]">정류장</span>
+                    <span className="block text-[10px] font-bold text-[rgba(30,58,138,0.5)]">정류장</span>
                     <span className="block text-[16px] font-black text-[#1e3a8a]">{activeStops.length}개</span>
                   </span>
                 </button>
@@ -689,12 +730,12 @@ export default function CampusShuttleWrapper() {
 
               {sheetExpanded && <div className="relative flex w-full shrink-0 flex-col items-start gap-3 scrollbar-hide">
                 {stopsWithArrival.length === 0 ? (
-                  <div className="w-full rounded-[18px] border border-dashed border-[#cbd5e1] p-6 text-center">
-                    <MapPin className="mx-auto mb-2 h-6 w-6 text-[#94a3b8]" />
-                    <p className="font-['Public_Sans'] text-[13px] font-semibold text-[#64748b]">
+                  <div className="w-full rounded-[18px] border border-dashed border-[rgba(30,58,138,0.24)] p-6 text-center">
+                    <MapPin className="mx-auto mb-2 h-6 w-6 text-[rgba(30,58,138,0.5)]" />
+                    <p className="font-['Public_Sans'] text-[13px] font-semibold text-[rgba(30,58,138,0.7)]">
                       표시할 정류장이 없습니다
                     </p>
-                    <p className="mt-1 font-['Public_Sans'] text-[12px] text-[#94a3b8]">
+                    <p className="mt-1 font-['Public_Sans'] text-[12px] text-[rgba(30,58,138,0.5)]">
                       관리자 노선 관리에서 정류장 위치를 저장하면 여기에 표시됩니다.
                     </p>
                   </div>
@@ -703,30 +744,30 @@ export default function CampusShuttleWrapper() {
                     <button
                       key={stop.id}
                       onClick={() => setFocusLocation({ lat: stop.lat, lng: stop.lng, zoom: 18, key: Date.now() })}
-                      className={`bg-[rgba(248,250,252,0.5)] relative rounded-[16px] shrink-0 w-full border border-[#f1f5f9] text-left transition-all active:scale-[0.99] ${
+                      className={`relative w-full shrink-0 rounded-[16px] border border-[rgba(30,58,138,0.1)] bg-white text-left transition-all active:scale-[0.99] ${
                         !stop.estimate?.minutes ? "opacity-80" : ""
                       }`}
                     >
                       <div className="flex items-center gap-[14px] p-[16px] w-full">
                         <div
                           className={`${
-                            stop.estimate?.state === "arriving" ? "bg-[#1e3a8a]" : "bg-[#e2e8f0]"
+                            stop.estimate?.state === "arriving" ? "bg-[#1e3a8a]" : "border border-[rgba(30,58,138,0.18)] bg-white"
                           } relative rounded-[12px] shrink-0 size-[46px] flex items-center justify-center ${
                             stop.estimate?.state === "arriving" ? "shadow-[0px_4px_6px_-1px_rgba(30,58,138,0.2)]" : ""
                           }`}
                         >
                           {mode === "station" ? (
-                            <RouteIcon className={`w-5 h-5 ${stop.estimate?.state === "arriving" ? "text-white" : "text-[#64748b]"}`} />
+                            <RouteIcon className={`w-5 h-5 ${stop.estimate?.state === "arriving" ? "text-white" : "text-[#1e3a8a]"}`} />
                           ) : (
-                            <Bus className={`w-5 h-5 ${stop.estimate?.state === "arriving" ? "text-white" : "text-[#64748b]"}`} />
+                            <Bus className={`w-5 h-5 ${stop.estimate?.state === "arriving" ? "text-white" : "text-[#1e3a8a]"}`} />
                           )}
                         </div>
 
                         <div className="flex-1 min-w-0">
-                          <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[16px] leading-[24px] truncate">
+                          <p className="font-['Public_Sans'] font-bold text-[#1e3a8a] text-[16px] leading-[24px] truncate">
                             {t(stop.nameKo, stop.nameEn)}
                           </p>
-                          <p className="font-['Public_Sans'] font-medium text-[#64748b] text-[11px] leading-[16.5px]">
+                          <p className="font-['Public_Sans'] font-medium text-[rgba(30,58,138,0.62)] text-[11px] leading-[16.5px]">
                             {stop.estimate?.busLabel
                               ? `${stop.estimate.busLabel} · ${stop.order}번째 정류장`
                               : `${mode === "station" ? "신창역 셔틀" : "학내순환"} · ${stop.order}번째 정류장`}
@@ -735,14 +776,14 @@ export default function CampusShuttleWrapper() {
 
                         <div className="flex flex-col items-end">
                           <div className={`font-['Public_Sans'] font-bold text-[10px] tracking-[0.25px] uppercase ${
-                            stop.estimate?.state === "arriving" ? "text-[#059669]" : "text-[#94a3b8]"
+                            stop.estimate?.state === "arriving" ? "text-[#1e3a8a]" : "text-[rgba(30,58,138,0.48)]"
                           }`}>
                             {stop.estimate?.state === "arriving"
                               ? "곧 도착"
                               : stop.estimate?.state === "stale" ? "위치 지연" : "예상 시간"}
                           </div>
                           <div className={`font-['Public_Sans'] font-extrabold text-[16px] leading-[24px] ${
-                            !stop.estimate?.minutes ? "text-[#94a3b8]" : "text-[#0f172a]"
+                            !stop.estimate?.minutes ? "text-[rgba(30,58,138,0.48)]" : "text-[#1e3a8a]"
                           }`}>
                             {stop.estimate?.state === "arriving" && stop.estimate.minutes === 1
                               ? "잠시 후"

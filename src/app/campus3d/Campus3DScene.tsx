@@ -25,6 +25,7 @@ export interface CampusLiveBus {
   position: Point2D;
   heading?: number;
   routeProgress?: number;
+  etaLabel?: string;
 }
 export interface CampusInitialView {
   target: Point2D;
@@ -631,9 +632,12 @@ const LiveShuttleBus = memo(function LiveShuttleBus({ bus, track, followed, cont
         </mesh>
       )))}
       <Html position={[0, 6.6, 0]} center distanceFactor={330} zIndexRange={[16, 0]}>
-        <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
+        <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }} className={`flex items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-left text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
           <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
-          {bus.label}
+          <span className="flex flex-col leading-tight">
+            <span>{bus.label}</span>
+            {bus.etaLabel ? <span className={`mt-0.5 text-[10px] font-bold sm:text-[9px] ${followed ? "text-white/75" : "text-[#64748b]"}`}>{bus.etaLabel} 도착 예정</span> : null}
+          </span>
         </button>
       </Html>
     </group>
@@ -851,7 +855,10 @@ function CampusWorld(props: Campus3DSceneProps) {
               <Html position={[0, 7, 0]} center zIndexRange={[12, 0]}>
                 <button type="button" onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl border py-2 pl-2 pr-3 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:py-1.5 sm:pl-1.5 sm:pr-2.5 sm:text-[10px] ${props.selectedStopId === stop.id ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#0f172a]"}`}>
                   <span className="grid h-5 w-5 place-items-center rounded-lg bg-[#1e3a8a] text-[9px] font-extrabold text-white">{index + 1}</span>
-                  {stop.name}
+                  <span className="flex flex-col text-left leading-tight">
+                    <span>{stop.name}</span>
+                    {stop.departureLabel ? <span className={`mt-0.5 text-[10px] font-bold sm:text-[9px] ${props.selectedStopId === stop.id ? "text-white/75" : "text-[#64748b]"}`}>{stop.departureLabel} 예정</span> : null}
+                  </span>
                 </button>
               </Html>
             </group>
@@ -880,14 +887,25 @@ function CampusWorld(props: Campus3DSceneProps) {
         makeDefault
         enableDamping
         dampingFactor={0.075}
-        rotateSpeed={-0.7}
+        rotateSpeed={0.58}
+        panSpeed={0.78}
+        zoomSpeed={0.85}
         autoRotate={props.autoRotate}
         autoRotateSpeed={0.45}
         minDistance={70}
         maxDistance={6000}
         minPolarAngle={0.18}
         maxPolarAngle={Math.PI / 2.08}
-        screenSpacePanning={false}
+        screenSpacePanning
+        mouseButtons={{
+          LEFT: THREE.MOUSE.ROTATE,
+          MIDDLE: THREE.MOUSE.DOLLY,
+          RIGHT: THREE.MOUSE.PAN,
+        }}
+        touches={{
+          ONE: THREE.TOUCH.ROTATE,
+          TWO: THREE.TOUCH.DOLLY_PAN,
+        }}
         enabled={!props.isTouring}
       />
       <CameraDirector controls={controls} selectedBuildingId={props.selectedBuildingId} focusTarget={props.focusTarget} initialView={props.initialView} resetVersion={props.resetVersion} />

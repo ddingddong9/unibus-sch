@@ -8,6 +8,7 @@ interface NaverMapProps {
     position: { lat: number; lng: number };
     heading?: number; // [변경] heading 추가
     label: string;
+    etaLabel?: string;
   }>;
   stops?: Array<{ id: string; name: string; position: { lat: number; lng: number }; type?: 'start' | 'end' | 'middle' }>;
   userLocation?: { lat: number; lng: number } | null;
@@ -42,10 +43,11 @@ const escapeHtml = (value: string) =>
   })[char] || char);
 
 // 지도 앱에서 익숙한 핀형 차량 마커. 핀 끝이 실제 좌표를 가리키고, 작은 화살표만 진행 방향을 표시한다.
-const BUS_MARKER_CONTENT = (label: string, rotation = 0) => `
-  <div style="width:92px;height:66px;display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 4px 8px rgba(15,23,42,0.28));">
-    <div style="max-width:88px;margin-bottom:4px;background:white;color:#0f172a;border:1px solid rgba(15,23,42,0.12);box-shadow:0 2px 5px rgba(15,23,42,0.12);padding:3px 8px;border-radius:999px;font-size:11px;font-weight:800;line-height:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:sans-serif;">
-      ${escapeHtml(label)}
+const BUS_MARKER_CONTENT = (label: string, rotation = 0, etaLabel?: string) => `
+  <div style="width:104px;height:78px;display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 4px 8px rgba(15,23,42,0.28));">
+    <div style="max-width:100px;margin-bottom:4px;background:white;color:#0f172a;border:1px solid rgba(15,23,42,0.12);box-shadow:0 2px 5px rgba(15,23,42,0.12);padding:4px 8px;border-radius:8px;font-size:11px;font-weight:800;line-height:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:sans-serif;text-align:center;">
+      <div>${escapeHtml(label)}</div>
+      ${etaLabel ? `<div style="margin-top:2px;color:#64748b;font-size:9px;font-weight:700;">${escapeHtml(etaLabel)} 도착 예정</div>` : ""}
     </div>
     <div style="position:relative;width:38px;height:42px;">
       <div style="position:absolute;left:50%;top:-6px;width:0;height:0;border-left:5px solid transparent;border-right:5px solid transparent;border-bottom:9px solid #ef4444;transform:translateX(-50%) rotate(${rotation}deg);transform-origin:50% 22px;transition:transform 0.25s ease;"></div>
@@ -181,9 +183,25 @@ export default function NaverMapComponent({
   const animateMarker = useCallback((
     marker: any,
     fromLat: number, fromLng: number, fromHeading: number,
-    toLat: number, toLng: number, toHeading: number
+    toLat: number, toLng: number, toHeading: number,
+    label: string, etaLabel?: string,
   ) => {
-    // [변경] 위치 변화 없으면 skip
+    const nextEtaLabel = etaLabel ?? '';
+    const headingDelta = ((toHeading - fromHeading) % 360 + 540) % 360 - 180;
+    const labelChanged = marker.__label !== label || marker.__etaLabel !== nextEtaLabel;
+    if (Math.abs(headingDelta) > 5 || labelChanged) {
+      try {
+        marker.setIcon({
+          content: BUS_MARKER_CONTENT(label, Math.round(toHeading), nextEtaLabel),
+          size: new window.naver.maps.Size(104, 78),
+          anchor: new window.naver.maps.Point(52, 78),
+        });
+      } catch (_) {}
+    }
+    marker.__label = label;
+    marker.__etaLabel = nextEtaLabel;
+
+    // 위치가 같더라도 예상 도착 정보는 위에서 갱신한다.
     if (fromLat === toLat && fromLng === toLng) return;
 
     // [변경] 이전 RAF 취소 (중복 실행 방지)
@@ -242,20 +260,6 @@ export default function NaverMapComponent({
       waypoints = [{ lat: fromLat, lng: fromLng }, { lat: toLat, lng: toLng }];
     }
 
-    // [변경] heading 최단경로 회전 (예: 350° → 10° 는 +20° 회전)
-    const headingDelta = ((toHeading - fromHeading) % 360 + 540) % 360 - 180;
-
-    // [변경] heading 변경 시 아이콘 1회 업데이트 (per-frame setIcon 회피)
-    if (Math.abs(headingDelta) > 5) {
-      try {
-        marker.setIcon({
-          content: BUS_MARKER_CONTENT(marker.__label ?? '', Math.round(toHeading)),
-          size: new window.naver.maps.Size(92, 66),
-          anchor: new window.naver.maps.Point(46, 66),
-        });
-      } catch (_) {}
-    }
-
     const segCount = waypoints.length - 1;
     const startTime = performance.now(); // [변경] performance.now() 기반
 
@@ -309,7 +313,8 @@ export default function NaverMapComponent({
         animateMarker(
           existing,
           fromLat, fromLng, fromHeading,
-          bus.position.lat, bus.position.lng, bus.heading ?? 0
+          bus.position.lat, bus.position.lng, bus.heading ?? 0,
+          bus.label, bus.etaLabel,
         );
         existing.__heading = bus.heading ?? 0;
         existingMap.delete(bus.id);
@@ -321,14 +326,15 @@ export default function NaverMapComponent({
             position: new maps.LatLng(bus.position.lat, bus.position.lng),
             map: mapInstance.current,
             icon: {
-              content: BUS_MARKER_CONTENT(bus.label, bus.heading ?? 0),
-              size: new maps.Size(92, 66),
-              anchor: new maps.Point(46, 66),
+              content: BUS_MARKER_CONTENT(bus.label, bus.heading ?? 0, bus.etaLabel),
+              size: new maps.Size(104, 78),
+              anchor: new maps.Point(52, 78),
             },
             zIndex: 20,
           });
           marker.__busId = bus.id;
           marker.__label = bus.label;
+          marker.__etaLabel = bus.etaLabel ?? '';
           marker.__heading = bus.heading ?? 0;
           marker.__routeIdx = 0;
           marker.__animRafId = null; // [변경] RAF ID 초기화

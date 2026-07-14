@@ -38,5 +38,5 @@ export interface CampusStop {
   name: string;
   latitude: number;
   longitude: number;
+  departureLabel?: string;
 }
-
