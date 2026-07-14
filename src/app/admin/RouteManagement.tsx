@@ -49,6 +49,21 @@ const parseStopNames = (value: string) =>
 
 const hasStationStop = (names: string[]) => names.some((name) => /신창|순천향대역|순천향대학교역/.test(name));
 
+const normalizeStopName = (name: string) => name.replace(/\s+/g, "").toLowerCase();
+
+const findInvalidDuplicateStop = (names: string[], allowClosedLoop: boolean) => {
+  const normalized = names.map(normalizeStopName);
+  return names.find((_, index) => {
+    const firstIndex = normalized.indexOf(normalized[index]);
+    if (firstIndex === index) return false;
+    return !(
+      allowClosedLoop &&
+      firstIndex === 0 &&
+      index === normalized.length - 1
+    );
+  });
+};
+
 const validateRouteForm = (formData: {
   name: string;
   type: "campus" | "commuter";
@@ -61,8 +76,8 @@ const validateRouteForm = (formData: {
 }) => {
   const errors: string[] = [];
   const stopNames = parseStopNames(formData.stops);
-  const normalizedStops = stopNames.map((name) => name.replace(/\s+/g, "").toLowerCase());
-  const duplicateStop = stopNames.find((_, index) => normalizedStops.indexOf(normalizedStops[index]) !== index);
+  const allowClosedLoop = formData.type === "campus" && formData.shuttleVariant === "campus_loop";
+  const duplicateStop = findInvalidDuplicateStop(stopNames, allowClosedLoop);
   const scheduleTokens = formData.schedule
     .split(/[,\n]/)
     .map((time) => time.trim())
