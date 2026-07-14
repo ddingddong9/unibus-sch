@@ -96,7 +96,16 @@ const validateRouteDetailsInput = (
     } else {
       const names = stops.map((stop) => String(stop?.name || '').trim()).filter(Boolean);
       const normalized = names.map((name) => name.replace(/\s+/g, '').toLowerCase());
-      const duplicate = names.find((_, index) => normalized.indexOf(normalized[index]) !== index);
+      const allowClosedLoop = toDbRouteType(type) === 'shuttle' && shuttleVariant === 'campus_loop';
+      const duplicate = names.find((_, index) => {
+        const firstIndex = normalized.indexOf(normalized[index]);
+        if (firstIndex === index) return false;
+        return !(
+          allowClosedLoop &&
+          firstIndex === 0 &&
+          index === normalized.length - 1
+        );
+      });
       if (names.length < 2) errors.push("정류장은 최소 2개 이상 필요합니다.");
       if (duplicate) errors.push(`중복된 정류장이 있습니다: ${duplicate}`);
       if (
@@ -587,7 +596,7 @@ routes.put("/:id", requireAdmin, async (c) => {
     const nextType = type || toClientRouteType(existingRoute.type);
     const nextShuttleVariant = shuttleVariant !== undefined
       ? shuttleVariant
-      : undefined;
+      : existingRoute.shuttle_variant;
     const detailErrors = [
       ...validateRouteDetailsInput(nextType, nextShuttleVariant, stops, shapePoints),
       ...validateServiceRules(nextType, nextShuttleVariant ?? existingRoute.shuttle_variant, payload),
