@@ -287,7 +287,7 @@ function ShuttleBusModel({ bus, track, followed, controls, onFollow }: {
           <meshStandardMaterial color="#151a1f" />
         </mesh>
       )))}
-      <Html position={[0, 6.6, 0]} center distanceFactor={330} zIndexRange={[16, 0]}>
+      <Html position={[0, 6.6, 0]} center zIndexRange={[16, 0]}>
         <button type="button" className={`flex items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-left text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
           <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
           <span className="flex flex-col leading-tight">
@@ -401,23 +401,24 @@ function StationWorld(props: StationShuttle3DSceneProps) {
         <group key={stop.id} position={[stop.position[0], getStationTerrainHeight(stop.position[0], stop.position[1]) + 2, stop.position[1]]} onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }}>
           <mesh castShadow>
             <cylinderGeometry args={[3.5, 3.5, 1.5, 24]} />
-            <meshStandardMaterial color="#ffffff" emissive="#f59e0b" emissiveIntensity={0.12} />
+            <meshStandardMaterial color="#ffffff" emissive="#1e3a8a" emissiveIntensity={0.12} />
           </mesh>
           <mesh position={[0, 0.8, 0]}>
             <cylinderGeometry args={[2.25, 2.25, 1.7, 24]} />
-            <meshStandardMaterial color={props.selectedStopId === stop.id ? "#1e3a8a" : "#f59e0b"} />
+            <meshStandardMaterial color="#1e3a8a" />
           </mesh>
           <Html position={[0, 7, 0]} center zIndexRange={[14, 0]}>
             <button
               type="button"
               aria-pressed={props.selectedStopId === stop.id}
               onClick={() => props.onSelectStop(stop)}
-              className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg border py-1.5 pl-1.5 pr-2.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${props.selectedStopId === stop.id ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#0f172a]"}`}
+              className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg border py-1.5 pl-1.5 pr-2.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.22)] ${props.selectedStopId === stop.id ? "ring-2 ring-white/90" : ""}`}
+              style={{ backgroundColor: "#1e3a8a", borderColor: "rgba(255,255,255,0.9)", color: "#ffffff" }}
             >
-              <span className="grid h-5 w-5 place-items-center rounded-lg bg-[#1e3a8a] text-[9px] text-white">{index + 1}</span>
+              <span className="grid h-5 w-5 place-items-center rounded-lg text-[9px]" style={{ backgroundColor: "#ffffff", color: "#1e3a8a" }}>{index + 1}</span>
               <span className="flex flex-col text-left leading-tight">
                 <span>{stop.name}</span>
-                {stop.departureLabel ? <span className={`mt-0.5 text-[9px] font-bold ${props.selectedStopId === stop.id ? "text-white/75" : "text-[#64748b]"}`}>{stop.departureLabel} 예정</span> : null}
+                {stop.departureLabel ? <span className="mt-0.5 text-[9px] font-bold text-white/75">{stop.departureLabel} 예정</span> : null}
               </span>
             </button>
           </Html>
