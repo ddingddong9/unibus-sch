@@ -461,6 +461,13 @@ export default function NaverMapComponent({
         mapInstance.current = new maps.Map(mapRef.current, {
           center: new maps.LatLng(initialCenterRef.current.lat, initialCenterRef.current.lng),
           zoom: initialZoomRef.current,
+          draggable: true,
+          pinchZoom: true,
+          scrollWheel: true,
+          keyboardShortcuts: true,
+          disableDoubleClickZoom: false,
+          disableDoubleTapZoom: false,
+          disableTwoFingerTapZoom: false,
           zoomControl: false,
           mapTypeControl: false,
           scaleControl: false,

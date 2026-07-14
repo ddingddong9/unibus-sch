@@ -182,7 +182,7 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
       focusTarget={null}
       routePath={projectedRoute}
       routeStops={projectedStops}
-      liveBuses={sceneMode === "campus" ? liveBuses : liveBuses.length > 0 ? liveBuses : undefined}
+      liveBuses={liveBuses}
       fallbackBusLabels={sceneMode === "station" ? ["신창역 셔틀"] : undefined}
       initialView={initialView}
       followBusId={followBusId}

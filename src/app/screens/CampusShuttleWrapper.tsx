@@ -6,7 +6,7 @@ import NaverMapComponent from "../components/NaverMapComponent";
 import { api } from "../services/api";
 import { supabase } from "../services/supabase";
 import { estimateStopArrivals } from "../utils/shuttleEta";
-import { simulateCampusLoop } from "../utils/campusLoopSimulation";
+import { simulateCampusLoop, simulateStationShuttle } from "../utils/campusLoopSimulation";
 import { formatServiceTime, getNextShuttleService, getServiceRuleSummary } from "../utils/shuttleSchedule";
 import { getStationShuttleMap } from "../utils/stationShuttleMap";
 
@@ -188,11 +188,11 @@ export default function CampusShuttleWrapper() {
   }, []);
 
   useEffect(() => {
-    if (!pageVisible || mode !== "campus") return;
+    if (!pageVisible) return;
     setSimulationTick(Date.now());
     const timer = window.setInterval(() => setSimulationTick(Date.now()), 500);
     return () => window.clearInterval(timer);
-  }, [mode, pageVisible]);
+  }, [pageVisible]);
 
   useEffect(() => {
     const fetchRoutes = async () => {
@@ -392,17 +392,43 @@ export default function CampusShuttleWrapper() {
       : { buses: [], stopDepartures: new Map<string, string>() },
     [campusLoopRoute?.intervalMinutes, campusStops, mode, routePath, simulationTick],
   );
+  const stationSimulation = useMemo(
+    () => mode === "station"
+      ? simulateStationShuttle(
+          routePath,
+          stationStops.map((stop) => ({
+            id: stop.id,
+            name: stop.nameKo,
+            lat: stop.lat,
+            lng: stop.lng,
+            order: stop.order,
+          })),
+          simulationTick,
+        )
+      : { buses: [], stopDepartures: new Map<string, string>() },
+    [mode, routePath, simulationTick, stationStops],
+  );
   const usingCampusSimulation = mode === "campus" && visibleBuses.length === 0;
+  const usingStationSimulation = mode === "station" && visibleBuses.length === 0;
+  const usingSimulation = usingCampusSimulation || usingStationSimulation;
   const effectiveBuses = useMemo<BusMarker[]>(
-    () => usingCampusSimulation ? campusSimulation.buses : visibleBuses,
-    [campusSimulation.buses, usingCampusSimulation, visibleBuses],
+    () => {
+      if (visibleBuses.length > 0) return visibleBuses;
+      return mode === "campus" ? campusSimulation.buses : stationSimulation.buses;
+    },
+    [campusSimulation.buses, mode, stationSimulation.buses, visibleBuses],
   );
   const mapStops = useMemo(() => activeStops.map((stop) => ({
     id: stop.id,
     name: stop.nameKo,
     position: { lat: stop.lat, lng: stop.lng },
-    departureLabel: usingCampusSimulation ? campusSimulation.stopDepartures.get(stop.id) : undefined,
-  })), [activeStops, campusSimulation.stopDepartures, usingCampusSimulation]);
+  })), [activeStops]);
+  const sceneStops = useMemo(() => mapStops.map((stop) => ({
+    ...stop,
+    departureLabel: usingCampusSimulation
+      ? campusSimulation.stopDepartures.get(stop.id)
+      : usingStationSimulation ? stationSimulation.stopDepartures.get(stop.id) : undefined,
+  })), [campusSimulation.stopDepartures, mapStops, stationSimulation.stopDepartures, usingCampusSimulation, usingStationSimulation]);
   const mapCenter = activeStops[0] ? { lat: activeStops[0].lat, lng: activeStops[0].lng } : CAMPUS_CENTER;
   const arrivalEstimates = useMemo(
     () => estimateStopArrivals(
@@ -412,10 +438,10 @@ export default function CampusShuttleWrapper() {
       {
         loop: mode === "campus",
         fallbackSpeedMps: mode === "campus" ? 6.2 : 9.5,
-        nowMs: usingCampusSimulation ? simulationTick : clockTick,
+        nowMs: usingSimulation ? simulationTick : clockTick,
       },
     ),
-    [activeStops, clockTick, effectiveBuses, mode, routePath, simulationTick, usingCampusSimulation],
+    [activeStops, clockTick, effectiveBuses, mode, routePath, simulationTick, usingSimulation],
   );
   const displayBuses = useMemo(() => {
     if (mode !== "station") return effectiveBuses;
@@ -423,7 +449,7 @@ export default function CampusShuttleWrapper() {
     const destinationEstimate = destination ? arrivalEstimates.get(destination.id) : null;
     return effectiveBuses.map((bus) => ({
       ...bus,
-      label: destinationEstimate?.busId === bus.id && destinationEstimate.minutes
+      label: !bus.etaLabel && destinationEstimate?.busId === bus.id && destinationEstimate.minutes
         ? `${destination?.nameKo === "신창역" ? "신창역" : "라운지"} 약 ${destinationEstimate.minutes}분`
         : bus.label,
     }));
@@ -496,7 +522,7 @@ export default function CampusShuttleWrapper() {
                 key={`${mode}-${selectedStationRoute?.id ?? "campus"}-${fitBoundsKey}`}
                 sceneMode={mode}
                 routePath={routePath}
-                stops={mapStops}
+                stops={sceneStops}
                 buses={displayBuses}
                 onSelectStop={(stopId) => {
                   const stop = activeStops.find((item) => item.id === stopId);
