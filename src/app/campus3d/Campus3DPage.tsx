@@ -24,17 +24,81 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import Campus3DScene, { campusData, type CampusWeather, type RenderQuality } from "./Campus3DScene";
-import { buildingCategory, projectCoordinate } from "./campus-geometry";
+import Campus3DScene, { campusData, type CampusLiveBus, type CampusWeather, type RenderQuality } from "./Campus3DScene";
+import { buildingCategory, createCampusRoute, projectCoordinate } from "./campus-geometry";
 import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
 import type { CampusBuilding, CampusStop, Point2D } from "./types";
 import { terrainData } from "./terrain";
 import { api } from "../services/api";
+import CampusTimelinePanel, { type CampusTimelineMode, type CampusTimelineSpeed } from "./CampusTimelinePanel";
+import { simulateTransitService, type TransitSimulationPhase } from "./transitSimulation";
+import type { CampusPerformanceMetrics } from "./CampusPerformanceGovernor";
 
 const LANDMARKS = [
   { ...CAMPUS_LANDMARKS.westGate, point: getCampusLandmarkPoint(CAMPUS_LANDMARKS.westGate, campusData.origin) },
   { ...CAMPUS_LANDMARKS.hyangseolEastGate, point: getCampusLandmarkPoint(CAMPUS_LANDMARKS.hyangseolEastGate, campusData.origin) },
 ] as const;
+
+function routeLength(points: Point2D[]) {
+  let total = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    total += Math.hypot(points[index][0] - points[index - 1][0], points[index][1] - points[index - 1][1]);
+  }
+  return total;
+}
+
+function pointAtRouteDistance(points: Point2D[], distance: number): Point2D {
+  if (points.length === 0) return [0, 0];
+  let remaining = Math.max(0, distance);
+  for (let index = 1; index < points.length; index += 1) {
+    const from = points[index - 1];
+    const to = points[index];
+    const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    if (remaining <= length || index === points.length - 1) {
+      const progress = length > 0 ? Math.min(1, remaining / length) : 0;
+      return [
+        from[0] + (to[0] - from[0]) * progress,
+        from[1] + (to[1] - from[1]) * progress,
+      ];
+    }
+    remaining -= length;
+  }
+  return points[points.length - 1];
+}
+
+function projectPointToRoute(point: Point2D, points: Point2D[]) {
+  let bestDistance = Number.POSITIVE_INFINITY;
+  let routeProgress = 0;
+  let projected = point;
+  let cumulative = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const from = points[index - 1];
+    const to = points[index];
+    const dx = to[0] - from[0];
+    const dz = to[1] - from[1];
+    const lengthSquared = dx * dx + dz * dz;
+    const length = Math.sqrt(lengthSquared);
+    const ratio = lengthSquared > 0
+      ? Math.max(0, Math.min(1, ((point[0] - from[0]) * dx + (point[1] - from[1]) * dz) / lengthSquared))
+      : 0;
+    const candidate: Point2D = [from[0] + dx * ratio, from[1] + dz * ratio];
+    const distance = Math.hypot(point[0] - candidate[0], point[1] - candidate[1]);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      projected = candidate;
+      routeProgress = cumulative + length * ratio;
+    }
+    cumulative += length;
+  }
+  return { projected, routeProgress };
+}
+
+function phaseLabel(phase: TransitSimulationPhase) {
+  if (phase === "campus_loop") return "학내순환 운행";
+  if (phase === "boarding") return "승객 탑승 중";
+  if (phase === "waiting_for_departure") return "출발 대기";
+  return "운행 준비";
+}
 
 function SceneLoading() {
   return (
@@ -88,10 +152,10 @@ interface Campus3DPageProps {
 
 export default function Campus3DPage({ embedded = false }: Campus3DPageProps) {
   const shellRef = useRef<HTMLDivElement>(null);
+  const timelineTickRef = useRef(Date.now());
   const [selectedBuilding, setSelectedBuilding] = useState<CampusBuilding | null>(null);
   const [focusTarget, setFocusTarget] = useState<{ x: number; z: number; height: number; label: string } | null>(null);
   const [isNight, setIsNight] = useState(false);
-  const [isRunning, setIsRunning] = useState(true);
   const [autoRotate, setAutoRotate] = useState(false);
   const [showRoute, setShowRoute] = useState(true);
   const [directoryOpen, setDirectoryOpen] = useState(false);
@@ -101,12 +165,25 @@ export default function Campus3DPage({ embedded = false }: Campus3DPageProps) {
   const [remoteRoute, setRemoteRoute] = useState<Point2D[] | null>(null);
   const [remoteStops, setRemoteStops] = useState<CampusStop[] | null>(null);
   const [followBusId, setFollowBusId] = useState<string | null>(null);
-  const [simulationSpeed, setSimulationSpeed] = useState(1);
+  const [timelineMode, setTimelineMode] = useState<CampusTimelineMode>("demo");
+  const [timelinePlaying, setTimelinePlaying] = useState(true);
+  const [timelineSpeed, setTimelineSpeed] = useState<CampusTimelineSpeed>(1);
+  const [timelineTime, setTimelineTime] = useState(() => Date.now());
+  const [liveBuses, setLiveBuses] = useState<CampusLiveBus[]>([]);
+  const [performanceMetrics, setPerformanceMetrics] = useState<CampusPerformanceMetrics | null>(null);
   const [presentationOpen, setPresentationOpen] = useState(false);
   const [selectedStop, setSelectedStop] = useState<CampusStop | null>(null);
   const [weather, setWeather] = useState<CampusWeather>("clear");
   const [renderQuality, setRenderQuality] = useState<RenderQuality>("balanced");
   const [isTouring, setIsTouring] = useState(false);
+  const defaultRoute = useMemo(() => createCampusRoute(campusData), []);
+  const activeRoute = remoteRoute ?? defaultRoute;
+  const activeRouteLength = useMemo(() => routeLength(activeRoute), [activeRoute]);
+  const timelineRange = useMemo(() => {
+    const start = new Date(timelineTime);
+    start.setHours(6, 0, 0, 0);
+    return { start: start.getTime(), end: start.getTime() + 18 * 60 * 60_000 };
+  }, [timelineTime]);
 
   const buildings = useMemo(
     () => [...campusData.buildings].sort((a, b) => a.name.localeCompare(b.name, "ko")),
@@ -159,6 +236,93 @@ export default function Campus3DPage({ embedded = false }: Campus3DPageProps) {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    timelineTickRef.current = Date.now();
+    const timer = window.setInterval(() => {
+      const now = Date.now();
+      const elapsed = now - timelineTickRef.current;
+      timelineTickRef.current = now;
+      if (timelineMode === "live") {
+        setTimelineTime(now);
+      } else if (timelinePlaying) {
+        setTimelineTime((time) => time + elapsed * timelineSpeed);
+      }
+    }, 250);
+    return () => window.clearInterval(timer);
+  }, [timelineMode, timelinePlaying, timelineSpeed]);
+
+  useEffect(() => {
+    if (timelineMode !== "live") return;
+    let active = true;
+    const fetchLiveBuses = async () => {
+      try {
+        const [buses, locations] = await Promise.all([api.getBuses(), api.getBusLocations()]);
+        if (!active) return;
+        const locationByBus = new Map(locations.map((location: any) => [location.busId, location]));
+        const now = Date.now();
+        const next = buses
+          .filter((bus: any) => bus.type === "campus" && bus.status === "active" && bus.isRunning)
+          .map((bus: any) => {
+            const location = locationByBus.get(bus.id) as any;
+            if (!location || !Number.isFinite(location.lat) || !Number.isFinite(location.lng)) return null;
+            const raw = projectCoordinate(location.lat, location.lng, campusData.origin);
+            const routeProjection = projectPointToRoute(raw, activeRoute);
+            const updatedAt = location.timestamp ? new Date(location.timestamp).getTime() : now;
+            const ageMs = Math.max(0, now - updatedAt);
+            return {
+              id: bus.id,
+              label: bus.name,
+              position: routeProjection.projected,
+              heading: Number(location.heading) || 0,
+              routeProgress: routeProjection.routeProgress,
+              signalStatus: ageMs > 180_000 ? "offline" : ageMs > 45_000 ? "stale" : "live",
+              statusLabel: ageMs > 180_000 ? "위치 연결 끊김" : ageMs > 45_000 ? `${Math.max(1, Math.round(ageMs / 60_000))}분 전 위치` : undefined,
+            } satisfies CampusLiveBus;
+          })
+          .filter(Boolean) as CampusLiveBus[];
+        setLiveBuses(next);
+      } catch {
+        if (active) setLiveBuses([]);
+      }
+    };
+    void fetchLiveBuses();
+    const timer = window.setInterval(fetchLiveBuses, 10_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [activeRoute, timelineMode]);
+
+  const simulatedBuses = useMemo<CampusLiveBus[]>(() => {
+    if (activeRouteLength <= 0) return [];
+    const service = simulateTransitService({
+      now: timelineTime,
+      route: {
+        routeId: "campus-loop",
+        routeLength: activeRouteLength,
+        durationMinutes: 24,
+        variant: "campus_loop",
+      },
+      rule: {
+        intervalMinutes: 10,
+        anchorAt: timelineRange.start,
+        serviceStartAt: timelineRange.start,
+        serviceEndAt: timelineRange.end,
+      },
+      includeUpcomingVehicle: false,
+      maximumVehicles: 4,
+    });
+    return service.vehicles.map((vehicle, index) => ({
+      id: `demo-${vehicle.id}`,
+      label: `학내순환 ${index + 1}호`,
+      position: pointAtRouteDistance(activeRoute, vehicle.routeProgress),
+      routeProgress: vehicle.routeProgress,
+      signalStatus: "simulation",
+      statusLabel: phaseLabel(vehicle.phase),
+      etaLabel: vehicle.nextEvent ? `${Math.max(1, Math.ceil(vehicle.nextEvent.minutesUntil))}분` : undefined,
+    }));
+  }, [activeRoute, activeRouteLength, timelineRange.end, timelineRange.start, timelineTime]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -218,15 +382,17 @@ export default function Campus3DPage({ embedded = false }: Campus3DPageProps) {
       <Suspense fallback={<SceneLoading />}>
         <Campus3DScene
           isNight={isNight}
-          isRunning={isRunning}
+          isRunning={timelineMode === "live" || timelinePlaying}
           autoRotate={autoRotate}
           showRoute={showRoute}
           selectedBuildingId={selectedBuilding?.id ?? null}
           focusTarget={sceneFocusTarget}
           routePath={remoteRoute}
           routeStops={remoteStops}
+          liveBuses={timelineMode === "demo" ? simulatedBuses : liveBuses}
+          routeBehavior="loop"
           followBusId={followBusId}
-          simulationSpeed={simulationSpeed}
+          simulationSpeed={timelineSpeed}
           weather={weather}
           renderQuality={renderQuality}
           isTouring={isTouring}
@@ -243,6 +409,7 @@ export default function Campus3DPage({ embedded = false }: Campus3DPageProps) {
             }
           }}
           selectedStopId={selectedStop?.id ?? null}
+          onPerformanceMetrics={embedded || presentationOpen ? setPerformanceMetrics : undefined}
           onSelectStop={(stop) => {
             setSelectedStop(stop);
             setSelectedBuilding(null);
@@ -424,31 +591,42 @@ export default function Campus3DPage({ embedded = false }: Campus3DPageProps) {
       ) : null}
 
       {presentationOpen ? (
-        <section className="absolute bottom-[82px] left-1/2 z-30 w-[min(440px,calc(100%-24px))] -translate-x-1/2 rounded-2xl border border-white/80 bg-white/94 p-3 shadow-[0_14px_38px_rgba(15,23,42,0.18)] backdrop-blur-xl sm:bottom-24">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-xs font-extrabold text-[#0f172a]">발표 운행 제어</p>
-              <p className="text-[10px] font-medium text-[#64748b]">속도와 추적 차량을 선택하세요</p>
-            </div>
-            <div className="flex items-center gap-1 rounded-xl bg-[#f1f5f9] p-1">
-              {[0.5, 1, 2].map((speed) => (
-                <button key={speed} type="button" onClick={() => setSimulationSpeed(speed)} className={`h-8 min-w-10 rounded-lg px-2 text-[10px] font-extrabold ${simulationSpeed === speed ? "bg-[#1e3a8a] text-white" : "text-[#64748b] hover:text-[#1e3a8a]"}`}>
-                  {speed}x
+        <section className="absolute bottom-[82px] left-1/2 z-30 max-h-[calc(100dvh-110px)] w-[min(620px,calc(100%-24px))] -translate-x-1/2 space-y-2 overflow-y-auto sm:bottom-24">
+          <CampusTimelinePanel
+            mode={timelineMode}
+            isPlaying={timelineMode === "live" || timelinePlaying}
+            currentTime={timelineTime}
+            rangeStart={timelineRange.start}
+            rangeEnd={timelineRange.end}
+            speed={timelineSpeed}
+            onModeChange={(mode) => {
+              setTimelineMode(mode);
+              setFollowBusId(null);
+              if (mode === "live") setTimelineTime(Date.now());
+            }}
+            onPlayingChange={setTimelinePlaying}
+            onTimeChange={(time) => {
+              setTimelineMode("demo");
+              setTimelineTime(time);
+            }}
+            onSpeedChange={setTimelineSpeed}
+            onResetToNow={() => setTimelineTime(Date.now())}
+          />
+          <div className="rounded-lg border border-white/80 bg-white/94 p-3 shadow-[0_14px_38px_rgba(15,23,42,0.18)] backdrop-blur-xl">
+            <div className="grid grid-cols-4 gap-1.5">
+              {(timelineMode === "demo" ? simulatedBuses : liveBuses).slice(0, 3).map((bus) => (
+                <button key={bus.id} type="button" onClick={() => setFollowBusId((current) => current === bus.id ? null : bus.id)} className={`h-9 truncate rounded-lg border px-2 text-[10px] font-extrabold ${followBusId === bus.id ? "border-[#1e3a8a] bg-[#eef3ff] text-[#1e3a8a]" : "border-[#e2e8f0] bg-white text-[#64748b]"}`}>
+                  {bus.label}
                 </button>
               ))}
-            </div>
-          </div>
-          <div className="mt-3 grid grid-cols-4 gap-1.5">
-            {["SCH 01", "SCH 02", "SCH 03"].map((busId) => (
-              <button key={busId} type="button" onClick={() => setFollowBusId((current) => current === busId ? null : busId)} className={`h-9 rounded-xl border text-[10px] font-extrabold ${followBusId === busId ? "border-[#1e3a8a] bg-[#eef3ff] text-[#1e3a8a]" : "border-[#e2e8f0] bg-white text-[#64748b]"}`}>
-                {busId}
+              <button type="button" onClick={() => setFollowBusId(null)} className="h-9 rounded-lg border border-[#e2e8f0] bg-white text-[10px] font-extrabold text-[#64748b]">
+                전체 보기
               </button>
-            ))}
-            <button type="button" onClick={() => setFollowBusId(null)} className="h-9 rounded-xl border border-[#e2e8f0] bg-white text-[10px] font-extrabold text-[#64748b]">
-              전체 보기
-            </button>
-          </div>
-          <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-[#e2e8f0] pt-2">
+            </div>
+            {(timelineMode === "demo" ? simulatedBuses : liveBuses).length === 0 ? (
+              <p className="py-2 text-center text-[10px] font-semibold text-[#64748b]">이 시각에 운행 중인 차량이 없습니다</p>
+            ) : null}
+            <div className="mt-2 grid grid-cols-3 gap-1.5 border-t border-[#e2e8f0] pt-2">
             {([
               { value: "clear", label: "맑음", icon: CloudSun },
               { value: "cloudy", label: "흐림", icon: Cloud },
@@ -459,16 +637,17 @@ export default function Campus3DPage({ embedded = false }: Campus3DPageProps) {
                 {item.label}
               </button>
             ))}
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-1.5">
             <button type="button" onClick={() => { setFollowBusId(null); setAutoRotate(false); setSelectedBuilding(null); setSelectedStop(null); setFocusTarget(null); setIsTouring((touring) => !touring); }} className={`flex h-10 items-center justify-center gap-2 rounded-xl border text-[10px] font-extrabold ${isTouring ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-[#e2e8f0] bg-white text-[#475569]"}`}>
               <Film className="h-4 w-4" aria-hidden="true" />
               {isTouring ? "캠퍼스 투어 종료" : "캠퍼스 자동 투어"}
             </button>
             <button type="button" onClick={() => setRenderQuality((quality) => quality === "balanced" ? "high" : "balanced")} className="flex h-10 items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] bg-white text-[10px] font-extrabold text-[#475569]">
               <Sparkles className="h-4 w-4 text-[#1e3a8a]" aria-hidden="true" />
-              {renderQuality === "high" ? "고화질" : "균형 화질"}
+              {renderQuality === "high" ? "고화질" : "균형 화질"}{performanceMetrics ? ` · ${Math.round(performanceMetrics.fps)}fps` : ""}
             </button>
+            </div>
           </div>
         </section>
       ) : null}
@@ -478,8 +657,8 @@ export default function Campus3DPage({ embedded = false }: Campus3DPageProps) {
           <Layers3 className="h-4.5 w-4.5" aria-hidden="true" />
         </IconButton>
         <span className="mx-0.5 h-7 w-px bg-[#e2e8f0]" />
-        <IconButton label={isRunning ? "셔틀 일시정지" : "셔틀 운행 재생"} active={isRunning} onClick={() => setIsRunning((running) => !running)}>
-          {isRunning ? <Pause className="h-4.5 w-4.5" /> : <Play className="h-4.5 w-4.5" />}
+        <IconButton label={timelinePlaying ? "데모 일시정지" : "데모 운행 재생"} active={timelinePlaying} onClick={() => { setTimelineMode("demo"); setTimelinePlaying((playing) => !playing); }}>
+          {timelinePlaying ? <Pause className="h-4.5 w-4.5" /> : <Play className="h-4.5 w-4.5" />}
         </IconButton>
         <IconButton label="셔틀 경로 표시" active={showRoute} onClick={() => setShowRoute((visible) => !visible)}>
           <Route className="h-4.5 w-4.5" aria-hidden="true" />
