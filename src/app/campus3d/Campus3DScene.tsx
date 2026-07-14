@@ -1,4 +1,4 @@
-import { Component, memo, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useMemo, useRef } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, Line, OrbitControls, Sky, Stars } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
@@ -15,22 +15,16 @@ import CampusStructures from "./CampusStructures";
 import TerrainSurface from "./TerrainSurface";
 import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
 import { getTerrainHeight } from "./terrain";
-import { CampusPerformanceGovernor, type CampusPerformanceMetrics } from "./CampusPerformanceGovernor";
 
 const campusData = campusDataSource as CampusData;
 export type CampusWeather = "clear" | "cloudy" | "rain";
 export type RenderQuality = "balanced" | "high";
-export type RouteBehavior = "loop" | "pingpong";
-export type BusSignalStatus = "live" | "stale" | "offline" | "simulation";
 export interface CampusLiveBus {
   id: string;
   label: string;
   position: Point2D;
   heading?: number;
   routeProgress?: number;
-  signalStatus?: BusSignalStatus;
-  statusLabel?: string;
-  etaLabel?: string;
 }
 export interface CampusInitialView {
   target: Point2D;
@@ -45,9 +39,7 @@ const MAJOR_BUILDINGS = new Set([
   "공과대학",
   "학생회관",
   "의료과학대",
-  "향설생활관3",
 ]);
-const OVERVIEW_BUILDINGS = new Set(["도서관", "대학본부", "향설생활관3"]);
 
 interface BuildingFootprint {
   width: number;
@@ -164,8 +156,6 @@ interface Campus3DSceneProps {
   liveBuses?: CampusLiveBus[];
   initialView?: CampusInitialView | null;
   fallbackBusLabels?: string[];
-  routeBehavior?: RouteBehavior;
-  onPerformanceMetrics?: (metrics: CampusPerformanceMetrics) => void;
 }
 
 function shapeFromPoints(points: Point2D[]) {
@@ -209,92 +199,21 @@ function drapePathToTerrain(
   return terrainPoints;
 }
 
-const PEDESTRIAN_ROAD_KINDS = new Set(["footway", "path", "steps", "cycleway"]);
-
-function createRoadRibbonGeometry(roads: CampusRoad[], pedestrian: boolean) {
-  const positions: number[] = [];
-  const indices: number[] = [];
-  const centerlinePositions: number[] = [];
-
-  roads.forEach((road) => {
-    if (PEDESTRIAN_ROAD_KINDS.has(road.kind) !== pedestrian) return;
-    const sampled = drapePathToTerrain(road.points, pedestrian ? 0.52 : 0.68, pedestrian ? 4 : 5);
-    if (sampled.length < 2) return;
-    const vertexStart = positions.length / 3;
-    const halfWidth = pedestrian
-      ? Math.max(0.65, Math.min(road.width, 2.4) / 2)
-      : Math.max(2.1, road.width / 2);
-
-    sampled.forEach((point, index) => {
-      const previous = sampled[Math.max(0, index - 1)];
-      const next = sampled[Math.min(sampled.length - 1, index + 1)];
-      const tangentX = next[0] - previous[0];
-      const tangentZ = next[2] - previous[2];
-      const tangentLength = Math.hypot(tangentX, tangentZ) || 1;
-      const sideX = -tangentZ / tangentLength;
-      const sideZ = tangentX / tangentLength;
-      const leftX = point[0] + sideX * halfWidth;
-      const leftZ = point[2] + sideZ * halfWidth;
-      const rightX = point[0] - sideX * halfWidth;
-      const rightZ = point[2] - sideZ * halfWidth;
-      const clearance = pedestrian ? 0.52 : 0.68;
-      positions.push(
-        leftX, getTerrainHeight(leftX, leftZ) + clearance, leftZ,
-        rightX, getTerrainHeight(rightX, rightZ) + clearance, rightZ,
-      );
-
-      if (!pedestrian && index > 0) {
-        centerlinePositions.push(
-          previous[0], previous[1] + 0.12, previous[2],
-          point[0], point[1] + 0.12, point[2],
-        );
-      }
-    });
-
-    for (let index = 0; index < sampled.length - 1; index += 1) {
-      const left = vertexStart + index * 2;
-      const right = left + 1;
-      const nextLeft = left + 2;
-      const nextRight = left + 3;
-      indices.push(left, right, nextLeft, nextLeft, right, nextRight);
-    }
-  });
-
-  const surface = new THREE.BufferGeometry();
-  surface.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  surface.setIndex(indices);
-  surface.computeVertexNormals();
-  surface.computeBoundingSphere();
-
-  const centerlines = new THREE.BufferGeometry();
-  centerlines.setAttribute("position", new THREE.Float32BufferAttribute(centerlinePositions, 3));
-  centerlines.computeBoundingSphere();
-  return { surface, centerlines };
-}
-
-const CampusRoadNetwork = memo(function CampusRoadNetwork({ roads, isNight }: { roads: CampusRoad[]; isNight: boolean }) {
-  const vehicle = useMemo(() => createRoadRibbonGeometry(roads, false), [roads]);
-  const pedestrian = useMemo(() => createRoadRibbonGeometry(roads, true), [roads]);
-
-  useEffect(() => () => {
-    vehicle.surface.dispose();
-    vehicle.centerlines.dispose();
-    pedestrian.surface.dispose();
-    pedestrian.centerlines.dispose();
-  }, [pedestrian, vehicle]);
+const TerrainRoad = memo(function TerrainRoad({ road, isNight }: { road: CampusRoad; isNight: boolean }) {
+  const pedestrian = ["footway", "path", "steps", "cycleway"].includes(road.kind);
+  const points = useMemo(
+    () => drapePathToTerrain(road.points, pedestrian ? 0.78 : 1.12, pedestrian ? 5 : 7),
+    [pedestrian, road.points],
+  );
 
   return (
-    <group>
-      <mesh geometry={vehicle.surface} receiveShadow renderOrder={3}>
-        <meshStandardMaterial color={isNight ? "#27323a" : "#596166"} roughness={0.94} metalness={0.02} />
-      </mesh>
-      <lineSegments geometry={vehicle.centerlines} renderOrder={4}>
-        <lineBasicMaterial color={isNight ? "#6e7b82" : "#d8dde0"} transparent opacity={0.62} />
-      </lineSegments>
-      <mesh geometry={pedestrian.surface} receiveShadow renderOrder={2}>
-        <meshStandardMaterial color={isNight ? "#59665f" : "#d8cfba"} roughness={0.98} />
-      </mesh>
-    </group>
+    <Line
+      points={points}
+      color={pedestrian ? isNight ? "#59665f" : "#d8cfba" : isNight ? "#27323a" : "#5b6265"}
+      lineWidth={pedestrian ? 1.2 : Math.min(road.width, 5.5)}
+      transparent
+      opacity={pedestrian ? 0.72 : 1}
+    />
   );
 });
 
@@ -334,38 +253,6 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
   );
 });
 
-function DistanceAwareHtml({
-  position,
-  distanceFactor,
-  maxDistance,
-  zIndexRange,
-  children,
-}: {
-  position: [number, number, number];
-  distanceFactor: number;
-  maxDistance: number;
-  zIndexRange: [number, number];
-  children: ReactNode;
-}) {
-  const contentRef = useRef<HTMLDivElement>(null);
-  const worldPosition = useMemo(() => new THREE.Vector3(...position), [position]);
-  const frame = useRef(0);
-
-  useFrame(({ camera }) => {
-    frame.current += 1;
-    if (frame.current % 8 !== 0 || !contentRef.current) return;
-    const visible = camera.position.distanceTo(worldPosition) <= maxDistance;
-    contentRef.current.style.opacity = visible ? "1" : "0";
-    contentRef.current.style.pointerEvents = visible ? "auto" : "none";
-  });
-
-  return (
-    <Html position={position} center occlude distanceFactor={distanceFactor} zIndexRange={zIndexRange}>
-      <div ref={contentRef} className="transition-opacity duration-200">{children}</div>
-    </Html>
-  );
-}
-
 const BuildingMesh = memo(function BuildingMesh({
   building,
   selected,
@@ -378,24 +265,19 @@ const BuildingMesh = memo(function BuildingMesh({
   onSelect: (building: CampusBuilding) => void;
 }) {
   const viewportWidth = useThree((state) => state.size.width);
-  const terrainRange = useMemo(() => {
-    const heights = building.points.map(([x, z]) => getTerrainHeight(x, z));
-    return { min: Math.min(...heights), max: Math.max(...heights) };
-  }, [building.points]);
-  const foundationDepth = Math.max(5, terrainRange.max - terrainRange.min + 2.5);
   const geometry = useMemo(
     () => new THREE.ExtrudeGeometry(shapeFromPoints(building.points), {
-      depth: building.height + foundationDepth,
+      depth: building.height + 5,
       bevelEnabled: true,
       bevelSize: 0.65,
       bevelThickness: 0.7,
       bevelSegments: 1,
     }),
-    [building.height, building.points, foundationDepth],
+    [building.height, building.points],
   );
   const edges = useMemo(() => new THREE.EdgesGeometry(geometry, 32), [geometry]);
   const center = useMemo(() => polygonCenter(building.points), [building.points]);
-  const baseHeight = terrainRange.max;
+  const baseHeight = useMemo(() => getTerrainHeight(center[0], center[1]), [center]);
   const footprint = useMemo<BuildingFootprint>(() => {
     let longest = { length: 0, dx: 1, dz: 0 };
     building.points.forEach((point, index) => {
@@ -421,7 +303,6 @@ const BuildingMesh = memo(function BuildingMesh({
     };
   }, [building.points, center]);
   const isMajor = MAJOR_BUILDINGS.has(building.name);
-  const isOverviewBuilding = OVERVIEW_BUILDINGS.has(building.name);
 
   useEffect(() => () => {
     geometry.dispose();
@@ -437,7 +318,7 @@ const BuildingMesh = memo(function BuildingMesh({
       <mesh
         geometry={geometry}
         rotation={[-Math.PI / 2, 0, 0]}
-        position={[0, baseHeight - foundationDepth + 0.2, 0]}
+        position={[0, baseHeight - 4.8, 0]}
         castShadow
         receiveShadow
         onClick={(event) => {
@@ -474,11 +355,11 @@ const BuildingMesh = memo(function BuildingMesh({
         />
       )) : null}
       {(selected || MAJOR_BUILDINGS.has(building.name)) ? (
-        <DistanceAwareHtml
+        <Html
           position={[center[0], baseHeight + building.height + 5, center[1]]}
+          center
           distanceFactor={selected ? (viewportWidth < 640 ? 460 : 300) : (viewportWidth < 640 ? 640 : 420)}
           zIndexRange={[20, 0]}
-          maxDistance={selected ? Number.POSITIVE_INFINITY : isOverviewBuilding ? 3400 : viewportWidth < 640 ? 1550 : 920}
         >
           <button
             type="button"
@@ -495,7 +376,7 @@ const BuildingMesh = memo(function BuildingMesh({
             <span className={`h-1.5 w-1.5 rounded-full ${selected ? "bg-white" : "bg-[#1e3a8a]"}`} />
             {building.name}
           </button>
-        </DistanceAwareHtml>
+        </Html>
       ) : null}
       {isMajor ? (
         <group position={[center[0], baseHeight + building.height + 0.7, center[1]]}>
@@ -562,11 +443,6 @@ function createRouteTrack(points: Point2D[]): RouteTrack {
 
 function sampleRoute(track: RouteTrack, distance: number, position: THREE.Vector3) {
   const { points, lengths, total } = track;
-  if (points.length < 2 || lengths.length === 0 || total <= 0) {
-    const fallback = points[0] ?? [0, 0];
-    position.set(fallback[0], getTerrainHeight(fallback[0], fallback[1]) + 0.75, fallback[1]);
-    return { angle: 0 };
-  }
   const wrappedDistance = ((distance % total) + total) % total;
   let low = 0;
   let high = lengths.length - 1;
@@ -606,7 +482,6 @@ function ShuttleBus({
   label,
   followed,
   speedMultiplier,
-  routeBehavior,
   controls,
   onFollow,
 }: {
@@ -616,7 +491,6 @@ function ShuttleBus({
   label: string;
   followed: boolean;
   speedMultiplier: number;
-  routeBehavior: RouteBehavior;
   controls: React.RefObject<OrbitControlsImpl | null>;
   onFollow: (busId: string | null) => void;
 }) {
@@ -633,9 +507,7 @@ function ShuttleBus({
   useFrame((_, delta) => {
     if (!group.current || track.points.length < 2) return;
     if (running) distance.current += delta * 10.5 * speedMultiplier;
-    const sample = routeBehavior === "loop"
-      ? sampleRoute(track, distance.current, targetPosition)
-      : samplePingPongRoute(track, distance.current, targetPosition);
+    const sample = samplePingPongRoute(track, distance.current, targetPosition);
     group.current.position.copy(targetPosition);
     targetEuler.set(0, sample.angle, 0);
     targetQuaternion.setFromEuler(targetEuler);
@@ -677,7 +549,7 @@ function ShuttleBus({
           <meshStandardMaterial color="#151a1f" roughness={0.82} />
         </mesh>
       )))}
-      <Html position={[0, 6.6, 0]} center occlude distanceFactor={330} zIndexRange={[16, 0]}>
+      <Html position={[0, 6.6, 0]} center distanceFactor={330} zIndexRange={[16, 0]}>
         <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : label); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
           <span className={`h-2 w-2 rounded-full ring-2 ring-white ${running ? "animate-pulse bg-[#22c55e]" : "bg-[#94a3b8]"}`} />
           {label}
@@ -687,10 +559,9 @@ function ShuttleBus({
   );
 }
 
-const LiveShuttleBus = memo(function LiveShuttleBus({ bus, track, routeBehavior, followed, controls, onFollow }: {
+const LiveShuttleBus = memo(function LiveShuttleBus({ bus, track, followed, controls, onFollow }: {
   bus: CampusLiveBus;
   track: RouteTrack;
-  routeBehavior: RouteBehavior;
   followed: boolean;
   controls: React.RefObject<OrbitControlsImpl | null>;
   onFollow: (busId: string | null) => void;
@@ -705,27 +576,21 @@ const LiveShuttleBus = memo(function LiveShuttleBus({ bus, track, routeBehavior,
   );
   const cameraPosition = useMemo(() => new THREE.Vector3(), []);
   const cameraTarget = useMemo(() => new THREE.Vector3(), []);
-  const targetQuaternion = useMemo(() => new THREE.Quaternion(), []);
-  const targetEuler = useMemo(() => new THREE.Euler(), []);
   const rotation = Math.PI - THREE.MathUtils.degToRad(bus.heading ?? 0);
 
   useFrame((_, delta) => {
     if (!group.current) return;
     let desiredDistance = bus.routeProgress ?? routeDistance.current;
-    if (routeBehavior === "loop" && track.total > 0) {
+    if (track.total > 0) {
       const difference = desiredDistance - routeDistance.current;
       if (difference < -track.total / 2) desiredDistance += track.total;
       else if (difference > track.total / 2) desiredDistance -= track.total;
     }
     routeDistance.current = THREE.MathUtils.lerp(routeDistance.current, desiredDistance, 1 - Math.exp(-delta * 1.25));
-    const sample = routeBehavior === "loop"
-      ? sampleRoute(track, routeDistance.current, target)
-      : sampleRoute(track, Math.min(Math.max(routeDistance.current, 0), Math.max(track.total - 0.001, 0)), target);
+    const sample = sampleRoute(track, routeDistance.current, target);
     group.current.position.copy(target);
     const routeRotation = Number.isFinite(sample.angle) ? sample.angle : rotation;
-    targetEuler.set(0, routeRotation, 0);
-    targetQuaternion.setFromEuler(targetEuler);
-    group.current.quaternion.slerp(targetQuaternion, 1 - Math.exp(-delta * 5));
+    group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, routeRotation, 1 - Math.exp(-delta * 5));
     if (followed) {
       cameraPosition.set(target.x + 38, target.y + 30, target.z + 44);
       cameraTarget.set(target.x, target.y + 3, target.z);
@@ -765,12 +630,10 @@ const LiveShuttleBus = memo(function LiveShuttleBus({ bus, track, routeBehavior,
           <meshStandardMaterial color="#151a1f" roughness={0.82} />
         </mesh>
       )))}
-      <Html position={[0, 6.6, 0]} center occlude distanceFactor={330} zIndexRange={[16, 0]}>
+      <Html position={[0, 6.6, 0]} center distanceFactor={330} zIndexRange={[16, 0]}>
         <button type="button" onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
-          <span className={`h-2 w-2 rounded-full ring-2 ring-white ${bus.signalStatus === "offline" ? "bg-[#94a3b8]" : bus.signalStatus === "stale" ? "bg-[#f59e0b]" : bus.signalStatus === "simulation" ? "bg-[#38bdf8]" : "bg-[#22c55e]"}`} />
-          <span>{bus.label}</span>
-          {bus.etaLabel ? <span className={followed ? "text-white/75" : "text-[#64748b]"}>{bus.etaLabel}</span> : null}
-          {bus.statusLabel ? <span className={followed ? "text-white/70" : "text-[#94a3b8]"}>{bus.statusLabel}</span> : null}
+          <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
+          {bus.label}
         </button>
       </Html>
     </group>
@@ -791,7 +654,6 @@ function CameraDirector({
   initialView?: CampusInitialView | null;
 }) {
   const camera = useThree((state) => state.camera);
-  const viewportAspect = useThree((state) => state.size.width / Math.max(state.size.height, 1));
 
   useEffect(() => {
     const selected = campusData.buildings.find((building) => building.id === selectedBuildingId);
@@ -803,7 +665,6 @@ function CameraDirector({
     const terrainHeight = getTerrainHeight(target[0], target[1]);
     const subjectHeight = selected?.height ?? focusTarget?.height ?? 0;
     const hasSubject = Boolean(selected || focusTarget);
-    const overviewScale = viewportAspect > 1.45 ? 0.72 : viewportAspect < 0.72 ? 1.04 : 0.9;
     const targetPosition = hasSubject
       ? new THREE.Vector3(target[0] + 105, terrainHeight + Math.max(subjectHeight + 72, 90), target[1] + 125)
       : initialView?.cameraPosition
@@ -815,11 +676,11 @@ function CameraDirector({
           )
       : initialView
         ? new THREE.Vector3(
-            target[0] + initialView.distance * overviewScale * (initialView.distance > 1500 ? 0.12 : 0.52),
-            terrainHeight + initialView.distance * overviewScale * (initialView.distance > 1500 ? 0.92 : 0.72),
-            target[1] + initialView.distance * overviewScale * (initialView.distance > 1500 ? 0.12 : 0.58),
+            target[0] + initialView.distance * (initialView.distance > 1500 ? 0.12 : 0.52),
+            terrainHeight + initialView.distance * (initialView.distance > 1500 ? 0.92 : 0.72),
+            target[1] + initialView.distance * (initialView.distance > 1500 ? 0.12 : 0.58),
           )
-        : new THREE.Vector3(560 * overviewScale, 900 * overviewScale, 720 * overviewScale);
+        : new THREE.Vector3(560, 900, 720);
     const targetLookAt = new THREE.Vector3(
       target[0],
       terrainHeight + (hasSubject ? subjectHeight * 0.3 : initialView?.cameraPosition ? 12 : 0),
@@ -846,7 +707,7 @@ function CameraDirector({
     };
     frame = requestAnimationFrame(animate);
     return () => cancelAnimationFrame(frame);
-  }, [camera, controls, focusTarget, initialView, resetVersion, selectedBuildingId, viewportAspect]);
+  }, [camera, controls, focusTarget, initialView, resetVersion, selectedBuildingId]);
 
   return null;
 }
@@ -894,63 +755,6 @@ function CinematicTour({ enabled, controls }: { enabled: boolean; controls: Reac
   });
 
   return null;
-}
-
-function WebGLContextWatcher({ onLost, onRestored }: { onLost: () => void; onRestored: () => void }) {
-  const gl = useThree((state) => state.gl);
-
-  useEffect(() => {
-    const canvas = gl.domElement;
-    const handleLost = (event: Event) => {
-      event.preventDefault();
-      onLost();
-    };
-    canvas.addEventListener("webglcontextlost", handleLost);
-    canvas.addEventListener("webglcontextrestored", onRestored);
-    return () => {
-      canvas.removeEventListener("webglcontextlost", handleLost);
-      canvas.removeEventListener("webglcontextrestored", onRestored);
-    };
-  }, [gl, onLost, onRestored]);
-
-  return null;
-}
-
-class SceneErrorBoundary extends Component<{
-  children: ReactNode;
-  fallback: ReactNode;
-  resetKey: number;
-}, { failed: boolean }> {
-  state = { failed: false };
-
-  static getDerivedStateFromError() {
-    return { failed: true };
-  }
-
-  componentDidUpdate(previous: Readonly<{ resetKey: number }>) {
-    if (previous.resetKey !== this.props.resetKey && this.state.failed) {
-      this.setState({ failed: false });
-    }
-  }
-
-  render() {
-    return this.state.failed ? this.props.fallback : this.props.children;
-  }
-}
-
-function SceneUnavailable({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div className="grid h-full min-h-[320px] place-items-center bg-[#e8edf1] px-8 text-center text-[#0f172a]">
-      <div className="max-w-xs">
-        <div className="mx-auto grid h-12 w-12 place-items-center rounded-lg bg-white text-xl shadow-sm" aria-hidden="true">3D</div>
-        <p className="mt-4 text-sm font-extrabold">3D 지도를 표시할 수 없습니다</p>
-        <p className="mt-1 text-xs font-medium leading-5 text-[#64748b]">그래픽 연결이 일시적으로 중단되었습니다. 2D 지도를 이용하거나 다시 시도해 주세요.</p>
-        <button type="button" onClick={onRetry} className="mt-4 h-10 rounded-lg bg-[#1e3a8a] px-4 text-xs font-extrabold text-white shadow-sm transition-colors hover:bg-[#182f70]">
-          3D 다시 불러오기
-        </button>
-      </div>
-    </div>
-  );
 }
 
 function CampusWorld(props: Campus3DSceneProps) {
@@ -1007,7 +811,7 @@ function CampusWorld(props: Campus3DSceneProps) {
         opacity={0.42}
       />
       {campusData.areas.map((area) => <AreaMesh key={area.id} area={area} isNight={props.isNight} />)}
-      <CampusRoadNetwork roads={campusData.roads} isNight={props.isNight} />
+      {campusData.roads.map((road) => <TerrainRoad key={road.id} road={road} isNight={props.isNight} />)}
       {campusData.buildings.map((building) => (
         <BuildingMesh
           key={building.id}
@@ -1044,7 +848,7 @@ function CampusWorld(props: Campus3DSceneProps) {
                 <cylinderGeometry args={[2.25, 2.25, 1.7, 24]} />
                 <meshStandardMaterial color={props.selectedStopId === stop.id ? "#1e3a8a" : "#f59e0b"} />
               </mesh>
-              <Html position={[0, 7, 0]} center occlude zIndexRange={[12, 0]}>
+              <Html position={[0, 7, 0]} center zIndexRange={[12, 0]}>
                 <button type="button" onClick={(event) => { event.stopPropagation(); props.onSelectStop(stop); }} className={`flex items-center gap-1.5 whitespace-nowrap rounded-xl border py-2 pl-2 pr-3 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:py-1.5 sm:pl-1.5 sm:pr-2.5 sm:text-[10px] ${props.selectedStopId === stop.id ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#0f172a]"}`}>
                   <span className="grid h-5 w-5 place-items-center rounded-lg bg-[#1e3a8a] text-[9px] font-extrabold text-white">{index + 1}</span>
                   {stop.name}
@@ -1053,7 +857,7 @@ function CampusWorld(props: Campus3DSceneProps) {
             </group>
           ))}
           {props.liveBuses !== undefined ? props.liveBuses.map((bus) => (
-            <LiveShuttleBus key={bus.id} bus={bus} track={routeTrack} routeBehavior={props.routeBehavior ?? "loop"} followed={props.followBusId === bus.id} controls={controls} onFollow={props.onFollowBus} />
+            <LiveShuttleBus key={bus.id} bus={bus} track={routeTrack} followed={props.followBusId === bus.id} controls={controls} onFollow={props.onFollowBus} />
           )) : (
             (props.fallbackBusLabels ?? ["학내순환 1호", "학내순환 2호", "학내순환 3호"]).map((label, index, labels) => (
               <ShuttleBus
@@ -1064,7 +868,6 @@ function CampusWorld(props: Campus3DSceneProps) {
                 label={label}
                 followed={props.followBusId === label}
                 speedMultiplier={props.simulationSpeed}
-                routeBehavior={props.routeBehavior ?? "loop"}
                 controls={controls}
                 onFollow={props.onFollowBus}
               />
@@ -1094,40 +897,17 @@ function CampusWorld(props: Campus3DSceneProps) {
 }
 
 export default function Campus3DScene(props: Campus3DSceneProps) {
-  const [contextLost, setContextLost] = useState(false);
-  const [resetKey, setResetKey] = useState(0);
-  const handleContextLost = useCallback(() => setContextLost(true), []);
-  const handleContextRestored = useCallback(() => setContextLost(false), []);
-  const retryScene = useCallback(() => {
-    setContextLost(false);
-    setResetKey((key) => key + 1);
-  }, []);
-  const fallback = <SceneUnavailable onRetry={retryScene} />;
-
-  if (contextLost) return fallback;
-
   return (
-    <SceneErrorBoundary fallback={fallback} resetKey={resetKey}>
-      <Canvas
-        key={resetKey}
-        shadows={props.renderQuality === "high"}
-        dpr={[0.85, props.renderQuality === "high" ? 2 : 1.4]}
-        performance={{ min: 0.5, debounce: 320 }}
-        camera={{ position: [560, 900, 720], fov: 42, near: 1, far: 8000 }}
-        gl={{ antialias: props.renderQuality === "high", powerPreference: "high-performance", alpha: false }}
-        onPointerMissed={() => props.onSelectBuilding(null)}
-      >
-        <WebGLContextWatcher onLost={handleContextLost} onRestored={handleContextRestored} />
-        <CampusPerformanceGovernor
-          initialFactor={props.renderQuality === "high" ? 0.9 : 0.72}
-          minFactor={0.5}
-          maxFactor={1}
-          fallbackFactor={0.5}
-          onMetrics={props.onPerformanceMetrics}
-        />
-        <CampusWorld {...props} />
-      </Canvas>
-    </SceneErrorBoundary>
+    <Canvas
+      shadows={props.renderQuality === "high"}
+      dpr={[1, props.renderQuality === "high" ? 2 : 1.4]}
+      performance={{ min: 0.5 }}
+      camera={{ position: [560, 900, 720], fov: 42, near: 1, far: 8000 }}
+      gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
+      onPointerMissed={() => props.onSelectBuilding(null)}
+    >
+      <CampusWorld {...props} />
+    </Canvas>
   );
 }
 
