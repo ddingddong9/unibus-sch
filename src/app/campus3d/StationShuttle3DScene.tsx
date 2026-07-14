@@ -3,14 +3,12 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, Line, OrbitControls, Sky } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
-import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import type { CampusInitialView, CampusLiveBus } from "./Campus3DScene";
 import type { CampusArea, CampusBuilding, CampusRoad, CampusStop, Point2D } from "./types";
 import { polygonCenter, projectCoordinate } from "./campus-geometry";
 import { stationCorridorData } from "./station-corridor";
 import { getStationTerrainHeight, stationTerrainData } from "./station-terrain";
 import StationTerrainSurface from "./StationTerrainSurface";
-import { CampusPerformanceGovernor } from "./CampusPerformanceGovernor";
 
 interface StationShuttle3DSceneProps {
   routePath: Point2D[];
@@ -74,63 +72,28 @@ const CorridorRoad = memo(function CorridorRoad({ road }: { road: CampusRoad }) 
   );
 });
 
-type CorridorBuildingGroup = "apartments" | "campus" | "general";
+const CorridorBuilding = memo(function CorridorBuilding({ building }: { building: CampusBuilding }) {
+  const center = useMemo(() => polygonCenter(building.points), [building.points]);
+  const baseHeight = useMemo(() => getStationTerrainHeight(center[0], center[1]), [center]);
+  const geometry = useMemo(() => new THREE.ExtrudeGeometry(shapeFromPoints(building.points), {
+    depth: building.height,
+    bevelEnabled: true,
+    bevelSize: 0.35,
+    bevelThickness: 0.4,
+    bevelSegments: 1,
+  }), [building.height, building.points]);
+  const color = building.kind === "apartments"
+    ? "#dce9ec"
+    : building.kind === "university" || building.kind === "dormitory"
+      ? "#f1f6f4"
+      : "#fbfaf4";
 
-function buildingGroup(building: CampusBuilding): CorridorBuildingGroup {
-  if (building.kind === "apartments") return "apartments";
-  if (building.kind === "university" || building.kind === "dormitory") return "campus";
-  return "general";
-}
-
-function createMergedBuildingGeometry(buildings: CampusBuilding[]) {
-  const geometries = buildings.map((building) => {
-    const terrainHeights = building.points.map(([x, z]) => getStationTerrainHeight(x, z));
-    const lowestTerrain = Math.min(...terrainHeights);
-    const highestTerrain = Math.max(...terrainHeights);
-    const geometry = new THREE.ExtrudeGeometry(shapeFromPoints(building.points), {
-      depth: building.height + highestTerrain - lowestTerrain,
-      bevelEnabled: true,
-      bevelSize: 0.35,
-      bevelThickness: 0.4,
-      bevelSegments: 1,
-    });
-    const transform = new THREE.Matrix4()
-      .makeTranslation(0, lowestTerrain, 0)
-      .multiply(new THREE.Matrix4().makeRotationX(-Math.PI / 2));
-    geometry.applyMatrix4(transform);
-    return geometry;
-  });
-  const merged = geometries.length > 0 ? mergeGeometries(geometries, false) : null;
-  geometries.forEach((geometry) => geometry.dispose());
-  return merged;
-}
-
-const CorridorBuildings = memo(function CorridorBuildings({ buildings }: { buildings: CampusBuilding[] }) {
-  const batches = useMemo(() => {
-    const groups: Record<CorridorBuildingGroup, CampusBuilding[]> = {
-      apartments: [],
-      campus: [],
-      general: [],
-    };
-    buildings.forEach((building) => groups[buildingGroup(building)].push(building));
-    return (Object.entries(groups) as [CorridorBuildingGroup, CampusBuilding[]][])
-      .map(([group, entries]) => ({ group, geometry: createMergedBuildingGeometry(entries) }))
-      .filter((batch): batch is { group: CorridorBuildingGroup; geometry: THREE.BufferGeometry } => Boolean(batch.geometry));
-  }, [buildings]);
-
-  useEffect(() => () => batches.forEach(({ geometry }) => geometry.dispose()), [batches]);
-
-  const colors: Record<CorridorBuildingGroup, string> = {
-    apartments: "#dce9ec",
-    campus: "#f1f6f4",
-    general: "#fbfaf4",
-  };
-
-  return batches.map(({ group, geometry }) => (
-    <mesh key={group} geometry={geometry} castShadow receiveShadow>
-      <meshStandardMaterial color={colors[group]} roughness={0.76} metalness={0.03} />
+  useEffect(() => () => geometry.dispose(), [geometry]);
+  return (
+    <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} position={[0, baseHeight, 0]} castShadow receiveShadow>
+      <meshStandardMaterial color={color} roughness={0.76} metalness={0.03} />
     </mesh>
-  ));
+  );
 });
 
 const CorridorArea = memo(function CorridorArea({ area }: { area: CampusArea }) {
@@ -233,7 +196,7 @@ function SinchangStation() {
           ))}
         </group>
       ))}
-      <Html position={[-18, 25, 9]} center occlude distanceFactor={430} zIndexRange={[18, 0]}>
+      <Html position={[-18, 25, 9]} center distanceFactor={430} zIndexRange={[18, 0]}>
         <div className="pointer-events-none flex items-center gap-2 whitespace-nowrap rounded-lg border border-white/90 bg-white/96 px-3 py-2 text-[11px] font-extrabold text-[#0f172a] shadow-[0_10px_28px_rgba(15,23,42,0.18)] backdrop-blur-xl">
           <span className="h-2 w-2 rounded-full bg-[#0878bd] ring-2 ring-[#d9f2ff]" />
           KORAIL 신창역
@@ -284,7 +247,6 @@ function ShuttleBusModel({ bus, track, followed, controls, onFollow }: {
 }) {
   const group = useRef<THREE.Group>(null);
   const camera = useThree((state) => state.camera);
-  const viewportWidth = useThree((state) => state.size.width);
   const distance = useRef(bus.routeProgress ?? 0);
   const target = useMemo(() => new THREE.Vector3(), []);
   const cameraPosition = useMemo(() => new THREE.Vector3(), []);
@@ -306,7 +268,7 @@ function ShuttleBusModel({ bus, track, followed, controls, onFollow }: {
   });
 
   return (
-    <group ref={group} scale={viewportWidth < 640 ? 1.82 : 1.45} onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }}>
+    <group ref={group} scale={1.45} onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }}>
       <mesh castShadow position={[0, 1.55, 0]}>
         <boxGeometry args={[3.1, 2.5, 7.4]} />
         <meshStandardMaterial color="#f8fafc" roughness={0.5} />
@@ -325,12 +287,10 @@ function ShuttleBusModel({ bus, track, followed, controls, onFollow }: {
           <meshStandardMaterial color="#151a1f" />
         </mesh>
       )))}
-      <Html position={[0, 6.6, 0]} center occlude distanceFactor={330} zIndexRange={[16, 0]}>
-        <button type="button" className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-2 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:px-2.5 sm:py-1.5 sm:text-[10px] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
-          <span className={`h-2 w-2 rounded-full ring-2 ring-white ${bus.signalStatus === "offline" ? "bg-[#94a3b8]" : bus.signalStatus === "stale" ? "bg-[#f59e0b]" : bus.signalStatus === "simulation" ? "bg-[#38bdf8]" : "bg-[#22c55e]"}`} />
-          <span>{bus.label}</span>
-          {bus.etaLabel ? <span className={followed ? "text-white/75" : "text-[#64748b]"}>{bus.etaLabel}</span> : null}
-          {bus.statusLabel ? <span className={followed ? "text-white/70" : "text-[#94a3b8]"}>{bus.statusLabel}</span> : null}
+      <Html position={[0, 6.6, 0]} center distanceFactor={330} zIndexRange={[16, 0]}>
+        <button type="button" className={`flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
+          <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
+          {bus.label}
         </button>
       </Html>
     </group>
@@ -398,7 +358,7 @@ function StationWorld(props: StationShuttle3DSceneProps) {
       {stationCorridorData.roads.map((road) => <CorridorRoad key={road.id} road={road} />)}
       {stationCorridorData.railways.map((railway) => <RailwayLine key={railway.id} railway={railway} />)}
       {stationCorridorData.platforms.map((platform) => <StationPlatform key={platform.id} platform={platform} />)}
-      <CorridorBuildings buildings={stationCorridorData.buildings} />
+      {stationCorridorData.buildings.map((building) => <CorridorBuilding key={building.id} building={building} />)}
       <SinchangStation />
       <Line points={routeSurface} color="#ffffff" lineWidth={6} depthTest={false} renderOrder={20} />
       <Line points={routeSurface} color="#1e3a8a" lineWidth={3.6} depthTest={false} renderOrder={21} />
@@ -412,8 +372,8 @@ function StationWorld(props: StationShuttle3DSceneProps) {
             <cylinderGeometry args={[2.25, 2.25, 1.7, 24]} />
             <meshStandardMaterial color={props.selectedStopId === stop.id ? "#1e3a8a" : "#f59e0b"} />
           </mesh>
-          <Html position={[0, 7, 0]} center occlude distanceFactor={360} zIndexRange={[14, 0]}>
-            <button type="button" className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg border py-2 pl-2 pr-3 text-[12px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] backdrop-blur-xl sm:py-1.5 sm:pl-1.5 sm:pr-2.5 sm:text-[10px] ${props.selectedStopId === stop.id ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#0f172a]"}`}>
+          <Html position={[0, 7, 0]} center zIndexRange={[14, 0]}>
+            <button type="button" className={`flex items-center gap-1.5 whitespace-nowrap rounded-lg border py-1.5 pl-1.5 pr-2.5 text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${props.selectedStopId === stop.id ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#0f172a]"}`}>
               <span className="grid h-5 w-5 place-items-center rounded-lg bg-[#1e3a8a] text-[9px] text-white">{index + 1}</span>
               {stop.name}
             </button>
@@ -439,7 +399,6 @@ export default function StationShuttle3DScene(props: StationShuttle3DSceneProps)
       camera={{ position: [300, 1500, 350], fov: 42, near: 1, far: 7000 }}
       gl={{ antialias: true, powerPreference: "high-performance", alpha: false }}
     >
-      <CampusPerformanceGovernor initialFactor={0.72} minFactor={0.5} maxFactor={1} metricsIntervalMs={0} />
       <StationWorld {...props} />
     </Canvas>
   );
