@@ -82,16 +82,22 @@ const CorridorBuilding = memo(function CorridorBuilding({ building }: { building
     bevelThickness: 0.4,
     bevelSegments: 1,
   }), [building.height, building.points]);
-  const color = building.kind === "apartments"
-    ? "#dce9ec"
+  const roofColor = building.kind === "apartments"
+    ? "#e8f0f3"
     : building.kind === "university" || building.kind === "dormitory"
-      ? "#f1f6f4"
-      : "#fbfaf4";
+      ? "#f7faf6"
+      : "#fffdf5";
+  const sideColor = building.kind === "apartments"
+    ? "#9fb2bc"
+    : building.kind === "university" || building.kind === "dormitory"
+      ? "#a8bbb2"
+      : "#c1b8a5";
 
   useEffect(() => () => geometry.dispose(), [geometry]);
   return (
     <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} position={[0, baseHeight, 0]} castShadow receiveShadow>
-      <meshStandardMaterial color={color} roughness={0.76} metalness={0.03} />
+      <meshStandardMaterial attach="material-0" color={roofColor} roughness={0.64} metalness={0.02} />
+      <meshStandardMaterial attach="material-1" color={sideColor} roughness={0.82} metalness={0.01} />
     </mesh>
   );
 });
@@ -113,7 +119,7 @@ const CorridorArea = memo(function CorridorArea({ area }: { area: CampusArea }) 
     return surface;
   }, [area.points]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  const color = area.kind === "water" ? "#60c4df" : area.kind === "parking" ? "#d1d8d6" : "#73bc7b";
+  const color = area.kind === "water" ? "#58b6d1" : area.kind === "parking" ? "#9ea9a7" : "#619c68";
   return (
     <mesh geometry={geometry} receiveShadow>
       <meshStandardMaterial color={color} roughness={0.92} />
@@ -385,9 +391,9 @@ function StationWorld(props: StationShuttle3DSceneProps) {
       <color attach="background" args={["#dff1f7"]} />
       <fog attach="fog" args={["#dff1f7", 1700, 4000]} />
       <Sky distance={2200} sunPosition={[320, 460, -240]} turbidity={5.5} rayleigh={1.5} />
-      <ambientLight intensity={1.38} color="#fbfeff" />
-      <hemisphereLight intensity={1.12} color="#eefaff" groundColor="#739d72" />
-      <directionalLight castShadow position={[300, 520, 210]} intensity={2.45} color="#fff3d6" shadow-mapSize={[1024, 1024]} shadow-camera-left={-1100} shadow-camera-right={1100} shadow-camera-top={800} shadow-camera-bottom={-800} shadow-bias={-0.0003} />
+      <ambientLight intensity={0.9} color="#fbfeff" />
+      <hemisphereLight intensity={0.78} color="#eefaff" groundColor="#63855f" />
+      <directionalLight castShadow position={[300, 520, 210]} intensity={2.7} color="#fff3d6" shadow-mapSize={[1024, 1024]} shadow-camera-left={-1100} shadow-camera-right={1100} shadow-camera-top={800} shadow-camera-bottom={-800} shadow-bias={-0.0003} />
       <StationTerrainSurface />
       {stationCorridorData.areas.map((area) => <CorridorArea key={area.id} area={area} />)}
       {stationCorridorData.roads.map((road) => <CorridorRoad key={road.id} road={road} />)}

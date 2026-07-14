@@ -50,9 +50,9 @@ interface BuildingFootprint {
 
 function RoofMaterial({ variant, isNight }: { variant: "concrete" | "glass"; isNight: boolean }) {
   if (variant === "glass") {
-    return <meshStandardMaterial color={isNight ? "#9cc8d8" : "#78aabb"} emissive="#4f9fbd" emissiveIntensity={isNight ? 0.4 : 0.04} metalness={0.26} roughness={0.34} />;
+    return <meshStandardMaterial color={isNight ? "#9cc8d8" : "#5593aa"} emissive="#4f9fbd" emissiveIntensity={isNight ? 0.4 : 0.03} metalness={0.26} roughness={0.34} />;
   }
-  return <meshStandardMaterial color={isNight ? "#4b5e69" : "#d8dfe1"} roughness={0.72} metalness={0.12} />;
+  return <meshStandardMaterial color={isNight ? "#4b5e69" : "#e8ece8"} roughness={0.72} metalness={0.08} />;
 }
 
 const MajorBuildingRoof = memo(function MajorBuildingRoof({
@@ -310,9 +310,19 @@ const BuildingMesh = memo(function BuildingMesh({
     edges.dispose();
   }, [edges, geometry]);
 
-  const baseColor = /생활관|학성사|글로벌/.test(building.name)
-    ? isNight ? "#344854" : "#d8e0e2"
-    : isNight ? "#263644" : "#eef1ed";
+  const residential = /생활관|학성사|글로벌/.test(building.name);
+  const roofColor = selected
+    ? "#ffd17a"
+    : residential
+      ? isNight ? "#506671" : "#edf3f4"
+      : isNight ? "#415563" : "#fffdf8";
+  const sideColor = selected
+    ? "#d97a17"
+    : residential
+      ? isNight ? "#283d49" : "#91a7b1"
+      : isNight ? "#223440" : "#aab7b8";
+  const edgeColor = selected ? "#a84b08" : isNight ? "#718999" : "#40515a";
+  const floorBandColor = isNight ? "#e8c56f" : residential ? "#647d88" : "#71817f";
 
   return (
     <group>
@@ -335,24 +345,33 @@ const BuildingMesh = memo(function BuildingMesh({
         }}
       >
         <meshStandardMaterial
-          color={selected ? "#ffb547" : baseColor}
-          emissive={isNight ? selected ? "#b65c08" : "#182d3a" : "#000000"}
-          emissiveIntensity={isNight ? 0.55 : 0}
-          roughness={0.68}
-          metalness={0.06}
+          attach="material-0"
+          color={roofColor}
+          emissive={isNight ? selected ? "#b65c08" : "#1b303c" : "#000000"}
+          emissiveIntensity={isNight ? 0.45 : 0}
+          roughness={0.62}
+          metalness={0.04}
+        />
+        <meshStandardMaterial
+          attach="material-1"
+          color={sideColor}
+          emissive={isNight ? selected ? "#7c3508" : "#13242d" : "#000000"}
+          emissiveIntensity={isNight ? 0.32 : 0}
+          roughness={0.78}
+          metalness={0.02}
         />
         <lineSegments geometry={edges}>
-          <lineBasicMaterial color={selected ? "#e87912" : isNight ? "#50687a" : "#b2bcb8"} transparent opacity={0.72} />
+          <lineBasicMaterial color={edgeColor} transparent opacity={selected ? 0.92 : 0.78} />
         </lineSegments>
       </mesh>
       {building.height >= 12 ? [0.28, 0.52, 0.76].map((level) => (
         <Line
           key={level}
           points={[...building.points, building.points[0]].map(([x, z]) => [x, baseHeight + building.height * level, z])}
-          color={isNight ? "#f6c76d" : "#8fa2a7"}
+          color={floorBandColor}
           lineWidth={selected ? 1.35 : 0.7}
           transparent
-          opacity={isNight ? 0.68 : 0.48}
+          opacity={isNight ? 0.68 : 0.56}
         />
       )) : null}
       {(selected || MAJOR_BUILDINGS.has(building.name)) ? (
@@ -787,19 +806,26 @@ function CampusWorld(props: Campus3DSceneProps) {
   return (
     <>
       <color attach="background" args={[props.isNight ? "#07111f" : props.weather === "clear" ? "#cfe2ef" : "#aebbc4"]} />
-      <fog attach="fog" args={[props.isNight ? "#07111f" : props.weather === "clear" ? "#cfe2ef" : "#aebbc4", props.weather === "rain" ? 520 : 900, props.weather === "rain" ? 1750 : 2600]} />
+      <fog
+        attach="fog"
+        args={[
+          props.isNight ? "#07111f" : props.weather === "clear" ? "#cfe2ef" : "#aebbc4",
+          props.weather === "rain" ? 520 : props.weather === "clear" ? 1800 : 1250,
+          props.weather === "rain" ? 1750 : props.weather === "clear" ? 4200 : 3200,
+        ]}
+      />
       {props.isNight ? <Stars radius={650} depth={180} count={1600} factor={4} saturation={0.2} fade speed={0.35} /> : props.weather === "clear" ? <Sky distance={1800} sunPosition={[250, 420, -300]} turbidity={5} rayleigh={1.7} /> : null}
       {props.weather === "rain" ? <Rainfall quality={props.renderQuality} /> : null}
-      <ambientLight intensity={props.isNight ? 0.55 : props.weather === "clear" ? 1.55 : 1.05} color={props.isNight ? "#7799c9" : props.weather === "clear" ? "#f6fbff" : "#dce5eb"} />
+      <ambientLight intensity={props.isNight ? 0.55 : props.weather === "clear" ? 0.95 : 0.82} color={props.isNight ? "#7799c9" : props.weather === "clear" ? "#f6fbff" : "#dce5eb"} />
       <hemisphereLight
-        intensity={props.isNight ? 0.7 : props.weather === "clear" ? 1.35 : 0.9}
+        intensity={props.isNight ? 0.7 : props.weather === "clear" ? 0.9 : 0.72}
         color={props.isNight ? "#7294c8" : "#e7f4ff"}
         groundColor={props.isNight ? "#18251e" : "#6f825f"}
       />
       <directionalLight
         castShadow
         position={props.isNight ? [-240, 330, 120] : [280, 480, 180]}
-        intensity={props.isNight ? 1.4 : props.weather === "clear" ? 2.8 : 1.15}
+        intensity={props.isNight ? 1.4 : props.weather === "clear" ? 2.65 : 1.65}
         color={props.isNight ? "#93b8ff" : "#fff2d8"}
         shadow-mapSize={props.renderQuality === "high" ? [2048, 2048] : [1024, 1024]}
         shadow-camera-left={-520}

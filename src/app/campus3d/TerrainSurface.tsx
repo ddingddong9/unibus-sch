@@ -9,8 +9,8 @@ const TerrainSurface = memo(function TerrainSurface({ isNight }: { isNight: bool
     const resolution = sourceResolution + 84;
     const positions = new Float32Array(resolution * resolution * 3);
     const colors = new Float32Array(resolution * resolution * 3);
-    const lowColor = new THREE.Color(isNight ? "#111c1a" : "#9eaa8b");
-    const highColor = new THREE.Color(isNight ? "#26332f" : "#c3c7ab");
+    const lowColor = new THREE.Color(isNight ? "#111c1a" : "#596e5b");
+    const highColor = new THREE.Color(isNight ? "#26332f" : "#8e9d7b");
     const minHeight = Math.min(...heights);
     const maxHeight = Math.max(...heights);
 
