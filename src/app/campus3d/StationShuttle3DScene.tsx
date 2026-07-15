@@ -3,8 +3,9 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Html, Line, OrbitControls, Sky } from "@react-three/drei";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import * as THREE from "three";
+import campusDataSource from "./campus-data.json";
 import type { CampusInitialView, CampusLiveBus } from "./Campus3DScene";
-import type { CampusArea, CampusBuilding, CampusRoad, CampusStop, Point2D } from "./types";
+import type { CampusArea, CampusBuilding, CampusData, CampusRoad, CampusStop, Point2D } from "./types";
 import { polygonCenter, projectCoordinate } from "./campus-geometry";
 import { stationCorridorData } from "./station-corridor";
 import { getStationTerrainHeight, stationTerrainData } from "./station-terrain";
@@ -23,6 +24,48 @@ interface StationShuttle3DSceneProps {
 }
 
 type TerrainPoint = [number, number, number];
+
+const campusData = campusDataSource as CampusData;
+
+function rebaseCampusPoint([x, z]: Point2D): Point2D {
+  const latitude = campusData.origin.lat - z / 110_540;
+  const longitude = campusData.origin.lng
+    + x / (111_320 * Math.cos((campusData.origin.lat * Math.PI) / 180));
+  return projectCoordinate(latitude, longitude, stationCorridorData.origin);
+}
+
+function pointInPolygon([x, z]: Point2D, polygon: Point2D[]) {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index, index += 1) {
+    const [currentX, currentZ] = polygon[index];
+    const [previousX, previousZ] = polygon[previous];
+    const crosses = (currentZ > z) !== (previousZ > z)
+      && x < ((previousX - currentX) * (z - currentZ)) / (previousZ - currentZ) + currentX;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+const stationCampusBoundary = campusData.boundary.map(rebaseCampusPoint);
+const isInsideCampus = (points: Point2D[]) => pointInPolygon(polygonCenter(points), stationCampusBoundary);
+const stationCampusBuildings = campusData.buildings.map((building) => ({
+  ...building,
+  id: `campus-${building.id}`,
+  points: building.points.map(rebaseCampusPoint),
+}));
+const stationCampusRoads = campusData.roads.map((road) => ({
+  ...road,
+  id: `campus-${road.id}`,
+  points: road.points.map(rebaseCampusPoint),
+}));
+const stationCampusAreas = campusData.areas.map((area) => ({
+  ...area,
+  id: `campus-${area.id}`,
+  points: area.points.map(rebaseCampusPoint),
+}));
+const corridorBuildings = stationCorridorData.buildings.filter((building) => !isInsideCampus(building.points));
+const corridorRoads = stationCorridorData.roads.filter((road) => !isInsideCampus(road.points));
+const corridorAreas = stationCorridorData.areas.filter((area) => !isInsideCampus(area.points));
 
 function drapePath(points: Point2D[], clearance: number, maxSegmentLength = 9): TerrainPoint[] {
   if (points.length < 2) return [];
@@ -149,10 +192,6 @@ const CorridorArea = memo(function CorridorArea({ area }: { area: CampusArea }) 
       : [],
     [area.kind, area.points, waterLevel],
   );
-  const waterCenter = useMemo(
-    () => area.kind === "water" ? polygonCenter(area.points) : null,
-    [area.kind, area.points],
-  );
   const color = area.kind === "water" ? "#35a8c7" : area.kind === "parking" ? "#9ea9a7" : "#619c68";
   return (
     <group>
@@ -169,13 +208,6 @@ const CorridorArea = memo(function CorridorArea({ area }: { area: CampusArea }) 
       </mesh>
       {shoreline.length > 0 ? (
         <Line points={shoreline} color="#d8f1f4" lineWidth={1.4} transparent opacity={0.72} />
-      ) : null}
-      {area.name === "읍내저수지" && waterCenter && waterLevel != null ? (
-        <Html position={[waterCenter[0], waterLevel + 4, waterCenter[1]]} center distanceFactor={420} zIndexRange={[9, 0]}>
-          <div className="pointer-events-none whitespace-nowrap rounded-lg border border-white/90 bg-white/95 px-2.5 py-1.5 text-[10px] font-extrabold text-[#1e3a8a] shadow-[0_8px_20px_rgba(15,23,42,0.16)]">
-            읍내저수지
-          </div>
-        </Html>
       ) : null}
     </group>
   );
@@ -338,9 +370,13 @@ function ShuttleBusModel({ bus, track, followed, controls, onFollow }: {
     group.current.position.copy(target);
     group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, angle, 1 - Math.exp(-delta * 6));
     if (followed) {
-      cameraPosition.set(target.x + 36, target.y + 28, target.z + 42);
+      cameraPosition.set(
+        target.x - Math.sin(angle) * 68 + 24,
+        target.y + 42,
+        target.z - Math.cos(angle) * 68 + 24,
+      );
       cameraTarget.set(target.x, target.y + 3, target.z);
-      camera.position.lerp(cameraPosition, 1 - Math.exp(-delta * 2.4));
+      camera.position.lerp(cameraPosition, 1 - Math.exp(-delta * 2.1));
       controls.current?.target.lerp(cameraTarget, 1 - Math.exp(-delta * 3));
       controls.current?.update();
     }
@@ -471,11 +507,14 @@ function StationWorld(props: StationShuttle3DSceneProps) {
       <hemisphereLight intensity={0.78} color="#eefaff" groundColor="#63855f" />
       <directionalLight castShadow position={[300, 520, 210]} intensity={2.7} color="#fff3d6" shadow-mapSize={[1024, 1024]} shadow-camera-left={-1100} shadow-camera-right={1100} shadow-camera-top={800} shadow-camera-bottom={-800} shadow-bias={-0.0003} />
       <StationTerrainSurface />
-      {stationCorridorData.areas.map((area) => <CorridorArea key={area.id} area={area} />)}
-      {stationCorridorData.roads.map((road) => <CorridorRoad key={road.id} road={road} />)}
+      {corridorAreas.map((area) => <CorridorArea key={area.id} area={area} />)}
+      {stationCampusAreas.map((area) => <CorridorArea key={area.id} area={area} />)}
+      {corridorRoads.map((road) => <CorridorRoad key={road.id} road={road} />)}
+      {stationCampusRoads.map((road) => <CorridorRoad key={road.id} road={road} />)}
       {stationCorridorData.railways.map((railway) => <RailwayLine key={railway.id} railway={railway} />)}
       {stationCorridorData.platforms.map((platform) => <StationPlatform key={platform.id} platform={platform} />)}
-      {stationCorridorData.buildings.map((building) => <CorridorBuilding key={building.id} building={building} />)}
+      {corridorBuildings.map((building) => <CorridorBuilding key={building.id} building={building} />)}
+      {stationCampusBuildings.map((building) => <CorridorBuilding key={building.id} building={building} />)}
       <SinchangStation />
       <Line points={routeSurface} color="#ffffff" lineWidth={6} depthTest={false} renderOrder={20} />
       <Line points={routeSurface} color="#1e3a8a" lineWidth={3.6} depthTest={false} renderOrder={21} />

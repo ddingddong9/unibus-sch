@@ -252,10 +252,7 @@ export default function CampusShuttleWrapper() {
         );
         setRoutePath(stationMap.path);
         setStationStops(stationMap.stops);
-        const departureStop = stationMap.stops[0];
-        if (departureStop) {
-          setFocusLocation({ lat: departureStop.lat, lng: departureStop.lng, zoom: 17, key: Date.now() });
-        }
+        setFocusLocation(null);
       })
       .catch((error) => {
         console.warn("신창역 셔틀 경로 불러오기 실패:", error);
@@ -508,14 +505,14 @@ export default function CampusShuttleWrapper() {
           {mapMode === "2d" ? (
             <NaverMapComponent
               center={mapCenter}
-              zoom={mode === "station" ? 14 : 16}
+              zoom={16}
               buses={displayBuses}
               stops={mapStops}
               userLocation={userLocation}
               focusLocation={focusLocation}
               fitBoundsKey={fitBoundsKey}
-              autoFitBounds={mode === "campus"}
-              fitBoundsOptions={mode === "campus" ? CAMPUS_FIT_BOUNDS_OPTIONS : undefined}
+              autoFitBounds
+              fitBoundsOptions={CAMPUS_FIT_BOUNDS_OPTIONS}
               routePath={routePath}
               onBusClick={handleBusClick}
               onLocateRequest={enableUserLocation}
@@ -548,6 +545,7 @@ export default function CampusShuttleWrapper() {
                   key={item.key}
                   onClick={() => {
                     setMode(item.key);
+                    setFocusLocation(null);
                     if (item.key === "station" && stationDepartureRoute) {
                       setStationRouteId(stationDepartureRoute.id);
                     }
