@@ -24,7 +24,7 @@ import {
   Sparkles,
   X,
 } from "lucide-react";
-import Campus3DScene, { campusData, type CampusWeather, type RenderQuality } from "./Campus3DScene";
+import Campus3DScene, { campusData, campusStructureCount, type CampusWeather, type RenderQuality } from "./Campus3DScene";
 import { buildingCategory, projectCoordinate } from "./campus-geometry";
 import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
 import type { CampusBuilding, CampusStop, Point2D } from "./types";
@@ -351,7 +351,7 @@ export default function Campus3DPage({ embedded = false }: Campus3DPageProps) {
       <section className="pointer-events-none absolute bottom-5 left-5 z-20 hidden lg:block">
         <div className="pointer-events-auto flex items-stretch overflow-hidden rounded-2xl border border-white/80 bg-white/92 shadow-[0_10px_32px_rgba(15,23,42,0.12)] backdrop-blur-xl">
           {[
-            { icon: Building2, value: campusData.buildings.length, label: "건물" },
+            { icon: Building2, value: campusStructureCount, label: "건물" },
             { icon: Layers3, value: campusData.areas.length, label: "시설 영역" },
             { icon: Route, value: remoteStops?.length ?? 5, label: "정류장" },
             { icon: BusFront, value: 3, label: "운행 차량" },

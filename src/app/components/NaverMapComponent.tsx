@@ -16,6 +16,7 @@ interface NaverMapProps {
   fitBoundsKey?: number;
   autoFitBounds?: boolean;
   fitBoundsOptions?: { top: number; right: number; bottom: number; left: number; maxZoom?: number; zoomOffset?: number };
+  fitBoundsPoints?: Array<{ lat: number; lng: number }>;
   routePath?: [number, number][]; // [[lng, lat], ...] from Naver Directions API
   onBusClick?: (busId: string) => void;
   onLocateRequest?: () => void;
@@ -32,6 +33,7 @@ const getNaverMaps = () => {
 };
 
 const DEFAULT_FIT_BOUNDS_OPTIONS = { top: 80, right: 80, bottom: 80, left: 80 };
+const EMPTY_FIT_BOUNDS_POINTS: Array<{ lat: number; lng: number }> = [];
 
 const escapeHtml = (value: string) =>
   value.replace(/[&<>"']/g, (char) => ({
@@ -99,6 +101,7 @@ export default function NaverMapComponent({
   fitBoundsKey = 0,
   autoFitBounds = false,
   fitBoundsOptions = DEFAULT_FIT_BOUNDS_OPTIONS,
+  fitBoundsPoints = EMPTY_FIT_BOUNDS_POINTS,
   routePath = [],
   onBusClick,
   onLocateRequest,
@@ -127,6 +130,8 @@ export default function NaverMapComponent({
   autoFitBoundsRef.current = autoFitBounds;
   const fitBoundsOptionsRef = useRef(fitBoundsOptions);
   fitBoundsOptionsRef.current = fitBoundsOptions;
+  const fitBoundsPointsRef = useRef(fitBoundsPoints);
+  fitBoundsPointsRef.current = fitBoundsPoints;
   const onLocateRequestRef = useRef(onLocateRequest);
   onLocateRequestRef.current = onLocateRequest;
   const initialCenterRef = useRef(center);
@@ -144,6 +149,11 @@ export default function NaverMapComponent({
       pointCount += 1;
     });
     routePathRef.current.forEach(([lng, lat]) => {
+      if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
+      bounds.extend(new maps.LatLng(lat, lng));
+      pointCount += 1;
+    });
+    fitBoundsPointsRef.current.forEach(({ lat, lng }) => {
       if (!Number.isFinite(lat) || !Number.isFinite(lng)) return;
       bounds.extend(new maps.LatLng(lat, lng));
       pointCount += 1;
@@ -551,6 +561,10 @@ export default function NaverMapComponent({
     updateStopMarkers();
     if (autoFitBoundsRef.current) requestFitMapToContent();
   }, [routePath, updatePolyline, updateStopMarkers, requestFitMapToContent]);
+
+  useEffect(() => {
+    if (autoFitBoundsRef.current) requestFitMapToContent();
+  }, [fitBoundsPoints, requestFitMapToContent]);
 
   useEffect(() => {
     const maps = getNaverMaps();
