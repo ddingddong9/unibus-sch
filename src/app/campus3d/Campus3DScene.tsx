@@ -14,9 +14,51 @@ import type { CampusArea, CampusBuilding, CampusData, CampusRoad, CampusStop, Po
 import CampusStructures from "./CampusStructures";
 import TerrainSurface from "./TerrainSurface";
 import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
+import { stationCorridorData } from "./station-corridor";
 import { getTerrainHeight } from "./terrain";
 
 const campusData = campusDataSource as CampusData;
+const CAMPUS_CONTEXT_RADIUS = 700;
+
+function rebaseStationPoint([x, z]: Point2D): Point2D {
+  const latitude = stationCorridorData.origin.lat - z / 110_540;
+  const longitude = stationCorridorData.origin.lng
+    + x / (111_320 * Math.cos((stationCorridorData.origin.lat * Math.PI) / 180));
+  return projectCoordinate(latitude, longitude, campusData.origin);
+}
+
+function pointInPolygon([x, z]: Point2D, polygon: Point2D[]) {
+  let inside = false;
+  for (let index = 0, previous = polygon.length - 1; index < polygon.length; previous = index, index += 1) {
+    const [currentX, currentZ] = polygon[index];
+    const [previousX, previousZ] = polygon[previous];
+    const crosses = (currentZ > z) !== (previousZ > z)
+      && x < ((previousX - currentX) * (z - currentZ)) / (previousZ - currentZ) + currentX;
+    if (crosses) inside = !inside;
+  }
+  return inside;
+}
+
+function isNearbyCampusContext(points: Point2D[]) {
+  const center = polygonCenter(points);
+  return !pointInPolygon(center, campusData.boundary)
+    && Math.hypot(center[0], center[1]) <= CAMPUS_CONTEXT_RADIUS;
+}
+
+const campusContextBuildings = stationCorridorData.buildings
+  .map((building) => ({
+    ...building,
+    id: `context-${building.id}`,
+    points: building.points.map(rebaseStationPoint),
+  }))
+  .filter((building) => isNearbyCampusContext(building.points));
+const campusContextRoads = stationCorridorData.roads
+  .map((road) => ({
+    ...road,
+    id: `context-${road.id}`,
+    points: road.points.map(rebaseStationPoint),
+  }))
+  .filter((road) => isNearbyCampusContext(road.points));
 const EUPNAE_RESERVOIR: CampusArea = {
   id: "eupnae-reservoir",
   name: "읍내저수지",
@@ -431,6 +473,51 @@ const BuildingMesh = memo(function BuildingMesh({
         <group position={[center[0], baseHeight + building.height + 0.7, center[1]]}>
           <MajorBuildingRoof name={building.name} footprint={footprint} isNight={isNight} />
         </group>
+      ) : null}
+    </group>
+  );
+});
+
+const ContextBuildingMesh = memo(function ContextBuildingMesh({
+  building,
+  isNight,
+}: {
+  building: CampusBuilding;
+  isNight: boolean;
+}) {
+  const center = useMemo(() => polygonCenter(building.points), [building.points]);
+  const baseHeight = useMemo(() => getTerrainHeight(center[0], center[1]), [center]);
+  const geometry = useMemo(() => new THREE.ExtrudeGeometry(shapeFromPoints(building.points), {
+    depth: building.height,
+    bevelEnabled: true,
+    bevelSize: 0.22,
+    bevelThickness: 0.28,
+    bevelSegments: 1,
+  }), [building.height, building.points]);
+  const prominent = building.height >= 14;
+  const edges = useMemo(() => prominent ? new THREE.EdgesGeometry(geometry, 28) : null, [geometry, prominent]);
+
+  useEffect(() => () => {
+    geometry.dispose();
+    edges?.dispose();
+  }, [edges, geometry]);
+
+  return (
+    <group>
+      <mesh
+        geometry={geometry}
+        rotation={[-Math.PI / 2, 0, 0]}
+        position={[0, baseHeight, 0]}
+        castShadow={prominent}
+        receiveShadow
+      >
+        <meshStandardMaterial attach="material-0" color={isNight ? "#647782" : "#e8eeef"} roughness={0.72} />
+        <meshStandardMaterial attach="material-1" color={isNight ? "#344954" : "#9dafb5"} roughness={0.86} />
+      </mesh>
+      {edges ? (
+        <lineSegments geometry={edges} rotation={[-Math.PI / 2, 0, 0]} position={[0, baseHeight + 0.03, 0]}>
+          <lineBasicMaterial color={isNight ? "#748a95" : "#687b82"} transparent opacity={0.42} />
+        </lineSegments>
       ) : null}
     </group>
   );
@@ -883,7 +970,11 @@ function CampusWorld(props: Campus3DSceneProps) {
       />
       {campusData.areas.map((area) => <AreaMesh key={area.id} area={area} isNight={props.isNight} />)}
       <AreaMesh area={EUPNAE_RESERVOIR} isNight={props.isNight} />
+      {campusContextRoads.map((road) => <TerrainRoad key={road.id} road={road} isNight={props.isNight} />)}
       {campusData.roads.map((road) => <TerrainRoad key={road.id} road={road} isNight={props.isNight} />)}
+      {campusContextBuildings.map((building) => (
+        <ContextBuildingMesh key={building.id} building={building} isNight={props.isNight} />
+      ))}
       {campusData.buildings.map((building) => (
         <BuildingMesh
           key={building.id}
@@ -1002,4 +1093,5 @@ export default function Campus3DScene(props: Campus3DSceneProps) {
   );
 }
 
+export const campusStructureCount = campusData.buildings.length + campusContextBuildings.length;
 export { campusData };
