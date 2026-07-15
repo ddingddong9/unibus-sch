@@ -23,12 +23,12 @@ DEFAULT_OUTPUT = THESIS / "UNIBUS_졸업논문_권재원외5인.docx"
 FONT_KO = "Batang"
 FONT_SANS = "Malgun Gothic"
 FONT_EN = "Times New Roman"
-NAVY = "173873"
-BLUE = "DCEBFA"
-LIGHT = "F4F6F9"
-LINE = "AAB4C3"
-INK = "111827"
-MUTED = "596579"
+NAVY = "425466"
+BLUE = "E9EDF0"
+LIGHT = "F3F3F3"
+LINE = "A7ADB2"
+INK = "202428"
+MUTED = "60666C"
 
 
 @dataclass
@@ -408,9 +408,25 @@ def set_table_borders(table, color: str = LINE, size: int = 5) -> None:
         if node is None:
             node = OxmlElement(f"w:{edge}")
             borders.append(node)
-        node.set(qn("w:val"), "single")
-        node.set(qn("w:sz"), str(size))
-        node.set(qn("w:color"), color)
+        visible = edge in {"top", "bottom"}
+        node.set(qn("w:val"), "single" if visible else "nil")
+        node.set(qn("w:sz"), "10" if visible else "0")
+        node.set(qn("w:color"), INK if visible else "auto")
+
+
+def set_cell_bottom_border(cell, color: str = INK, size: int = 6) -> None:
+    tc_pr = cell._tc.get_or_add_tcPr()
+    borders = tc_pr.find(qn("w:tcBorders"))
+    if borders is None:
+        borders = OxmlElement("w:tcBorders")
+        tc_pr.append(borders)
+    bottom = borders.find(qn("w:bottom"))
+    if bottom is None:
+        bottom = OxmlElement("w:bottom")
+        borders.append(bottom)
+    bottom.set(qn("w:val"), "single")
+    bottom.set(qn("w:sz"), str(size))
+    bottom.set(qn("w:color"), color)
 
 
 def set_repeat_table_header(row) -> None:
@@ -503,14 +519,16 @@ def add_table(document: Document, rows: list[list[str]], caption: CaptionRecord,
             cell = row.cells[col_idx]
             cell.vertical_alignment = WD_ALIGN_VERTICAL.CENTER
             set_cell_margins(cell)
-            set_cell_shading(cell, NAVY if row_idx == 0 else (LIGHT if row_idx % 2 == 0 else "FFFFFF"))
+            set_cell_shading(cell, LIGHT if row_idx == 0 else "FFFFFF")
+            if row_idx == 0:
+                set_cell_bottom_border(cell)
             paragraph = cell.paragraphs[0]
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER if (row_idx == 0 or len(value) < 18) else WD_ALIGN_PARAGRAPH.LEFT
             paragraph.paragraph_format.first_line_indent = Pt(0)
             paragraph.paragraph_format.line_spacing = 1.15
             paragraph.paragraph_format.space_after = Pt(0)
             run = paragraph.add_run(value)
-            set_run_font(run, FONT_KO, 8.3 if len(rows[0]) >= 6 else 8.8, bold=row_idx == 0, color="FFFFFF" if row_idx == 0 else INK)
+            set_run_font(run, FONT_KO, 8.3 if len(rows[0]) >= 6 else 8.8, bold=row_idx == 0, color=INK)
     after = document.add_paragraph()
     after.paragraph_format.space_after = Pt(2)
 

@@ -15,19 +15,20 @@ OUTPUT.mkdir(parents=True, exist_ok=True)
 FONT_SANS = "/System/Library/Fonts/AppleSDGothicNeo.ttc"
 FONT_SERIF = "/System/Library/Fonts/Supplemental/AppleMyungjo.ttf"
 
-NAVY = "#173873"
-NAVY_2 = "#254F9A"
-BLUE = "#5D87C7"
-SKY = "#DCEBFA"
-TEAL = "#25847E"
-GREEN = "#5A8F68"
-RED = "#B34C55"
-INK = "#172033"
-MUTED = "#657089"
-LINE = "#AEB9C9"
+NAVY = "#425466"
+NAVY_2 = "#425466"
+BLUE = "#425466"
+SKY = "#E9EDF0"
+TEAL = "#425466"
+GREEN = "#425466"
+RED = "#425466"
+INK = "#202428"
+MUTED = "#60666C"
+LINE = "#A7ADB2"
 PAPER = "#FFFFFF"
-PANEL = "#F5F7FA"
-SOFT = "#E9EEF5"
+PANEL = "#F5F6F7"
+SOFT = "#E2E5E8"
+HAIRLINE = "#D7DADD"
 
 
 def font(size: int, bold: bool = False, serif: bool = False) -> ImageFont.FreeTypeFont:
@@ -86,20 +87,21 @@ def rounded_box(
     accent: str,
     fill: str = PAPER,
 ) -> None:
-    draw.rounded_rectangle(box, radius=18, fill=fill, outline=LINE, width=2)
+    # Academic diagrams use a restrained, print-safe box system instead of UI cards.
+    draw.rectangle(box, fill=PAPER, outline=LINE, width=2)
     x1, y1, x2, _ = box
-    draw.rounded_rectangle((x1, y1, x2, y1 + 56), radius=18, fill=accent)
-    draw.rectangle((x1, y1 + 32, x2, y1 + 56), fill=accent)
-    draw_centered_text(draw, (x1, y1, x2, y1 + 56), title, font(24, True), PAPER)
-    draw_centered_text(draw, (x1 + 10, y1 + 58, x2 - 10, box[3] - 8), body, font(19), INK, 6)
+    draw.line((x1, y1, x2, y1), fill=NAVY, width=6)
+    draw_centered_text(draw, (x1, y1 + 4, x2, y1 + 60), title, font(23, True), INK)
+    draw.line((x1 + 18, y1 + 62, x2 - 18, y1 + 62), fill=HAIRLINE, width=2)
+    draw_centered_text(draw, (x1 + 10, y1 + 66, x2 - 10, box[3] - 8), body, font(19), INK, 6)
 
 
 def arrow(
     draw: ImageDraw.ImageDraw,
     start: tuple[int, int],
     end: tuple[int, int],
-    color: str = MUTED,
-    width: int = 5,
+    color: str = NAVY,
+    width: int = 4,
 ) -> None:
     draw.line((start, end), fill=color, width=width)
     x1, y1 = start
@@ -119,10 +121,10 @@ def arrow(
 
 
 def title(draw: ImageDraw.ImageDraw, text: str, subtitle: str = "") -> None:
-    draw.text((70, 45), text, font=font(42, True), fill=INK)
+    draw.text((70, 45), text, font=font(36, True), fill=INK)
     if subtitle:
-        draw.text((72, 102), subtitle, font=font(22), fill=MUTED)
-    draw.line((70, 145, 1930, 145), fill=NAVY, width=4)
+        draw.text((72, 97), subtitle, font=font(20), fill=MUTED)
+    draw.line((70, 142, 1930, 142), fill=NAVY, width=2)
 
 
 def build_architecture() -> None:
@@ -136,7 +138,7 @@ def build_architecture() -> None:
         ((80, 800, 370, 990), "기사 PWA", "배차 확인 · 운행 상태\n위치 자동 송신"),
     ]
     for box, heading, body in client_boxes:
-        rounded_box(draw, box, heading, body, NAVY_2, SKY)
+        rounded_box(draw, box, heading, body, NAVY_2)
 
     rounded_box(
         draw,
@@ -144,7 +146,7 @@ def build_architecture() -> None:
         "React 19 + Vite PWA",
         "라우터·21개 지연 로딩 화면\n\n인증·역할별 보호 라우트\n\nNAVER 지도 2D\n\nReact Three Fiber 3D\n\n시간표·ETA·경로 시뮬레이션\n\nService Worker·Web Manifest",
         NAVY,
-        PANEL,
+        PAPER,
     )
     rounded_box(
         draw,
@@ -152,7 +154,7 @@ def build_architecture() -> None:
         "Supabase Edge Function",
         "Hono HTTP API\n\n인증·역할 미들웨어\n\n노선·버스·기사 API\n\n공지·사용자·푸시 API\n\nCORS 허용 목록\n\n경로 저장 RPC 호출",
         TEAL,
-        "#EEF7F5",
+        PAPER,
     )
     rounded_box(
         draw,
@@ -160,24 +162,24 @@ def build_architecture() -> None:
         "PostgreSQL + Realtime",
         "12개 테이블 · 18개 마이그레이션\nRLS 역할 정책\n최신 위치 + 30초 이력 표본\n버스 운행 세션·경로 캐시",
         GREEN,
-        "#F1F7F2",
+        PAPER,
     )
 
-    rounded_box(draw, (1790, 230, 1940, 420), "지도", "NAVER\nMaps API", BLUE, SKY)
-    rounded_box(draw, (1790, 520, 1940, 710), "인증", "Kakao\nOAuth", BLUE, SKY)
-    rounded_box(draw, (1790, 810, 1940, 1000), "알림", "Web Push\nService", BLUE, SKY)
+    rounded_box(draw, (1790, 230, 1940, 420), "지도", "NAVER\nMaps API", BLUE)
+    rounded_box(draw, (1790, 520, 1940, 710), "인증", "Kakao\nOAuth", BLUE)
+    rounded_box(draw, (1790, 810, 1940, 1000), "알림", "Web Push\nService", BLUE)
 
     for y in (315, 605, 895):
-        arrow(draw, (370, y), (520, y), NAVY_2)
-    arrow(draw, (1050, 450), (1190, 450), TEAL)
-    arrow(draw, (1450, 700), (1450, 790), GREEN)
-    arrow(draw, (1710, 325), (1790, 325), BLUE)
-    arrow(draw, (1710, 615), (1790, 615), BLUE)
-    arrow(draw, (1710, 905), (1790, 905), BLUE)
-    arrow(draw, (1190, 940), (1050, 940), GREEN)
+        arrow(draw, (370, y), (520, y))
+    arrow(draw, (1050, 450), (1190, 450))
+    arrow(draw, (1450, 700), (1450, 790))
+    arrow(draw, (1710, 325), (1790, 325))
+    arrow(draw, (1710, 615), (1790, 615))
+    arrow(draw, (1710, 905), (1790, 905))
+    arrow(draw, (1190, 940), (1050, 940))
 
-    draw.text((80, 1145), "권한 경계", font=font(20, True), fill=RED)
-    draw.line((195, 1160, 480, 1160), fill=RED, width=4)
+    draw.text((80, 1145), "권한 경계", font=font(20, True), fill=INK)
+    draw.line((195, 1160, 480, 1160), fill=NAVY, width=3)
     draw.text((505, 1145), "HTTPS/API", font=font(20), fill=MUTED)
     draw.text((755, 1145), "RLS·서버 역할 검사", font=font(20), fill=MUTED)
     draw.text((1120, 1145), "공개 조회와 관리 쓰기 분리", font=font(20), fill=MUTED)
@@ -192,9 +194,10 @@ def entity_box(
     accent: str,
 ) -> None:
     x1, y1, x2, y2 = box
-    draw.rounded_rectangle(box, radius=12, fill=PAPER, outline=accent, width=3)
-    draw.rectangle((x1, y1, x2, y1 + 44), fill=accent)
-    draw_centered_text(draw, (x1, y1, x2, y1 + 44), name, font(19, True), PAPER)
+    draw.rectangle(box, fill=PAPER, outline=LINE, width=2)
+    draw.line((x1, y1, x2, y1), fill=NAVY, width=5)
+    draw.rectangle((x1 + 2, y1 + 3, x2 - 2, y1 + 44), fill=PANEL)
+    draw_centered_text(draw, (x1, y1 + 3, x2, y1 + 44), name, font(19, True), INK)
     y = y1 + 56
     for field in fields:
         draw.text((x1 + 14, y), field, font=font(15), fill=INK)
@@ -203,7 +206,7 @@ def entity_box(
 
 def connector(draw: ImageDraw.ImageDraw, a: tuple[int, int], b: tuple[int, int], label: str = "") -> None:
     draw.line((a, b), fill=LINE, width=3)
-    draw.ellipse((a[0] - 4, a[1] - 4, a[0] + 4, a[1] + 4), fill=NAVY)
+    draw.ellipse((a[0] - 4, a[1] - 4, a[0] + 4, a[1] + 4), fill=INK)
     arrow(draw, a, b, LINE, 3)
     if label:
         mx, my = (a[0] + b[0]) // 2, (a[1] + b[1]) // 2
@@ -258,7 +261,7 @@ def build_data_model() -> None:
     connector(draw, (1560, 680), (1640, 680), "활성 상태")
     connector(draw, (990, 400), (1370, 560), "운행 노선")
 
-    draw.rounded_rectangle((420, 1050, 1510, 1195), radius=14, fill=PANEL, outline=LINE, width=2)
+    draw.rectangle((420, 1050, 1510, 1195), fill=PANEL, outline=LINE, width=2)
     draw.text((450, 1075), "저장 전략", font=font(22, True), fill=INK)
     draw.text((450, 1118), "최신 위치는 bus_latest_state에 덮어쓰고, 30초 간격 표본만 bus_locations에 누적한다.", font=font(18), fill=MUTED)
     draw.text((450, 1155), "RLS는 공개 조회 데이터와 관리자·기사 쓰기 경로를 분리한다.", font=font(18), fill=MUTED)
@@ -273,10 +276,10 @@ def step_box(
     body: str,
     accent: str,
 ) -> None:
-    draw.rounded_rectangle(box, radius=18, fill=PAPER, outline=LINE, width=2)
+    draw.rectangle(box, fill=PAPER, outline=LINE, width=2)
     x1, y1, x2, y2 = box
-    draw.ellipse((x1 + 24, y1 + 22, x1 + 82, y1 + 80), fill=accent)
-    draw_centered_text(draw, (x1 + 24, y1 + 22, x1 + 82, y1 + 80), number, font(22, True), PAPER)
+    draw.ellipse((x1 + 24, y1 + 22, x1 + 82, y1 + 80), fill=PAPER, outline=NAVY, width=3)
+    draw_centered_text(draw, (x1 + 24, y1 + 22, x1 + 82, y1 + 80), number, font(22, True), NAVY)
     draw.text((x1 + 105, y1 + 24), heading, font=font(24, True), fill=INK)
     lines = wrap_text(draw, body, font(18), x2 - x1 - 135)
     y = y1 + 65
@@ -299,12 +302,12 @@ def build_operation_flow() -> None:
     ]
     for args in steps:
         step_box(draw, *args)
-    arrow(draw, (470, 390), (470, 510), NAVY)
-    arrow(draw, (470, 680), (470, 800), TEAL)
-    arrow(draw, (850, 885), (1150, 305), GREEN)
-    arrow(draw, (1530, 390), (1530, 510), GREEN)
-    arrow(draw, (1530, 680), (1530, 800), TEAL)
-    draw.rounded_rectangle((620, 1035, 1380, 1135), radius=14, fill=SKY, outline=BLUE, width=2)
+    arrow(draw, (470, 390), (470, 510))
+    arrow(draw, (470, 680), (470, 800))
+    arrow(draw, (850, 885), (1150, 305))
+    arrow(draw, (1530, 390), (1530, 510))
+    arrow(draw, (1530, 680), (1530, 800))
+    draw.rectangle((620, 1035, 1380, 1135), fill=PANEL, outline=LINE, width=2)
     draw_centered_text(
         draw,
         (630, 1045, 1370, 1125),
@@ -328,54 +331,56 @@ def bar(
 ) -> None:
     x, y = origin
     draw.text((x, y - 34), label, font=font(18, True), fill=INK)
-    draw.rounded_rectangle((x, y, x + width, y + height), radius=height // 2, fill=SOFT)
-    filled = max(height, int(width * value / maximum))
-    draw.rounded_rectangle((x, y, x + filled, y + height), radius=height // 2, fill=color)
-    draw.text((x + width + 16, y - 2), value_text, font=font(19, True), fill=color)
+    draw.rectangle((x, y, x + width, y + height), fill=SOFT)
+    filled = max(2, int(width * value / maximum))
+    draw.rectangle((x, y, x + filled, y + height), fill=NAVY)
+    draw.text((x + width + 16, y - 2), value_text, font=font(19, True), fill=INK)
 
 
 def build_evaluation_dashboard() -> None:
     image = Image.new("RGB", (2000, 1250), PAPER)
     draw = ImageDraw.Draw(image)
     title(draw, "프로토타입 정량 평가 요약", "2026-07-15, production build와 Lighthouse 기본 모바일 시뮬레이션")
-    cards = [
-        ("21 / 21", "알고리즘 시험 통과", NAVY),
-        ("0", "TypeScript·ESLint 오류", TEAL),
-        ("0", "npm 알려진 취약점", GREEN),
-        ("18 / 18", "로컬·원격 마이그레이션", BLUE),
+    metrics = [
+        ("21 / 21", "알고리즘 시험 통과"),
+        ("0", "TypeScript·ESLint 오류"),
+        ("0", "npm 알려진 취약점"),
+        ("18 / 18", "로컬·원격 마이그레이션"),
     ]
-    for idx, (value, label, accent) in enumerate(cards):
-        x1 = 70 + idx * 475
-        x2 = x1 + 420
-        draw.rounded_rectangle((x1, 190, x2, 370), radius=18, fill=PANEL, outline=LINE, width=2)
-        draw.text((x1 + 28, 220), value, font=font(46, True), fill=accent)
-        draw.text((x1 + 28, 300), label, font=font(20), fill=MUTED)
+    draw.line((70, 190, 1930, 190), fill=INK, width=3)
+    draw.line((70, 360, 1930, 360), fill=INK, width=3)
+    for idx, (value, label) in enumerate(metrics):
+        x1 = 70 + idx * 465
+        if idx:
+            draw.line((x1, 215, x1, 335), fill=HAIRLINE, width=2)
+        draw.text((x1 + 28, 218), value, font=font(43, True), fill=INK)
+        draw.text((x1 + 28, 300), label, font=font(19), fill=MUTED)
 
     draw.text((80, 440), "Lighthouse 중앙값", font=font(28, True), fill=INK)
-    bar(draw, (80, 510), 79, 100, 620, 30, NAVY, "온보딩 Performance", "79")
-    bar(draw, (80, 620), 73, 100, 620, 30, TEAL, "독립 3D Performance", "73")
-    bar(draw, (80, 730), 3.903, 6, 620, 30, BLUE, "온보딩 LCP", "3.903 s")
-    bar(draw, (80, 840), 4.654, 6, 620, 30, RED, "독립 3D LCP", "4.654 s")
+    bar(draw, (80, 510), 79, 100, 620, 24, NAVY, "온보딩 Performance", "79")
+    bar(draw, (80, 620), 73, 100, 620, 24, NAVY, "독립 3D Performance", "73")
+    bar(draw, (80, 730), 3.903, 6, 620, 24, NAVY, "온보딩 LCP", "3.903 s")
+    bar(draw, (80, 840), 4.654, 6, 620, 24, NAVY, "독립 3D LCP", "4.654 s")
     draw.text((80, 930), "두 경로 모두 Accessibility 100 · Best Practices 100 · TBT 0 ms · CLS 0", font=font(20), fill=MUTED)
 
     draw.text((1030, 440), "주요 gzip 청크", font=font(28, True), fill=INK)
     chunks = [
         ("campus-3d-vendor", 256.47, NAVY),
-        ("react-vendor", 81.31, BLUE),
-        ("Campus3DScene", 59.66, TEAL),
-        ("supabase", 54.96, GREEN),
-        ("motion-vendor", 37.78, MUTED),
+        ("react-vendor", 81.31, NAVY),
+        ("Campus3DScene", 59.66, NAVY),
+        ("supabase", 54.96, NAVY),
+        ("motion-vendor", 37.78, NAVY),
     ]
     for idx, (label, value, color) in enumerate(chunks):
-        bar(draw, (1030, 510 + idx * 105), value, 280, 680, 28, color, label, f"{value:.2f} kB")
+        bar(draw, (1030, 510 + idx * 105), value, 280, 680, 24, color, label, f"{value:.2f} kB")
 
-    draw.rounded_rectangle((70, 1045, 1930, 1170), radius=14, fill="#FFF6E8", outline="#D9B46D", width=2)
-    draw.text((100, 1070), "해석 한계", font=font(21, True), fill="#805918")
+    draw.line((70, 1045, 1930, 1045), fill=LINE, width=2)
+    draw.text((80, 1070), "주:", font=font(19, True), fill=INK)
     draw.text(
-        (100, 1110),
+        (125, 1070),
         "공개 경로 2개를 5회 측정한 사례 결과이며, 실제 사용자 장치의 체감 성능이나 ETA 정확도를 대표하지 않는다.",
-        font=font(19),
-        fill="#805918",
+        font=font(18),
+        fill=MUTED,
     )
     image.save(OUTPUT / "evaluation_dashboard.png", dpi=(300, 300))
 
@@ -401,7 +406,7 @@ def build_mobile_screens() -> None:
         x = start_x + idx * (frame_w + gap)
         screen = fit_image(SCREENSHOTS / name, (frame_w, frame_h), PAPER)
         image.paste(screen, (x, 90))
-        draw.rounded_rectangle((x - 3, 87, x + frame_w + 3, 1003), radius=18, outline=LINE, width=4)
+        draw.rectangle((x - 3, 87, x + frame_w + 3, 1003), outline=LINE, width=3)
         bbox = draw.textbbox((0, 0), label, font=font(23, True))
         draw.text((x + (frame_w - bbox[2]) / 2, 1040), label, font=font(23, True), fill=INK)
     image.save(OUTPUT / "user_mobile_screens.png", dpi=(300, 300))
@@ -421,7 +426,7 @@ def build_admin_screens() -> None:
         draw.rectangle((x - 2, 98, x + 912, 742), outline=LINE, width=3)
         bbox = draw.textbbox((0, 0), label, font=font(24, True))
         draw.text((x + (910 - bbox[2]) / 2, 780), label, font=font(24, True), fill=INK)
-    draw.rounded_rectangle((420, 865, 1580, 955), radius=14, fill=PANEL, outline=LINE, width=2)
+    draw.line((420, 865, 1580, 865), fill=LINE, width=2)
     draw_centered_text(draw, (430, 875, 1570, 945), "동일한 노선·정류장 데이터가 사용자 2D/3D 화면과 관리자 편집기에 연결된다.", font(21), MUTED)
     image.save(OUTPUT / "admin_screens.png", dpi=(300, 300))
 
@@ -437,7 +442,7 @@ def build_role_screens() -> None:
         x = 120 + idx * 530
         screen = fit_image(SCREENSHOTS / name, (430, 932), PAPER)
         image.paste(screen, (x, 70))
-        draw.rounded_rectangle((x - 3, 67, x + 433, 1005), radius=18, outline=LINE, width=4)
+        draw.rectangle((x - 3, 67, x + 433, 1005), outline=LINE, width=3)
         bbox = draw.textbbox((0, 0), label, font=font(23, True))
         draw.text((x + (430 - bbox[2]) / 2, 1045), label, font=font(23, True), fill=INK)
     image.save(OUTPUT / "role_screens.png", dpi=(300, 300))
