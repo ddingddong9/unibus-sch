@@ -263,11 +263,6 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
       : [],
     [area.kind, area.points, waterLevel],
   );
-  const waterCenter = useMemo(
-    () => area.kind === "water" ? polygonCenter(area.points) : null,
-    [area.kind, area.points],
-  );
-
   const color = area.kind === "water"
     ? isNight ? "#123d52" : "#35a8c7"
     : area.kind === "pitch"
@@ -299,13 +294,6 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
           transparent
           opacity={0.72}
         />
-      ) : null}
-      {area.name === "읍내저수지" && waterCenter && waterLevel != null ? (
-        <Html position={[waterCenter[0], waterLevel + 4, waterCenter[1]]} center distanceFactor={420} zIndexRange={[9, 0]}>
-          <div className="pointer-events-none whitespace-nowrap rounded-lg border border-white/90 bg-white/95 px-2.5 py-1.5 text-[10px] font-extrabold text-[#1e3a8a] shadow-[0_8px_20px_rgba(15,23,42,0.16)]">
-            읍내저수지
-          </div>
-        </Html>
       ) : null}
     </group>
   );
