@@ -1,9 +1,17 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router";
+import { Bell, BusFront, ChevronRight, MapPinned, TrainFront, Zap } from "lucide-react";
 import svgPaths from "../../imports/svg-odbnwpa57u";
 import BottomNav from "../components/BottomNav";
+import SinchangTimetableSheet from "../components/SinchangTimetableSheet";
 import { useLanguage } from "../contexts/LanguageContext";
+import {
+  getTrainServiceDay,
+  getUpcomingTrains,
+  type TrainServiceDay,
+} from "../data/sinchangTrainTimetable";
 import { api } from "../services/api";
+import type { Notice } from "../types";
 import { simulateCampusLoop } from "../utils/campusLoopSimulation";
 import { estimateStopArrivals } from "../utils/shuttleEta";
 
@@ -65,6 +73,9 @@ export default function HomeWrapper() {
   const [activeBuses, setActiveBuses] = useState<HomeBus[]>([]);
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [campusStops, setCampusStops] = useState<HomeStop[]>(CAMPUS_STOPS);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [timetableOpen, setTimetableOpen] = useState(false);
+  const [timetableDay, setTimetableDay] = useState<TrainServiceDay>(() => getTrainServiceDay());
   const [clockTick, setClockTick] = useState(() => Date.now());
 
   // 사용자 GPS 위치 → 가장 가까운 정류장 계산
@@ -91,6 +102,12 @@ export default function HomeWrapper() {
         if (savedStops.length > 0) setCampusStops(savedStops);
       })
       .catch((error) => console.warn("홈 노선 정보 불러오기 실패:", error));
+  }, []);
+
+  useEffect(() => {
+    api.getNotices()
+      .then(setNotices)
+      .catch((error) => console.warn("홈 공지사항 불러오기 실패:", error));
   }, []);
 
   useEffect(() => {
@@ -175,30 +192,24 @@ export default function HomeWrapper() {
   );
   const nextArrival = targetStop ? arrivalEstimates.get(targetStop.id)?.minutes ?? null : null;
   const busActive = displayBuses.length > 0;
-  const miniMap = useMemo(() => {
-    const source = routePath.length > 1
-      ? routePath.filter((_, index) => index % Math.max(1, Math.ceil(routePath.length / 100)) === 0)
-      : campusStops.map((stop) => [stop.lng, stop.lat] as [number, number]);
-    const lastRoutePoint = routePath[routePath.length - 1];
-    if (lastRoutePoint && source[source.length - 1] !== lastRoutePoint) source.push(lastRoutePoint);
-    if (source.length === 0) return { path: "", stops: [], buses: [] };
-    const lngs = source.map(([lng]) => lng);
-    const lats = source.map(([, lat]) => lat);
-    const minLng = Math.min(...lngs);
-    const maxLng = Math.max(...lngs);
-    const minLat = Math.min(...lats);
-    const maxLat = Math.max(...lats);
-    const project = (lng: number, lat: number) => ({
-      x: 16 + ((lng - minLng) / (maxLng - minLng || 1)) * 288,
-      y: 12 + (1 - (lat - minLat) / (maxLat - minLat || 1)) * 76,
-    });
-    const routePoints = source.map(([lng, lat]) => project(lng, lat));
-    return {
-      path: routePoints.map((point, index) => `${index === 0 ? "M" : "L"}${point.x.toFixed(1)} ${point.y.toFixed(1)}`).join(" "),
-      stops: campusStops.map((stop) => project(stop.lng, stop.lat)),
-      buses: displayBuses.map((bus) => project(bus.position.lng, bus.position.lat)),
-    };
-  }, [campusStops, displayBuses, routePath]);
+  const automaticTrainDay = getTrainServiceDay(new Date(clockTick));
+  const upcomingTrains = useMemo(
+    () => getUpcomingTrains(new Date(clockTick), automaticTrainDay, 3),
+    [automaticTrainDay, clockTick],
+  );
+  const importantNotices = useMemo(() => notices
+    .filter((notice) => notice.category === "route")
+    .slice()
+    .sort((a, b) => {
+      const rank = (notice: Notice) => (notice.isPinned ? 2 : 0) + (notice.priority === "high" ? 1 : 0);
+      return rank(b) - rank(a) || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    })
+    .slice(0, 2), [notices]);
+
+  const openTimetable = useCallback(() => {
+    setTimetableDay(automaticTrainDay);
+    setTimetableOpen(true);
+  }, [automaticTrainDay]);
 
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-start relative size-full">
@@ -313,128 +324,152 @@ export default function HomeWrapper() {
                 </div>
               </div>
 
-              {/* Quick Actions – stagger */}
-              <div className="relative shrink-0 w-full animate-[routeLift_260ms_ease-out]">
-                <div className="content-stretch flex flex-col gap-[16px] items-start px-[24px] py-[16px] relative w-full">
+              {/* Compact navigation */}
+              <div className="w-full px-6 py-3 animate-[routeLift_260ms_ease-out]">
+                <div className="grid grid-cols-3 gap-2">
                   {[
-                    {
-                      path: "/campus-shuttle",
-                      icon: svgPaths.p2d903e00,
-                      viewBox: "0 0 25.6667 21",
-                      title: t("셔틀버스", "Shuttle"),
-                      sub: t("학내순환 · 신창역 셔틀", "Campus loop · Sinchang shuttle"),
-                    },
-                    {
-                      path: "/commuter-bus",
-                      icon: svgPaths.p285d3c40,
-                      viewBox: "0 0 23.3333 18.6667",
-                      title: t("통학버스", "Commuter Bus"),
-                      sub: t("인천, 서울, 경기", "Incheon, Seoul, Gyeonggi"),
-                    },
-                    {
-                      path: "/notice",
-                      icon: svgPaths.p3106d480,
-                      viewBox: "0 0 23.3333 18.6667",
-                      title: t("공지사항", "Notice"),
-                      sub: t("운행 변경 및 업데이트", "Schedule changes & updates"),
-                      extra: "mb-[32px]",
-                    },
+                    { path: "/campus-shuttle", label: t("셔틀", "Shuttle"), icon: MapPinned },
+                    { path: "/commuter-bus", label: t("통학", "Commuter"), icon: BusFront },
+                    { path: "/notice", label: t("공지", "Notices"), icon: Bell },
                   ].map((action) => (
                     <button
-                      key={action.path + action.title}
+                      key={action.path}
+                      type="button"
                       onClick={() => navigate(action.path)}
-                      className={`bg-white content-stretch flex items-center justify-between p-[21px] relative rounded-[16px] shrink-0 w-full border border-[#e2e8f0] shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] hover:shadow-md transition-all active:scale-[0.98] ${action.extra ?? ""}`}
+                      className="flex h-[76px] flex-col items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] bg-white text-[#1e3a8a] shadow-sm transition-all hover:bg-[#f8fafc] active:scale-[0.97]"
                     >
-                      <div className="flex gap-[16px] items-center">
-                        <div className="home-accent-gradient bg-[#1e3a8a] content-stretch flex items-center justify-center relative rounded-[12px] shrink-0 size-[48px]">
-                          <div className="h-[21px] relative shrink-0 w-[25.667px]">
-                            <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox={action.viewBox}>
-                              <path d={action.icon} fill="white" />
-                            </svg>
-                          </div>
-                        </div>
-                        <div className="flex flex-col items-start">
-                          <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[#0f172a] text-[16px]">
-                            <p className="leading-[24px]">{action.title}</p>
-                          </div>
-                          <div className="flex flex-col font-['Public_Sans'] font-normal justify-center leading-[0] text-[#64748b] text-[14px]">
-                            <p className="leading-[17.5px]">{action.sub}</p>
-                          </div>
-                        </div>
-                      </div>
-                      <div className="h-[12px] relative shrink-0 w-[7.4px]">
-                        <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 7.4 12">
-                          <path d={svgPaths.p28c84800} fill="#94A3B8" />
-                        </svg>
-                      </div>
+                      <action.icon className="size-5" strokeWidth={2.2} aria-hidden="true" />
+                      <span className="text-[12px] font-extrabold">{action.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Live Tracking */}
-              <div className="relative shrink-0 w-full mb-4 animate-[routeLift_280ms_ease-out]">
-                <div className="content-stretch flex flex-col gap-[12px] items-start px-[24px] py-[16px] relative w-full">
-                  <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[#0f172a] text-[18px] w-full">
-                    <p className="leading-[28px]">{t("실시간 추적", "Live Tracking")}</p>
+              {/* Sinchang timetable */}
+              <section className="w-full px-6 py-4 animate-[routeLift_280ms_ease-out]">
+                <div className="mb-3 flex items-end justify-between">
+                  <div>
+                    <h2 className="text-[18px] font-extrabold leading-7 text-[#0f172a]">신창역 전철</h2>
+                    <p className="text-[11px] font-semibold text-[#64748b]">1호선 · 서울 방면</p>
                   </div>
+                  <span className="rounded-md bg-[#f1f5f9] px-2 py-1 text-[10px] font-extrabold text-[#64748b]">
+                    {automaticTrainDay === "weekday" ? "평일" : "토·공휴일"}
+                  </span>
+                </div>
 
-                  <button
-                    onClick={() => navigate("/campus-shuttle")}
-                    aria-label={t("학내순환 실시간 위치 보기", "View live campus loop positions")}
-                    className="bg-[#eef3ff] content-stretch flex flex-col h-[128px] items-start justify-center overflow-hidden relative rounded-[16px] shrink-0 w-full border border-[#dbe4f5] shadow-[inset_0px_2px_4px_0px_rgba(0,0,0,0.04)] hover:bg-[#e8eefb] transition-all active:scale-[0.98]"
-                  >
-                    <div className="absolute inset-0 opacity-80">
-                      <div className="absolute left-[12%] top-[-10px] h-[150px] w-[1px] rotate-[28deg] bg-white/80" />
-                      <div className="absolute left-[45%] top-[-20px] h-[170px] w-[1px] -rotate-[18deg] bg-white/70" />
-                      <div className="absolute right-[14%] top-[-10px] h-[150px] w-[1px] rotate-[12deg] bg-white/80" />
-                    </div>
-                    {miniMap.path && (
-                      <svg
-                        className="absolute inset-0 h-full w-full"
-                        viewBox="0 0 320 100"
-                        preserveAspectRatio="none"
-                        aria-hidden="true"
-                      >
-                        <path d={miniMap.path} fill="none" stroke="rgba(30,58,138,0.14)" strokeWidth="8" strokeLinecap="round" strokeLinejoin="round" />
-                        <path d={miniMap.path} fill="none" stroke="#1e3a8a" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
-                        {miniMap.stops.map((point, index) => (
-                          <circle key={`home-stop-${index}`} cx={point.x} cy={point.y} r="3" fill="white" stroke="#1e3a8a" strokeWidth="1.8" />
-                        ))}
-                        {miniMap.buses.map((point, index) => (
-                          <g key={`home-bus-${index}`} transform={`translate(${point.x} ${point.y})`}>
-                            <circle r="9" fill="rgba(30,58,138,0.16)" />
-                            <circle r="5" fill="#1e3a8a" stroke="white" strokeWidth="2" />
-                          </g>
-                        ))}
-                      </svg>
-                    )}
-
-                    <div className="absolute backdrop-blur-[4px] bg-white/90 left-[10px] top-[10px] rounded-[8px] px-[10px] py-[7px] text-left shadow-sm">
-                      <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[12px] leading-[16px]">
-                        {t("학내순환", "Campus Loop")}
-                      </p>
-                      <p className="font-['Public_Sans'] font-medium text-[#64748b] text-[10px] leading-[14px]">
-                        {busActive
-                          ? t(`${displayBuses.length}대 운행 중`, `${displayBuses.length} buses in service`)
-                          : t("운행 정보 없음", "No live service")}
-                      </p>
-                    </div>
-
-                    <div className="absolute backdrop-blur-[4px] bg-white/90 bottom-[8px] content-stretch flex flex-col items-start px-[9px] py-[5px] right-[8px] rounded-[8px] shadow-sm">
-                      <div className="flex flex-col font-['Public_Sans'] font-bold justify-center leading-[0] text-[#1e293b] text-[10px]">
-                        <p className="leading-[15px]">{t("전체 지도 보기", "OPEN MAP")}</p>
+                <button
+                  type="button"
+                  onClick={openTimetable}
+                  aria-label="신창역 전체 전철 시간표 보기"
+                  className="w-full overflow-hidden rounded-xl border border-[#dbe4f5] bg-white text-left shadow-[0_4px_18px_rgba(30,58,138,0.08)] transition-all hover:shadow-md active:scale-[0.985]"
+                >
+                  <div className="flex items-center justify-between bg-[#eef3ff] px-4 py-3">
+                    <div className="flex items-center gap-3">
+                      <span className="grid size-9 place-items-center rounded-full bg-[#1e3a8a] text-white">
+                        <TrainFront className="size-4" aria-hidden="true" />
+                      </span>
+                      <div>
+                        <p className="text-[13px] font-extrabold text-[#0f172a]">다음 출발</p>
+                        <p className="text-[10px] font-semibold text-[#64748b]">후문 셔틀은 전철 출발 10분 전</p>
                       </div>
                     </div>
+                    <span className="flex items-center gap-1 text-[11px] font-extrabold text-[#1e3a8a]">
+                      전체 시간표 <ChevronRight className="size-4" aria-hidden="true" />
+                    </span>
+                  </div>
+
+                  <div className="divide-y divide-[#f1f5f9] px-4">
+                    {upcomingTrains.map((train, index) => (
+                      <div key={`${train.time}-${train.destination}-${train.dayOffset}`} className="flex min-h-[58px] items-center gap-3">
+                        <p className={`w-[54px] tabular-nums text-[18px] font-black ${index === 0 ? "text-[#1e3a8a]" : "text-[#0f172a]"}`}>
+                          {train.time}
+                        </p>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5">
+                            <p className="truncate text-[12px] font-bold text-[#334155]">{train.destination}행</p>
+                            {train.express ? (
+                              <span className="flex items-center gap-0.5 rounded bg-[#1e3a8a] px-1.5 py-0.5 text-[8px] font-black text-white">
+                                <Zap className="size-2" aria-hidden="true" /> 급행
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="text-[10px] font-semibold text-[#94a3b8]">
+                            {train.dayOffset > 0 ? "내일 첫차" : index === 0 ? "가장 빠른 전철" : "이후 출발"}
+                          </p>
+                        </div>
+                        <p className="shrink-0 text-[11px] font-extrabold text-[#64748b]">
+                          {train.dayOffset > 0
+                            ? "내일"
+                            : train.minutesUntil <= 1 ? "곧 출발" : `${train.minutesUntil}분 후`}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </button>
+              </section>
+
+              {/* Important notices */}
+              <section className="mb-5 w-full px-6 py-4 animate-[routeLift_300ms_ease-out]">
+                <div className="mb-3 flex items-center justify-between">
+                  <h2 className="text-[18px] font-extrabold leading-7 text-[#0f172a]">운행 공지</h2>
+                  <button
+                    type="button"
+                    onClick={() => navigate("/notice")}
+                    className="flex items-center gap-0.5 text-[11px] font-extrabold text-[#64748b]"
+                  >
+                    전체보기 <ChevronRight className="size-4" aria-hidden="true" />
                   </button>
                 </div>
-              </div>
+
+                <div className="overflow-hidden rounded-xl border border-[#e2e8f0] bg-white">
+                  {importantNotices.length > 0 ? importantNotices.map((notice, index) => (
+                    <button
+                      key={notice.id}
+                      type="button"
+                      onClick={() => navigate("/notice")}
+                      className={`flex min-h-[66px] w-full items-center gap-3 px-4 text-left transition-colors hover:bg-[#f8fafc] ${index > 0 ? "border-t border-[#f1f5f9]" : ""}`}
+                    >
+                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#eef3ff] text-[#1e3a8a]">
+                        <Bell className="size-4" aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] font-extrabold text-[#0f172a]">{notice.title}</span>
+                        <span className="block text-[10px] font-semibold text-[#94a3b8]">
+                          {new Date(notice.createdAt).toLocaleDateString("ko-KR", { month: "short", day: "numeric" })}
+                        </span>
+                      </span>
+                      <ChevronRight className="size-4 shrink-0 text-[#94a3b8]" aria-hidden="true" />
+                    </button>
+                  )) : (
+                    <button
+                      type="button"
+                      onClick={() => navigate("/notice")}
+                      className="flex min-h-[66px] w-full items-center gap-3 px-4 text-left"
+                    >
+                      <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#f1f5f9] text-[#64748b]">
+                        <Bell className="size-4" aria-hidden="true" />
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[13px] font-extrabold text-[#0f172a]">새로운 운행 공지가 없습니다</span>
+                        <span className="block text-[10px] font-semibold text-[#94a3b8]">공지사항에서 전체 내용을 확인하세요</span>
+                      </span>
+                      <ChevronRight className="size-4 shrink-0 text-[#94a3b8]" aria-hidden="true" />
+                    </button>
+                  )}
+                </div>
+              </section>
         </div>
         {/* ── End content ────────────────────────── */}
 
       </div>
 
       <BottomNav />
+      <SinchangTimetableSheet
+        open={timetableOpen}
+        serviceDay={timetableDay}
+        onServiceDayChange={setTimetableDay}
+        onClose={() => setTimetableOpen(false)}
+      />
     </div>
   );
 }
