@@ -35,7 +35,7 @@ export default function BottomNav() {
             </svg>
           </div>
           <div className={`flex flex-col font-['Public_Sans'] ${isActive("/home") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
-            <p className="leading-[16.5px]" style={{ color: isActive("/home") ? "#1E3A8A" : "#94A3B8" }}>
+            <p className={`leading-[16.5px] ${isActive("/home") ? "text-[#1e3a8a]" : "text-[#94a3b8]"}`}>
               {t("홈", "Home")}
             </p>
           </div>
@@ -52,7 +52,7 @@ export default function BottomNav() {
             </svg>
           </div>
           <div className={`flex flex-col font-['Public_Sans'] ${isActive("/campus-shuttle") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
-            <p className="leading-[16.5px]" style={{ color: isActive("/campus-shuttle") ? "#1E3A8A" : "#94A3B8" }}>
+            <p className={`leading-[16.5px] ${isActive("/campus-shuttle") ? "text-[#1e3a8a]" : "text-[#94a3b8]"}`}>
               {t("셔틀버스", "Shuttle")}
             </p>
           </div>
@@ -69,7 +69,7 @@ export default function BottomNav() {
             </svg>
           </div>
           <div className={`flex flex-col font-['Public_Sans'] ${isActive("/commuter-bus") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
-            <p className="leading-[16.5px]" style={{ color: isActive("/commuter-bus") ? "#1E3A8A" : "#94A3B8" }}>
+            <p className={`leading-[16.5px] ${isActive("/commuter-bus") ? "text-[#1e3a8a]" : "text-[#94a3b8]"}`}>
               {t("통학버스", "Commuter")}
             </p>
           </div>
@@ -89,7 +89,7 @@ export default function BottomNav() {
             </svg>
           </div>
           <div className={`flex flex-col font-['Public_Sans'] ${isActive("/notice") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
-            <p className="leading-[16.5px]" style={{ color: isActive("/notice") ? "#1E3A8A" : "#94A3B8" }}>
+            <p className={`leading-[16.5px] ${isActive("/notice") ? "text-[#1e3a8a]" : "text-[#94a3b8]"}`}>
               {t("공지", "Notice")}
             </p>
           </div>
@@ -106,7 +106,7 @@ export default function BottomNav() {
             </svg>
           </div>
           <div className={`flex flex-col font-['Public_Sans'] ${isActive("/settings") ? "font-bold" : "font-medium"} justify-center leading-[0] text-[11px]`}>
-            <p className="leading-[16.5px]" style={{ color: isActive("/settings") ? "#1E3A8A" : "#94A3B8" }}>
+            <p className={`leading-[16.5px] ${isActive("/settings") ? "text-[#1e3a8a]" : "text-[#94a3b8]"}`}>
               {t("프로필", "Profile")}
             </p>
           </div>
