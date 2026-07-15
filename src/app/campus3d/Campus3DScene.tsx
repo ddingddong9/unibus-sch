@@ -257,12 +257,6 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
     return surface;
   }, [area.points, waterLevel]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  const shoreline = useMemo(
-    () => area.kind === "water"
-      ? [...area.points, area.points[0]].map(([x, z]) => [x, (waterLevel ?? getTerrainHeight(x, z)) + 0.12, z] as TerrainPoint)
-      : [],
-    [area.kind, area.points, waterLevel],
-  );
   const color = area.kind === "water"
     ? isNight ? "#38bdf8" : "#7dd3fc"
     : area.kind === "pitch"
@@ -276,25 +270,16 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
   return (
     <group>
       <mesh geometry={geometry} receiveShadow>
-        <meshStandardMaterial
-          color={color}
-          emissive={area.kind === "water" ? "#38bdf8" : "#000000"}
-          emissiveIntensity={area.kind === "water" ? 0.18 : 0}
-          roughness={area.kind === "water" ? 0.24 : 0.88}
-          metalness={area.kind === "water" ? 0.08 : 0}
-          transparent={false}
-          opacity={1}
-        />
+        {area.kind === "water" ? (
+          <meshBasicMaterial
+            color="#7dd3fc"
+            side={THREE.DoubleSide}
+            toneMapped={false}
+          />
+        ) : (
+          <meshStandardMaterial color={color} roughness={0.88} metalness={0} />
+        )}
       </mesh>
-      {shoreline.length > 0 ? (
-        <Line
-          points={shoreline}
-          color={isNight ? "#bae6fd" : "#e0f2fe"}
-          lineWidth={2}
-          transparent
-          opacity={0.95}
-        />
-      ) : null}
     </group>
   );
 });
