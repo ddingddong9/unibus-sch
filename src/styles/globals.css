@@ -101,6 +101,7 @@ html.dark {
 .dark .unibus-theme [class~="text-[#94a3b8]"] { color: #8e8e93; }
 .dark .unibus-theme [class~="text-[#1e3a8a]"],
 .dark .unibus-theme [class~="text-[#1e3b8a]"] { color: #b9d7ee; }
+.dark .unibus-theme [class*="text-[rgba(30,58,138,"] { color: rgba(185, 215, 238, 0.82); }
 
 .dark .unibus-theme [class~="bg-[#1e3a8a]"],
 .dark .unibus-theme [class~="bg-[#1e3b8a]"],
