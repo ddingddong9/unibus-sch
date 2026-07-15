@@ -92,24 +92,48 @@ const CorridorBuilding = memo(function CorridorBuilding({ building }: { building
     : building.kind === "university" || building.kind === "dormitory"
       ? "#a8bbb2"
       : "#c1b8a5";
+  const prominent = building.height >= 14 || ["apartments", "university", "train_station"].includes(building.kind);
+  const edges = useMemo(() => prominent ? new THREE.EdgesGeometry(geometry, 24) : null, [geometry, prominent]);
 
-  useEffect(() => () => geometry.dispose(), [geometry]);
+  useEffect(() => () => {
+    geometry.dispose();
+    edges?.dispose();
+  }, [edges, geometry]);
   return (
-    <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} position={[0, baseHeight, 0]} castShadow receiveShadow>
-      <meshStandardMaterial attach="material-0" color={roofColor} roughness={0.64} metalness={0.02} />
-      <meshStandardMaterial attach="material-1" color={sideColor} roughness={0.82} metalness={0.01} />
-    </mesh>
+    <group>
+      <mesh geometry={geometry} rotation={[-Math.PI / 2, 0, 0]} position={[0, baseHeight, 0]} castShadow receiveShadow>
+        <meshStandardMaterial attach="material-0" color={roofColor} roughness={0.64} metalness={0.02} />
+        <meshStandardMaterial attach="material-1" color={sideColor} roughness={0.82} metalness={0.01} />
+      </mesh>
+      {edges ? (
+        <lineSegments geometry={edges} rotation={[-Math.PI / 2, 0, 0]} position={[0, baseHeight + 0.03, 0]}>
+          <lineBasicMaterial color="#687980" transparent opacity={0.42} />
+        </lineSegments>
+      ) : null}
+      {prominent ? (
+        <mesh position={[center[0], baseHeight + building.height + 0.7, center[1]]} castShadow>
+          <boxGeometry args={[Math.min(7, building.height * 0.25), 1.4, Math.min(5, building.height * 0.18)]} />
+          <meshStandardMaterial color="#778990" metalness={0.2} roughness={0.5} />
+        </mesh>
+      ) : null}
+    </group>
   );
 });
 
 const CorridorArea = memo(function CorridorArea({ area }: { area: CampusArea }) {
+  const waterLevel = useMemo(
+    () => area.kind === "water"
+      ? Math.max(...area.points.map(([x, z]) => getStationTerrainHeight(x, z))) + 0.42
+      : null,
+    [area.kind, area.points],
+  );
   const geometry = useMemo(() => {
     const contour = area.points.map(([x, z]) => new THREE.Vector2(x, z));
     const faces = THREE.ShapeUtils.triangulateShape(contour, []);
     const positions = new Float32Array(area.points.length * 3);
     area.points.forEach(([x, z], index) => {
       positions[index * 3] = x;
-      positions[index * 3 + 1] = getStationTerrainHeight(x, z) + 0.28;
+      positions[index * 3 + 1] = waterLevel ?? getStationTerrainHeight(x, z) + 0.28;
       positions[index * 3 + 2] = z;
     });
     const surface = new THREE.BufferGeometry();
@@ -117,13 +141,43 @@ const CorridorArea = memo(function CorridorArea({ area }: { area: CampusArea }) 
     surface.setIndex(faces.flat());
     surface.computeVertexNormals();
     return surface;
-  }, [area.points]);
+  }, [area.points, waterLevel]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  const color = area.kind === "water" ? "#58b6d1" : area.kind === "parking" ? "#9ea9a7" : "#619c68";
+  const shoreline = useMemo(
+    () => area.kind === "water"
+      ? [...area.points, area.points[0]].map(([x, z]) => [x, (waterLevel ?? getStationTerrainHeight(x, z)) + 0.12, z] as TerrainPoint)
+      : [],
+    [area.kind, area.points, waterLevel],
+  );
+  const waterCenter = useMemo(
+    () => area.kind === "water" ? polygonCenter(area.points) : null,
+    [area.kind, area.points],
+  );
+  const color = area.kind === "water" ? "#35a8c7" : area.kind === "parking" ? "#9ea9a7" : "#619c68";
   return (
-    <mesh geometry={geometry} receiveShadow>
-      <meshStandardMaterial color={color} roughness={0.92} />
-    </mesh>
+    <group>
+      <mesh geometry={geometry} receiveShadow>
+        <meshStandardMaterial
+          color={color}
+          emissive={area.kind === "water" ? "#1f6077" : "#000000"}
+          emissiveIntensity={area.kind === "water" ? 0.1 : 0}
+          roughness={area.kind === "water" ? 0.3 : 0.92}
+          metalness={area.kind === "water" ? 0.18 : 0}
+          transparent={area.kind === "water"}
+          opacity={area.kind === "water" ? 0.94 : 1}
+        />
+      </mesh>
+      {shoreline.length > 0 ? (
+        <Line points={shoreline} color="#d8f1f4" lineWidth={1.4} transparent opacity={0.72} />
+      ) : null}
+      {area.name === "읍내저수지" && waterCenter && waterLevel != null ? (
+        <Html position={[waterCenter[0], waterLevel + 4, waterCenter[1]]} center distanceFactor={420} zIndexRange={[9, 0]}>
+          <div className="pointer-events-none whitespace-nowrap rounded-lg border border-white/90 bg-white/95 px-2.5 py-1.5 text-[10px] font-extrabold text-[#1e3a8a] shadow-[0_8px_20px_rgba(15,23,42,0.16)]">
+            읍내저수지
+          </div>
+        </Html>
+      ) : null}
+    </group>
   );
 });
 
@@ -162,6 +216,13 @@ function SinchangStation() {
 
   return (
     <group position={[stationPoint[0] - 25, baseHeight + 0.7, stationPoint[1] + 18]} rotation={[0, rotation, 0]}>
+      <mesh position={[-4, -0.35, 17]} receiveShadow>
+        <boxGeometry args={[112, 0.55, 72]} />
+        <meshStandardMaterial color="#cfd8d9" roughness={0.94} />
+      </mesh>
+      {[-44, -26, -8, 10, 28].map((x) => (
+        <Line key={`parking-${x}`} points={[[x, 0.02, 43], [x + 7, 0.02, 54]]} color="#f8fafc" lineWidth={0.75} />
+      ))}
       <mesh castShadow position={[-18, 7, 20]}>
         <boxGeometry args={[58, 14, 19]} />
         <meshStandardMaterial color="#f2f4f3" roughness={0.58} />
@@ -188,6 +249,18 @@ function SinchangStation() {
         <boxGeometry args={[16, 4, 34]} />
         <meshStandardMaterial color="#dbe2e3" metalness={0.16} roughness={0.48} />
       </mesh>
+      <group position={[32, 4.8, 37]}>
+        <mesh castShadow>
+          <boxGeometry args={[28, 1.1, 8]} />
+          <meshStandardMaterial color="#3c89a8" metalness={0.18} roughness={0.42} />
+        </mesh>
+        {[-11, 0, 11].map((x) => (
+          <mesh key={x} position={[x, -2.4, 0]}>
+            <boxGeometry args={[0.7, 4.8, 0.7]} />
+            <meshStandardMaterial color="#65787f" metalness={0.32} roughness={0.48} />
+          </mesh>
+        ))}
+      </group>
       {[-8, 8].map((z) => (
         <group key={z} position={[88, 7.2, z]}>
           <mesh castShadow>

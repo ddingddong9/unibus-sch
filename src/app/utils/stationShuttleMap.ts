@@ -39,8 +39,8 @@ export function getStationShuttleMap(
   const station = orderedStops.find((stop) => isStation(stop.nameKo));
   const rearGate = orderedStops.find((stop) => isRearGate(stop.nameKo));
   if (!station || !rearGate) return { path: [], stops: [] as StationMapStop[] };
-  // Keep the admin-edited coordinates as the single source of truth. Older
-  // routes call this stop "후문", so only normalize its passenger-facing name.
+  // Keep the admin-edited coordinates as the single source of truth. Only the
+  // physical stop marker/list uses the lounge name; service copy still says 후문.
   const lounge = { ...rearGate, nameKo: "김승우 라운지", nameEn: "Kim Seung-woo Lounge" };
 
   const endpoints = (direction === "to-station" ? [lounge, station] : [station, lounge])

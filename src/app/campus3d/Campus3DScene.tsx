@@ -17,6 +17,21 @@ import { CAMPUS_LANDMARKS, getCampusLandmarkPoint } from "./campus-landmarks";
 import { getTerrainHeight } from "./terrain";
 
 const campusData = campusDataSource as CampusData;
+const EUPNAE_RESERVOIR: CampusArea = {
+  id: "eupnae-reservoir",
+  name: "읍내저수지",
+  kind: "water",
+  points: [
+    [324.2, -106.51],
+    [328.6, -51.95],
+    [357.18, 14.63],
+    [404.43, 74.64],
+    [465.42, 74.64],
+    [462.13, -9.38],
+    [435.75, -41.58],
+    [410.48, -120.14],
+  ],
+};
 export type CampusWeather = "clear" | "cloudy" | "rain";
 export type RenderQuality = "balanced" | "high";
 export interface CampusLiveBus {
@@ -219,6 +234,12 @@ const TerrainRoad = memo(function TerrainRoad({ road, isNight }: { road: CampusR
 });
 
 const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; isNight: boolean }) {
+  const waterLevel = useMemo(
+    () => area.kind === "water"
+      ? Math.max(...area.points.map(([x, z]) => getTerrainHeight(x, z))) + 0.42
+      : null,
+    [area.kind, area.points],
+  );
   const geometry = useMemo(() => {
     const contour = area.points.map(([x, z]) => new THREE.Vector2(x, z));
     const faces = THREE.ShapeUtils.triangulateShape(contour, []);
@@ -226,7 +247,7 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
     area.points.forEach(([x, z], index) => {
       const offset = index * 3;
       positions[offset] = x;
-      positions[offset + 1] = getTerrainHeight(x, z) + 0.34;
+      positions[offset + 1] = waterLevel ?? getTerrainHeight(x, z) + 0.34;
       positions[offset + 2] = z;
     });
     const surface = new THREE.BufferGeometry();
@@ -234,11 +255,21 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
     surface.setIndex(faces.flat());
     surface.computeVertexNormals();
     return surface;
-  }, [area.points]);
+  }, [area.points, waterLevel]);
   useEffect(() => () => geometry.dispose(), [geometry]);
+  const shoreline = useMemo(
+    () => area.kind === "water"
+      ? [...area.points, area.points[0]].map(([x, z]) => [x, (waterLevel ?? getTerrainHeight(x, z)) + 0.12, z] as TerrainPoint)
+      : [],
+    [area.kind, area.points, waterLevel],
+  );
+  const waterCenter = useMemo(
+    () => area.kind === "water" ? polygonCenter(area.points) : null,
+    [area.kind, area.points],
+  );
 
   const color = area.kind === "water"
-    ? isNight ? "#123d52" : "#65b7d1"
+    ? isNight ? "#123d52" : "#35a8c7"
     : area.kind === "pitch"
       ? isNight ? "#173e2b" : "#4f995e"
       : area.kind === "parking"
@@ -248,9 +279,35 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
           : isNight ? "#233527" : "#8fb17b";
 
   return (
-    <mesh geometry={geometry} receiveShadow>
-      <meshStandardMaterial color={color} roughness={0.88} metalness={area.kind === "water" ? 0.15 : 0} />
-    </mesh>
+    <group>
+      <mesh geometry={geometry} receiveShadow>
+        <meshStandardMaterial
+          color={color}
+          emissive={area.kind === "water" ? isNight ? "#0b2532" : "#1f6077" : "#000000"}
+          emissiveIntensity={area.kind === "water" ? 0.1 : 0}
+          roughness={area.kind === "water" ? 0.3 : 0.88}
+          metalness={area.kind === "water" ? 0.18 : 0}
+          transparent={area.kind === "water"}
+          opacity={area.kind === "water" ? 0.94 : 1}
+        />
+      </mesh>
+      {shoreline.length > 0 ? (
+        <Line
+          points={shoreline}
+          color={isNight ? "#4d8799" : "#d8f1f4"}
+          lineWidth={1.4}
+          transparent
+          opacity={0.72}
+        />
+      ) : null}
+      {area.name === "읍내저수지" && waterCenter && waterLevel != null ? (
+        <Html position={[waterCenter[0], waterLevel + 4, waterCenter[1]]} center distanceFactor={420} zIndexRange={[9, 0]}>
+          <div className="pointer-events-none whitespace-nowrap rounded-lg border border-white/90 bg-white/95 px-2.5 py-1.5 text-[10px] font-extrabold text-[#1e3a8a] shadow-[0_8px_20px_rgba(15,23,42,0.16)]">
+            읍내저수지
+          </div>
+        </Html>
+      ) : null}
+    </group>
   );
 });
 
@@ -849,6 +906,7 @@ function CampusWorld(props: Campus3DSceneProps) {
         opacity={0.42}
       />
       {campusData.areas.map((area) => <AreaMesh key={area.id} area={area} isNight={props.isNight} />)}
+      <AreaMesh area={EUPNAE_RESERVOIR} isNight={props.isNight} />
       {campusData.roads.map((road) => <TerrainRoad key={road.id} road={road} isNight={props.isNight} />)}
       {campusData.buildings.map((building) => (
         <BuildingMesh

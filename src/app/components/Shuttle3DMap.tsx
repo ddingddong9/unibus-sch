@@ -135,7 +135,8 @@ export default function Shuttle3DMap({ sceneMode, routePath, stops, buses, onSel
       const mainGatePoint = mainGateLat != null && mainGateLng != null
         ? projectCoordinate(mainGateLat, mainGateLng, campusData.origin)
         : projectCoordinate(36.769014, 126.927978, campusData.origin);
-      const framingPoints = [rearGatePoint, hyang3Point, mainGatePoint];
+      const reservoirPoint = projectCoordinate(36.77013, 126.936, campusData.origin);
+      const framingPoints = [rearGatePoint, hyang3Point, mainGatePoint, reservoirPoint];
       const xs = framingPoints.map(([x]) => x);
       const zs = framingPoints.map(([, z]) => z);
       const target: Point2D = [
