@@ -186,15 +186,14 @@ const CorridorArea = memo(function CorridorArea({ area }: { area: CampusArea }) 
     return surface;
   }, [area.points, waterLevel]);
   useEffect(() => () => geometry.dispose(), [geometry]);
-  const color = area.kind === "water" ? "#7dd3fc" : area.kind === "parking" ? "#9ea9a7" : "#619c68";
+  const color = area.kind === "water" ? "#94c7d6" : area.kind === "parking" ? "#9ea9a7" : "#619c68";
   return (
     <group>
       <mesh geometry={geometry} receiveShadow>
         {area.kind === "water" ? (
           <meshBasicMaterial
-            color="#7dd3fc"
+            color="#94c7d6"
             side={THREE.DoubleSide}
-            toneMapped={false}
           />
         ) : (
           <meshStandardMaterial color={color} roughness={0.92} />
