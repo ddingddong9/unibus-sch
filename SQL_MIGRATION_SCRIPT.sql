@@ -263,10 +263,8 @@ ON CONFLICT (id) DO NOTHING;
 -- 4단계: 초기 데이터 삽입 (옵션)
 -- ============================================================
 
--- 관리자 계정 (이미 있으면 스킵)
-INSERT INTO users (email, password_hash, name, role, provider)
-VALUES ('admin@sch.ac.kr', 'admin123', '관리자', 'admin', 'local')
-ON CONFLICT (email) DO NOTHING;
+-- 관리자 계정은 고정 비밀번호로 만들지 않는다.
+-- 배포 시 Edge Function의 SEED_ADMIN_EMAIL, SEED_ADMIN_PASSWORD secret을 사용한다.
 
 -- 샘플 셔틀 노선
 INSERT INTO routes (id, name, type, description, color, is_active)

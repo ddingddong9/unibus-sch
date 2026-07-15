@@ -289,18 +289,20 @@ function MyComponent() {
 
 ### ✅ 현재 구현된 보안
 
-1. **토큰 기반 인증** - JWT 토큰 사용
+1. **토큰 기반 인증** - CSPRNG bearer token을 발급하고 서버에는 SHA-256 해시 저장
 2. **프론트엔드 라우트 보호** - ProtectedRoute, AdminRoute
 3. **백엔드 API 권한 확인** - `requireAuth`, `requireAdmin` 미들웨어
 4. **관리자 권한 검증** - 서버에서 이중 확인
+5. **비밀번호 해싱** - bcrypt 해시 저장
+6. **토큰 만료 검사** - 서버에서 만료 시각과 현재 역할 확인
+7. **CORS 제한** - 허용된 Origin만 응답
 
 ### ⚠️ 개선 필요한 보안 (향후 작업)
 
-1. **비밀번호 해싱** - 현재 평문 저장 (bcrypt 적용 필요)
-2. **토큰 만료 시간** - 자동 로그아웃 구현
-3. **Refresh Token** - 장기간 로그인 유지
-4. **HTTPS 전용** - 프로덕션 환경
-5. **CORS 제한** - 특정 도메인만 허용
+1. **세션 쿠키 전환** - localStorage bearer token을 HttpOnly·Secure·SameSite 쿠키로 이전
+2. **로그인 시도 제한** - 계정/IP 기반 rate limiting 적용
+3. **세션 수명 단축·회전** - 30일 고정 세션을 단기 access/회전 세션으로 개선
+4. **보안 헤더 강화** - 서비스 연동 도메인을 반영한 CSP 적용
 
 ---
 
@@ -312,8 +314,8 @@ function MyComponent() {
 # 1. 회원가입
 POST /auth/signup
 {
-  "email": "test@sch.ac.kr",
-  "password": "test1234",
+  "email": "<TEST_USER_EMAIL>",
+  "password": "<TEST_USER_PASSWORD>",
   "name": "테스트",
   "studentId": "20240001"
 }
@@ -321,8 +323,8 @@ POST /auth/signup
 # 2. 로그인
 POST /auth/login
 {
-  "email": "test@sch.ac.kr",
-  "password": "test1234"
+  "email": "<TEST_USER_EMAIL>",
+  "password": "<TEST_USER_PASSWORD>"
 }
 
 # 3. /home 접근 → 성공
@@ -335,8 +337,8 @@ POST /auth/login
 # 1. 관리자 계정으로 로그인
 POST /auth/login
 {
-  "email": "admin@sch.ac.kr",
-  "password": "admin1234"
+  "email": "<ADMIN_EMAIL>",
+  "password": "<ADMIN_PASSWORD>"
 }
 
 # 2. /home 접근 → 성공

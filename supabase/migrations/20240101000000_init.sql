@@ -251,10 +251,8 @@ ORDER BY bus_id, timestamp DESC;
 -- 4단계: 초기 데이터 삽입 (옵션)
 -- ============================================================
 
--- 관리자 계정 (이미 있으면 스킵)
-INSERT INTO users (email, password_hash, name, role, provider)
-VALUES ('admin@sch.ac.kr', '$2a$10$ESjDbWfCsrJi0liWDS.0P.c1KPMFjSGdfBNxZsTBeCxUJZh/BCH6O', '관리자', 'admin', 'local')
-ON CONFLICT (email) DO NOTHING;
+-- 관리자 계정은 마이그레이션에 포함하지 않는다.
+-- 배포 환경의 비밀값을 사용하는 관리자 생성 절차에서 별도로 등록한다.
 
 -- 샘플 셔틀 노선
 INSERT INTO routes (id, name, type, description, color, is_active)
