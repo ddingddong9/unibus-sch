@@ -3,7 +3,9 @@ import { useNavigate } from "react-router";
 
 const routeItems = [
   { label: "후문", state: "출발" },
-  { label: "도서관", state: "2분 후" },
+  { label: "향3", state: "1분 후" },
+  { label: "향1", state: "2분 후" },
+  { label: "도서관", state: "4분 후" },
   { label: "정문", state: "도착 예정" },
 ];
 
@@ -20,6 +22,9 @@ const liveStatusItems = [
   "인천 하교 노선 18:10",
 ];
 
+const ROUTE_PATH_D =
+  "M38 316 C82 245.8 118 224.2 152 164.8 C190 100 252 118.9 292 170.2 C330 218.8 318 283.6 286 316 C246 356.5 200 324.1 166 297.1 C124 263.4 82 270.1 38 316Z";
+
 function BrandMark() {
   return (
     <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-[#1e3a8a] text-white">
@@ -30,30 +35,40 @@ function BrandMark() {
 
 function MovingRouteGraphic() {
   return (
-    <div className="relative h-[318px] overflow-hidden rounded-lg border border-[#dbe4ef] bg-white shadow-sm">
+    <div className="relative h-[400px] overflow-hidden rounded-lg border border-[#dbe4ef] bg-white shadow-sm">
       <div className="absolute inset-x-0 top-0 h-[88px] bg-[#eaf4ff]" />
       <div className="absolute left-5 top-5 rounded-full border border-[#dbeafe] bg-white px-3 py-1.5 font-['Public_Sans'] text-[12px] font-bold text-[#1e3a8a] shadow-sm">
         실시간 운행
       </div>
+      <div className="absolute right-5 top-5 z-10 rounded-lg border border-[#dbeafe] bg-white px-3 py-1.5 shadow-sm">
+        <p className="font-['Public_Sans'] text-[9px] font-bold text-[#64748b]">가장 가까운 버스</p>
+        <div className="mt-0.5 flex items-center gap-1.5">
+          <p className="font-['Public_Sans'] text-[12px] font-extrabold text-[#0f172a]">학내순환 2호차</p>
+          <span className="rounded-full bg-[#ecfdf5] px-1.5 py-0.5 font-['Public_Sans'] text-[10px] font-extrabold text-[#047857]">3분</span>
+        </div>
+      </div>
 
-      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 360 318" fill="none" aria-hidden="true">
+      <svg className="absolute inset-0 h-full w-full" viewBox="0 0 360 400" fill="none" aria-hidden="true">
         <path
-          d="M38 238 C82 186 118 170 152 126 C190 78 252 92 292 130 C330 166 318 214 286 238 C246 268 200 244 166 224 C124 199 82 204 38 238Z"
+          id="onboarding-route-path"
+          d={ROUTE_PATH_D}
           stroke="#e2e8f0"
           strokeWidth="18"
           strokeLinecap="round"
         />
         <path
-          d="M38 238 C82 186 118 170 152 126 C190 78 252 92 292 130 C330 166 318 214 286 238 C246 268 200 244 166 224 C124 199 82 204 38 238Z"
+          d={ROUTE_PATH_D}
           stroke="#1e3a8a"
           strokeWidth="5"
           strokeLinecap="round"
           strokeDasharray="12 13"
         />
         {[
-          [38, 238, "후문"],
-          [153, 126, "도서관"],
-          [292, 130, "정문"],
+          [38, 316, "후문"],
+          [92, 244, "향3"],
+          [148, 172, "향1"],
+          [218, 124, "도서관"],
+          [292, 170, "정문"],
         ].map(([cx, cy, label]) => (
           <g key={`${label}`}>
             <circle cx={cx} cy={cy} r="11" fill="white" stroke="#1e3a8a" strokeWidth="4" />
@@ -63,27 +78,18 @@ function MovingRouteGraphic() {
             </text>
           </g>
         ))}
+
+        <g>
+          <animateMotion dur="8s" repeatCount="indefinite" calcMode="linear">
+            <mpath href="#onboarding-route-path" />
+          </animateMotion>
+          <foreignObject x="-23" y="-23" width="46" height="46" overflow="visible">
+            <div className="flex h-[46px] w-[46px] items-center justify-center rounded-full bg-[#1e3a8a] text-white shadow-[0_14px_24px_rgba(30,58,138,0.24)] ring-4 ring-white">
+              <BusFront className="h-5 w-5" />
+            </div>
+          </foreignObject>
+        </g>
       </svg>
-
-      <div className="onboarding-bus-marker absolute left-[22px] top-[222px]">
-        <div className="relative flex h-[46px] w-[46px] items-center justify-center rounded-full bg-[#1e3a8a] text-white shadow-[0_14px_24px_rgba(30,58,138,0.24)] ring-4 ring-white">
-          <BusFront className="h-5 w-5" />
-          <span className="absolute -bottom-[5px] h-3 w-3 rotate-45 bg-[#1e3a8a]" />
-        </div>
-      </div>
-
-      <div className="onboard-reveal absolute bottom-5 left-5 right-5 rounded-lg border border-[#e2e8f0] bg-white p-4 shadow-[0_18px_28px_rgba(15,23,42,0.08)] [animation-delay:250ms]">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-            <p className="font-['Public_Sans'] text-[12px] font-bold text-[#64748b]">가장 가까운 버스</p>
-            <p className="font-['Public_Sans'] text-[18px] font-extrabold text-[#0f172a]">학내순환 2호차</p>
-          </div>
-          <div className="rounded-lg bg-[#ecfdf5] px-3 py-2 text-right">
-            <p className="font-['Public_Sans'] text-[11px] font-bold text-[#047857]">예상 도착</p>
-            <p className="font-['Public_Sans'] text-[18px] font-extrabold text-[#047857]">3분</p>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
