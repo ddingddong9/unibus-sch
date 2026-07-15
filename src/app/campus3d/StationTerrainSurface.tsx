@@ -8,8 +8,8 @@ const StationTerrainSurface = memo(function StationTerrainSurface() {
     const resolution = stationTerrainData.resolution + 52;
     const positions = new Float32Array(resolution * resolution * 3);
     const colors = new Float32Array(resolution * resolution * 3);
-    const lowColor = new THREE.Color("#8bc889");
-    const highColor = new THREE.Color("#d8edb7");
+    const lowColor = new THREE.Color("#567c5b");
+    const highColor = new THREE.Color("#8caf75");
     const minHeight = Math.min(...stationTerrainData.heights);
     const maxHeight = Math.max(...stationTerrainData.heights);
 
