@@ -342,7 +342,7 @@ const AreaOutline = memo(function AreaOutline({ area, isNight }: { area: CampusA
 export default function CampusStructures({ data, isNight }: CampusStructuresProps) {
   const westGate = getCampusLandmarkPoint(CAMPUS_LANDMARKS.westGate, data.origin);
   const hyangseolEastGate = getCampusLandmarkPoint(CAMPUS_LANDMARKS.hyangseolEastGate, data.origin);
-  const fountain = data.areas.find((area) => area.kind === "water");
+  const fountain = data.areas.find((area) => area.name === "SCH분수연못");
   const shuttleStation = data.areas.find((area) => area.kind === "bus_station");
   const theater = data.buildings.find((building) => building.name === "야외 공연장");
 

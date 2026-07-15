@@ -125,8 +125,10 @@ function formatDepartureCountdown(departureAt: Date | undefined, nowMs: number) 
   return minutes > 0 ? `${hours}시간 ${minutes}분` : `${hours}시간 남음`;
 }
 
-const formatStationRouteName = (name?: string | null) =>
-  (name || "신창역 셔틀").replace(/후문/g, "김승우 라운지");
+const formatStationRouteName = (name?: string | null) => name || "신창역 셔틀";
+
+const formatStationServiceLabel = (label?: string) =>
+  label?.replace(/김승우\s*라운지/g, "후문");
 
 export default function CampusShuttleWrapper() {
   const { t } = useLanguage();
@@ -450,8 +452,9 @@ export default function CampusShuttleWrapper() {
     const destinationEstimate = destination ? arrivalEstimates.get(destination.id) : null;
     return effectiveBuses.map((bus) => ({
       ...bus,
+      etaLabel: formatStationServiceLabel(bus.etaLabel),
       label: !bus.etaLabel && destinationEstimate?.busId === bus.id && destinationEstimate.minutes
-        ? `${destination?.nameKo === "신창역" ? "신창역" : "라운지"} 약 ${destinationEstimate.minutes}분`
+        ? `${destination?.nameKo === "신창역" ? "신창역" : "후문"} 약 ${destinationEstimate.minutes}분`
         : bus.label,
     }));
   }, [activeStops, arrivalEstimates, effectiveBuses, mode]);
@@ -623,7 +626,7 @@ export default function CampusShuttleWrapper() {
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[12px] font-extrabold text-[#1e3a8a]">
                   {mode === "station"
-                    ? `${selectedStationDirection === "to-station" ? "김승우 라운지" : "신창역"} ${stationCountdown}`
+                    ? `${selectedStationDirection === "to-station" ? "후문" : "신창역"} ${stationCountdown}`
                     : "학내순환 운행 중"}
                 </span>
                 <span className="block truncate text-[10px] font-semibold text-[rgba(30,58,138,0.65)]">
@@ -643,7 +646,7 @@ export default function CampusShuttleWrapper() {
                   </p>
                   <p className="font-['Public_Sans'] text-[rgba(30,58,138,0.65)] text-[12px] leading-[18px]">
                     {mode === "station"
-                      ? "김승우 라운지와 신창역을 오가는 셔틀입니다"
+                      ? "후문과 신창역을 오가는 셔틀입니다"
                       : campusLoopRoute ? getServiceRuleSummary(campusLoopRoute) : "교내 정류장을 순환하는 셔틀입니다"}
                   </p>
                 </div>
@@ -682,7 +685,7 @@ export default function CampusShuttleWrapper() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="text-[11px] font-bold text-white/70">
-                          {selectedStationDirection === "to-station" ? "김승우 라운지 출발" : "신창역 출발"}
+                          {selectedStationDirection === "to-station" ? "후문 출발" : "신창역 출발"}
                         </p>
                         <p className="mt-0.5 text-[24px] font-black leading-8">{stationCountdown}</p>
                       </div>
@@ -708,8 +711,8 @@ export default function CampusShuttleWrapper() {
                   {sheetExpanded && selectedStationRoute && (
                     <p className="px-1 text-[11px] font-semibold text-[rgba(30,58,138,0.68)]">
                       {selectedStationDirection === "to-station"
-                        ? `열차 출발 ${stationOffset}분 전에 김승우 라운지에서 출발합니다`
-                        : `열차 도착 ${stationWait}분 후 출발 · ${continuesCampusLoop(selectedStationRoute) ? "후문 도착 후 학내순환 1회" : "김승우 라운지 종착"}`}
+                        ? `열차 출발 ${stationOffset}분 전에 후문에서 출발합니다`
+                        : `열차 도착 ${stationWait}분 후 출발 · ${continuesCampusLoop(selectedStationRoute) ? "후문 도착 후 학내순환 1회" : "후문 종착"}`}
                     </p>
                   )}
 
