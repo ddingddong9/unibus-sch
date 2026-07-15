@@ -258,7 +258,7 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
   }, [area.points, waterLevel]);
   useEffect(() => () => geometry.dispose(), [geometry]);
   const color = area.kind === "water"
-    ? isNight ? "#38bdf8" : "#7dd3fc"
+    ? isNight ? "#75aeba" : "#94c7d6"
     : area.kind === "pitch"
       ? isNight ? "#173e2b" : "#4f995e"
       : area.kind === "parking"
@@ -272,9 +272,8 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
       <mesh geometry={geometry} receiveShadow>
         {area.kind === "water" ? (
           <meshBasicMaterial
-            color="#7dd3fc"
+            color="#94c7d6"
             side={THREE.DoubleSide}
-            toneMapped={false}
           />
         ) : (
           <meshStandardMaterial color={color} roughness={0.88} metalness={0} />
