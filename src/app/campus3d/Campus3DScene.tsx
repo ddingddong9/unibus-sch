@@ -264,7 +264,7 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
     [area.kind, area.points, waterLevel],
   );
   const color = area.kind === "water"
-    ? isNight ? "#123d52" : "#35a8c7"
+    ? isNight ? "#38bdf8" : "#7dd3fc"
     : area.kind === "pitch"
       ? isNight ? "#173e2b" : "#4f995e"
       : area.kind === "parking"
@@ -278,21 +278,21 @@ const AreaMesh = memo(function AreaMesh({ area, isNight }: { area: CampusArea; i
       <mesh geometry={geometry} receiveShadow>
         <meshStandardMaterial
           color={color}
-          emissive={area.kind === "water" ? isNight ? "#0b2532" : "#1f6077" : "#000000"}
-          emissiveIntensity={area.kind === "water" ? 0.1 : 0}
-          roughness={area.kind === "water" ? 0.3 : 0.88}
-          metalness={area.kind === "water" ? 0.18 : 0}
-          transparent={area.kind === "water"}
-          opacity={area.kind === "water" ? 0.94 : 1}
+          emissive={area.kind === "water" ? "#38bdf8" : "#000000"}
+          emissiveIntensity={area.kind === "water" ? 0.18 : 0}
+          roughness={area.kind === "water" ? 0.24 : 0.88}
+          metalness={area.kind === "water" ? 0.08 : 0}
+          transparent={false}
+          opacity={1}
         />
       </mesh>
       {shoreline.length > 0 ? (
         <Line
           points={shoreline}
-          color={isNight ? "#4d8799" : "#d8f1f4"}
-          lineWidth={1.4}
+          color={isNight ? "#bae6fd" : "#e0f2fe"}
+          lineWidth={2}
           transparent
-          opacity={0.72}
+          opacity={0.95}
         />
       ) : null}
     </group>
@@ -579,9 +579,9 @@ function ShuttleBus({
     group.current.quaternion.slerp(targetQuaternion, 1 - Math.exp(-delta * 7));
     if (followed) {
       cameraPosition.set(
-        targetPosition.x - Math.sin(sample.angle) * 42 + 18,
-        targetPosition.y + 28,
-        targetPosition.z - Math.cos(sample.angle) * 42 + 18,
+        targetPosition.x - Math.sin(sample.angle) * 82 + 28,
+        targetPosition.y + 50,
+        targetPosition.z - Math.cos(sample.angle) * 82 + 28,
       );
       cameraTarget.set(targetPosition.x, targetPosition.y + 3, targetPosition.z);
       camera.position.lerp(cameraPosition, 1 - Math.exp(-delta * 2.4));
@@ -660,9 +660,13 @@ const LiveShuttleBus = memo(function LiveShuttleBus({ bus, track, followed, cont
     const routeRotation = Number.isFinite(sample.angle) ? sample.angle : rotation;
     group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, routeRotation, 1 - Math.exp(-delta * 5));
     if (followed) {
-      cameraPosition.set(target.x + 38, target.y + 30, target.z + 44);
+      cameraPosition.set(
+        target.x - Math.sin(routeRotation) * 82 + 28,
+        target.y + 50,
+        target.z - Math.cos(routeRotation) * 82 + 28,
+      );
       cameraTarget.set(target.x, target.y + 3, target.z);
-      camera.position.lerp(cameraPosition, 1 - Math.exp(-delta * 2.4));
+      camera.position.lerp(cameraPosition, 1 - Math.exp(-delta * 2.1));
       controls.current?.target.lerp(cameraTarget, 1 - Math.exp(-delta * 3));
       controls.current?.update();
     }

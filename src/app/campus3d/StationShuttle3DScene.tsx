@@ -192,22 +192,22 @@ const CorridorArea = memo(function CorridorArea({ area }: { area: CampusArea }) 
       : [],
     [area.kind, area.points, waterLevel],
   );
-  const color = area.kind === "water" ? "#35a8c7" : area.kind === "parking" ? "#9ea9a7" : "#619c68";
+  const color = area.kind === "water" ? "#7dd3fc" : area.kind === "parking" ? "#9ea9a7" : "#619c68";
   return (
     <group>
       <mesh geometry={geometry} receiveShadow>
         <meshStandardMaterial
           color={color}
-          emissive={area.kind === "water" ? "#1f6077" : "#000000"}
-          emissiveIntensity={area.kind === "water" ? 0.1 : 0}
-          roughness={area.kind === "water" ? 0.3 : 0.92}
-          metalness={area.kind === "water" ? 0.18 : 0}
-          transparent={area.kind === "water"}
-          opacity={area.kind === "water" ? 0.94 : 1}
+          emissive={area.kind === "water" ? "#38bdf8" : "#000000"}
+          emissiveIntensity={area.kind === "water" ? 0.18 : 0}
+          roughness={area.kind === "water" ? 0.24 : 0.92}
+          metalness={area.kind === "water" ? 0.08 : 0}
+          transparent={false}
+          opacity={1}
         />
       </mesh>
       {shoreline.length > 0 ? (
-        <Line points={shoreline} color="#d8f1f4" lineWidth={1.4} transparent opacity={0.72} />
+        <Line points={shoreline} color="#e0f2fe" lineWidth={2} transparent opacity={0.95} />
       ) : null}
     </group>
   );
@@ -371,9 +371,9 @@ function ShuttleBusModel({ bus, track, followed, controls, onFollow }: {
     group.current.rotation.y = THREE.MathUtils.lerp(group.current.rotation.y, angle, 1 - Math.exp(-delta * 6));
     if (followed) {
       cameraPosition.set(
-        target.x - Math.sin(angle) * 68 + 24,
-        target.y + 42,
-        target.z - Math.cos(angle) * 68 + 24,
+        target.x - Math.sin(angle) * 82 + 28,
+        target.y + 50,
+        target.z - Math.cos(angle) * 82 + 28,
       );
       cameraTarget.set(target.x, target.y + 3, target.z);
       camera.position.lerp(cameraPosition, 1 - Math.exp(-delta * 2.1));
@@ -404,7 +404,11 @@ function ShuttleBusModel({ bus, track, followed, controls, onFollow }: {
       )))}
       <Html position={[0, 6.6, 0]} center zIndexRange={[16, 0]}>
         <div className="flex -translate-y-8 flex-col items-center">
-          <button type="button" className={`flex items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-left text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}>
+          <button
+            type="button"
+            onClick={(event) => { event.stopPropagation(); onFollow(followed ? null : bus.id); }}
+            className={`flex items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-left text-[10px] font-extrabold shadow-[0_8px_22px_rgba(15,23,42,0.16)] ${followed ? "border-[#1e3a8a] bg-[#1e3a8a] text-white" : "border-white/85 bg-white/95 text-[#1e3a8a]"}`}
+          >
             <span className="h-2 w-2 rounded-full bg-[#22c55e] ring-2 ring-white" />
             <span className="flex flex-col leading-tight">
               <span>{bus.label}</span>
