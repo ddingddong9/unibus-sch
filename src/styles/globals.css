@@ -107,17 +107,6 @@ html.unibus-splash-active .unibus-theme {
   background-color: #1e3a8a;
 }
 
-/* 430px 디자인 비율은 유지하면서 iPhone의 실제 세로 화면을 끝까지 채운다. */
-@media (max-width: 429px) {
-  .unibus-mobile-canvas {
-    width: 430px;
-    height: var(--unibus-mobile-canvas-height, 100dvh);
-    flex: none;
-    transform: scale(var(--unibus-mobile-scale, 1));
-    transform-origin: top left;
-  }
-}
-
 body {
   margin: 0;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
