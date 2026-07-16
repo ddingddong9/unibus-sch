@@ -189,6 +189,5 @@ html.dark {
   padding-top: env(safe-area-inset-top, 0px);
 }
 .pb-safe-nav {
-  /* 하단 네비게이션: 홈 인디케이터 높이 + 기본 패딩 */
-  padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
