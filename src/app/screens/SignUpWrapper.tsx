@@ -81,7 +81,7 @@ export default function SignUpWrapper() {
   };
 
   return (
-    <div className="bg-gradient-to-b from-white to-[#f6f6f8] content-stretch flex flex-col items-start relative size-full overflow-auto">
+    <div className="relative flex size-full flex-col items-start overflow-y-auto overscroll-y-contain bg-gradient-to-b from-white to-[#f6f6f8] [-webkit-overflow-scrolling:touch]">
       {/* Header */}
       <div className="sticky top-0 z-30 w-full pt-safe">
         <div className="backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] flex items-center justify-between pb-[12px] pt-[16px] px-[16px] border-b border-[#f1f5f9]">

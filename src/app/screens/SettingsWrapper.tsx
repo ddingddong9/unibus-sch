@@ -3,7 +3,6 @@ import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import { Moon, Sun } from "lucide-react";
 import { useTheme } from "next-themes";
-import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import { useAuth } from "../contexts/AuthContext";
 import { SettingsSkeleton } from "../components/SkeletonLoaders";
@@ -107,7 +106,7 @@ export default function SettingsWrapper() {
 
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-start relative size-full">
-      <div className="bg-white content-stretch flex flex-col items-start overflow-auto pb-[120px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full scrollbar-hide" style={{ height: '100dvh' }}>
+      <div className="relative flex h-full w-full shrink-0 flex-col items-start overflow-y-auto overscroll-y-contain bg-white pb-[120px] shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] scrollbar-hide [-webkit-overflow-scrolling:touch]">
         {/* Header */}
         <div className="sticky top-0 z-30 w-full pt-safe">
           <div className="backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] flex items-center justify-between pb-[12px] pt-[16px] px-[16px] w-full border-b border-[#f1f5f9]">
@@ -478,9 +477,6 @@ export default function SettingsWrapper() {
           </form>
         </div>
       ) : null}
-
-      {/* Bottom Navigation */}
-      <BottomNav />
     </div>
   );
 }

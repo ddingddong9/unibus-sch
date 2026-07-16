@@ -215,7 +215,7 @@ export default function OnboardingWrapper() {
   const navigate = useNavigate();
 
   return (
-    <div className="size-full overflow-y-auto bg-[#f8fafc]">
+    <div className="size-full overflow-y-auto overscroll-y-contain bg-[#f8fafc] [-webkit-overflow-scrolling:touch]">
       <div className="min-h-full bg-[#f8fafc] px-5 pb-8 pt-safe">
         <header className="flex items-center justify-between py-4">
           <div className="flex items-center gap-2">

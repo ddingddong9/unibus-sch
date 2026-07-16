@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router";
 import { motion, AnimatePresence } from "framer-motion";
-import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
 import type { Notice } from "../types";
@@ -89,7 +88,7 @@ export default function NoticeWrapper() {
 
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-start relative size-full">
-      <div className="bg-white content-stretch flex flex-col items-start overflow-auto pb-[120px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full" style={{ height: '100dvh' }}>
+      <div className="relative flex h-full w-full shrink-0 flex-col items-start overflow-hidden bg-white pb-[120px] shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)]">
         {/* Header */}
         <div className="sticky top-0 z-30 w-full pt-safe">
           <div className="backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] flex items-center justify-between pb-[12px] pt-[16px] px-[16px] w-full">
@@ -168,7 +167,7 @@ export default function NoticeWrapper() {
         </div>
 
         {/* Notice List */}
-        <div className="flex-1 w-full px-[16px] py-[16px] space-y-3 overflow-y-auto scrollbar-hide">
+        <div className="w-full min-h-0 flex-1 space-y-3 overflow-y-auto overscroll-y-contain px-[16px] py-[16px] scrollbar-hide [-webkit-overflow-scrolling:touch]">
           {loading ? (
             <motion.div
               key="notice-skeleton"
@@ -330,9 +329,6 @@ export default function NoticeWrapper() {
           </motion.div>
         )}
       </AnimatePresence>
-
-      {/* Bottom Navigation */}
-      <BottomNav />
     </div>
   );
 }

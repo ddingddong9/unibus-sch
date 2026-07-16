@@ -72,7 +72,7 @@ export default function LoginWrapper() {
   };
 
   return (
-    <div className="content-stretch flex flex-col items-start relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] size-full bg-gradient-to-b from-white to-[#f6f6f8]">
+    <div className="relative flex size-full flex-col items-start overflow-y-auto overscroll-y-contain bg-gradient-to-b from-white to-[#f6f6f8] shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] [-webkit-overflow-scrolling:touch]">
       {/* Header */}
       <div className="bg-white relative shrink-0 w-full">
         <div className="flex flex-row items-center justify-center size-full">
