@@ -80,14 +80,6 @@ export interface NotificationDelivery {
   createdAt: string;
 }
 
-export interface DemoSession {
-  id: string;
-  status: 'active' | 'completed' | 'failed';
-  plans: Array<{ busId: string; kind: 'campus' | 'commuter'; routeId: string | null; label: string }>;
-  startedAt: string;
-  endedAt?: string | null;
-}
-
 export type ShuttleVariant =
   | 'campus_loop'
   | 'campus_to_station'
