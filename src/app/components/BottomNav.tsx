@@ -116,10 +116,6 @@ export default function BottomNav() {
         </button>
       </div>
 
-      {/* Bottom Indicator */}
-      <div className="absolute bottom-[6px] left-1/2 -translate-x-1/2">
-        <div className="bg-[#e2e8f0] h-[6px] rounded-[9999px] w-[128px]" />
-      </div>
     </nav>
   );
 }
