@@ -3,14 +3,20 @@
 @import './theme.css';
 
 @keyframes routeFade {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0.72;
+    transform: translate3d(0, 5px, 0) scale(0.998);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
 }
 
 @keyframes routeSlide {
   from {
-    opacity: 0;
-    transform: translate3d(24px, 0, 0);
+    opacity: 0.76;
+    transform: translate3d(7px, 0, 0);
   }
   to {
     opacity: 1;
@@ -20,12 +26,36 @@
 
 @keyframes routeLift {
   from {
-    opacity: 0;
-    transform: translate3d(0, 10px, 0);
+    opacity: 0.74;
+    transform: translate3d(0, 6px, 0);
   }
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0);
+  }
+}
+
+.route-transition {
+  animation-fill-mode: both;
+  backface-visibility: hidden;
+  will-change: opacity, transform;
+}
+
+.route-transition-tab {
+  animation: routeFade 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.route-transition-auth {
+  animation: routeSlide 210ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.route-transition-default {
+  animation: routeLift 190ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-transition {
+    animation: none;
   }
 }
 

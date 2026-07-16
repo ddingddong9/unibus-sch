@@ -6,12 +6,12 @@ const TAB_ROUTES = ["/home", "/campus-shuttle", "/commuter-bus", "/notice", "/se
 
 function getTransitionClass(pathname: string) {
   if (TAB_ROUTES.includes(pathname)) {
-    return "animate-[routeFade_150ms_ease-out]";
+    return "route-transition route-transition-tab";
   }
   if (AUTH_ROUTES.includes(pathname)) {
-    return "animate-[routeSlide_220ms_cubic-bezier(0.25,0.46,0.45,0.94)]";
+    return "route-transition route-transition-auth";
   }
-  return "animate-[routeLift_180ms_ease-out]";
+  return "route-transition route-transition-default";
 }
 
 export function AnimatedMobileLayout() {
