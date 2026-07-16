@@ -2,7 +2,6 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router";
 import { Bell, BusFront, ChevronRight, MapPinned, TrainFront, Zap } from "lucide-react";
 import svgPaths from "../../imports/svg-odbnwpa57u";
-import BottomNav from "../components/BottomNav";
 import SinchangTimetableSheet from "../components/SinchangTimetableSheet";
 import { useLanguage } from "../contexts/LanguageContext";
 import {
@@ -213,7 +212,7 @@ export default function HomeWrapper() {
 
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-start relative size-full">
-      <div className="bg-white content-stretch flex flex-col items-start overflow-y-auto scrollbar-hide pb-[120px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full" style={{ height: '100dvh' }}>
+      <div className="relative flex h-full w-full shrink-0 flex-col items-start overflow-y-auto overscroll-y-contain bg-white pb-[120px] shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] scrollbar-hide [-webkit-overflow-scrolling:touch]">
 
         {/* Header – sticky, no entrance animation */}
         <div className="sticky top-0 z-30 w-full pt-safe">
@@ -463,7 +462,6 @@ export default function HomeWrapper() {
 
       </div>
 
-      <BottomNav />
       <SinchangTimetableSheet
         open={timetableOpen}
         serviceDay={timetableDay}

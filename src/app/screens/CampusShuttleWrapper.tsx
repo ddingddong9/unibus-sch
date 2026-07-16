@@ -1,7 +1,6 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { Box, Bus, ChevronDown, ChevronUp, Map as MapIcon, MapPin, Route as RouteIcon, Train } from "lucide-react";
-import BottomNav from "../components/BottomNav";
 import { useLanguage } from "../contexts/LanguageContext";
 import NaverMapComponent from "../components/NaverMapComponent";
 import { api } from "../services/api";
@@ -537,7 +536,7 @@ export default function CampusShuttleWrapper() {
 
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
-      <div className="bg-[#f6f6f8] overflow-hidden relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] shrink-0 w-full max-w-[430px]" style={{ height: "100dvh" }}>
+      <div className="relative h-full w-full max-w-[430px] shrink-0 overflow-hidden bg-[#f6f6f8] shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)]">
         <div className="absolute inset-0 w-full h-full">
           <AnimatePresence initial={false} mode="sync">
             {mapMode === "2d" ? (
@@ -887,7 +886,6 @@ export default function CampusShuttleWrapper() {
           </div>}
         </div>
 
-        <BottomNav />
       </div>
     </div>
   );

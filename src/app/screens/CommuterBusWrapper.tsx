@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router";
-import BottomNav from "../components/BottomNav";
 import RouteMapModal from "../components/RouteMapModal";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
@@ -118,7 +117,7 @@ export default function CommuterBusWrapper() {
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
       <div
-        className="bg-white content-stretch flex flex-col items-start max-w-[430px] overflow-y-auto pb-[120px] relative shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] w-full h-full"
+        className="relative flex h-full w-full max-w-[430px] flex-col items-start overflow-y-auto overscroll-y-contain bg-white pb-[120px] shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)] scrollbar-hide [-webkit-overflow-scrolling:touch]"
       >
         {/* Header */}
         <div className="sticky top-0 z-30 w-full pt-safe">
@@ -430,9 +429,6 @@ export default function CommuterBusWrapper() {
           />
         );
       })()}
-
-      {/* Bottom Navigation */}
-      <BottomNav />
     </div>
   );
 }

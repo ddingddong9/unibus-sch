@@ -22,7 +22,10 @@ export default function BottomNav() {
   }, []);
 
   return (
-    <div className="fixed backdrop-blur-[12px] bg-[rgba(255,255,255,0.95)] bottom-0 content-stretch flex items-center justify-center left-1/2 -translate-x-1/2 pt-[13px] px-[24px] w-full max-w-[430px] border-t border-[#e2e8f0] z-50 pb-safe-nav">
+    <nav
+      aria-label={t("주요 화면", "Primary")}
+      className="absolute inset-x-0 bottom-0 z-50 flex w-full max-w-[430px] items-center justify-center border-t border-[#e2e8f0] bg-[rgba(255,255,255,0.95)] px-[24px] pb-safe-nav pt-[13px] backdrop-blur-[12px]"
+    >
       <div className="flex items-center justify-between w-full">
         {/* Home */}
         <button
@@ -117,6 +120,6 @@ export default function BottomNav() {
       <div className="absolute bottom-[6px] left-1/2 -translate-x-1/2">
         <div className="bg-[#e2e8f0] h-[6px] rounded-[9999px] w-[128px]" />
       </div>
-    </div>
+    </nav>
   );
 }
