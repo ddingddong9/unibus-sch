@@ -28,6 +28,7 @@ const allowedOriginPatterns = [
   /^https:\/\/unibus-sch\.vercel\.app$/,
   /^https:\/\/unibus-sch-git-[a-z0-9-]+-ddingddong9s-projects\.vercel\.app$/,
   /^https:\/\/unibus-sch-[a-z0-9]+-ddingddong9s-projects\.vercel\.app$/,
+  /^https:\/\/unibus-[a-z0-9]+-ddingddong9s-projects\.vercel\.app$/,
 ];
 
 const resolveAllowedOrigin = (origin: string) => {
