@@ -8,7 +8,6 @@ import {
   LayoutDashboard,
   LogOut,
   Menu,
-  MonitorPlay,
   Route,
   Users,
   X,
@@ -137,7 +136,6 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     { path: "/admin/notices", icon: FileText, label: "공지·알림", section: "콘텐츠 관리" },
     { path: "/admin/support", icon: CircleHelp, label: "문의·장애", section: "사용자 대응" },
     { path: "/admin/users", icon: Users, label: "사용자", section: "사용자 대응" },
-    { path: "/admin/demo", icon: MonitorPlay, label: "프로토타입 도구", section: "학술제" },
   ];
   const currentItem = menuItems.find((item) => item.path === location.pathname);
 

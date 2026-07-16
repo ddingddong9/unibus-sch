@@ -43,21 +43,6 @@ CREATE INDEX IF NOT EXISTS idx_notification_deliveries_created
   ON notification_deliveries(created_at DESC);
 ALTER TABLE notification_deliveries ENABLE ROW LEVEL SECURITY;
 
-CREATE TABLE IF NOT EXISTS demo_sessions (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  status VARCHAR(20) NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'completed', 'failed')),
-  snapshot JSONB NOT NULL DEFAULT '[]'::jsonb,
-  plans JSONB NOT NULL DEFAULT '[]'::jsonb,
-  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
-  started_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-  ended_at TIMESTAMP WITH TIME ZONE,
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_demo_sessions_one_active
-  ON demo_sessions(status) WHERE status = 'active';
-ALTER TABLE demo_sessions ENABLE ROW LEVEL SECURITY;
-
 CREATE TABLE IF NOT EXISTS admin_action_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   admin_id UUID REFERENCES users(id) ON DELETE SET NULL,

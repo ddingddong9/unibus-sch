@@ -13,7 +13,6 @@ import users from "./routes/users.tsx";
 import campus from "./routes/campus.tsx";
 import notifications from "./routes/notifications.tsx";
 import reports from "./routes/reports.tsx";
-import demo from "./routes/demo.tsx";
 
 const app = new Hono();
 
@@ -52,7 +51,6 @@ app.route('/users', users);
 app.route('/campus', campus);
 app.route('/notifications', notifications);
 app.route('/reports', reports);
-app.route('/demo', demo);
 
 // Local dev: Kong strips /functions/v1 but keeps /make-server, so Hono
 // receives paths like /make-server/auth/signup instead of just /auth/signup
@@ -66,7 +64,6 @@ app.route(`${DEV_PREFIX}/users`, users);
 app.route(`${DEV_PREFIX}/campus`, campus);
 app.route(`${DEV_PREFIX}/notifications`, notifications);
 app.route(`${DEV_PREFIX}/reports`, reports);
-app.route(`${DEV_PREFIX}/demo`, demo);
 
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));
 

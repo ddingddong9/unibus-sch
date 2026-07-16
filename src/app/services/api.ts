@@ -8,8 +8,7 @@ import type {
   UserReport,
   ReportCategory,
   ReportStatus,
-  NotificationDelivery,
-  DemoSession
+  NotificationDelivery
 } from '../types';
 
 type RouteStopInput = {
@@ -491,29 +490,6 @@ class ApiClient {
     });
     if (response.success && response.data) return response.data;
     throw new Error(response.error || 'Failed to update report');
-  }
-
-  // ============ DEMO SESSION ENDPOINTS ============
-
-  async getDemoSession(): Promise<DemoSession | null> {
-    const response = await this.request<ApiResponse<DemoSession | null>>('/demo/status');
-    if (response.success) return response.data ?? null;
-    throw new Error(response.error || 'Failed to fetch demo session');
-  }
-
-  async startDemoSession(plans: DemoSession['plans']): Promise<DemoSession> {
-    const response = await this.request<ApiResponse<DemoSession>>('/demo/start', {
-      method: 'POST',
-      body: JSON.stringify({ plans }),
-    });
-    if (response.success && response.data) return response.data;
-    throw new Error(response.error || 'Failed to start demo session');
-  }
-
-  async stopDemoSession(): Promise<DemoSession | null> {
-    const response = await this.request<ApiResponse<DemoSession | null>>('/demo/stop', { method: 'POST' });
-    if (response.success) return response.data ?? null;
-    throw new Error(response.error || 'Failed to stop demo session');
   }
 
   // ============ USER MANAGEMENT ENDPOINTS (Admin) ============
