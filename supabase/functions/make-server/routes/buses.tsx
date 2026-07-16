@@ -34,13 +34,19 @@ buses.get("/", async (c) => {
     }
 
     const busIds = (allBuses || []).map((bus: any) => bus.id);
-    const { data: activeTrips } = busIds.length > 0
-      ? await db.from('bus_trips')
+    const [{ data: activeTrips }, { data: latestLocations }] = busIds.length > 0
+      ? await Promise.all([
+        db.from('bus_trips')
         .select('id, bus_id, route_id, service_phase, planned_departure_at, current_stop_order')
         .in('bus_id', busIds)
-        .eq('status', 'active')
-      : { data: [] };
+        .eq('status', 'active'),
+        db.from('bus_latest_state')
+          .select('bus_id, latitude, longitude, speed, heading, timestamp')
+          .in('bus_id', busIds),
+      ])
+      : [{ data: [] }, { data: [] }];
     const tripByBus = new Map((activeTrips || []).map((trip: any) => [trip.bus_id, trip]));
+    const locationByBus = new Map((latestLocations || []).map((location: any) => [location.bus_id, location]));
 
     // 프론트엔드 호환성을 위해 필드명 변환
     const formattedBuses = allBuses?.map(bus => ({
@@ -68,6 +74,14 @@ buses.get("/", async (c) => {
         plannedDepartureAt: tripByBus.get(bus.id).planned_departure_at,
         currentStopOrder: tripByBus.get(bus.id).current_stop_order,
       } : null,
+      location: locationByBus.has(bus.id) ? {
+        lat: locationByBus.get(bus.id).latitude,
+        lng: locationByBus.get(bus.id).longitude,
+        speed: locationByBus.get(bus.id).speed,
+        heading: locationByBus.get(bus.id).heading,
+        timestamp: locationByBus.get(bus.id).timestamp,
+      } : null,
+      lastLocationAt: locationByBus.get(bus.id)?.timestamp || null,
       createdAt: bus.created_at,
       updatedAt: bus.updated_at,
     })) || [];
@@ -395,6 +409,35 @@ buses.put("/:id", requireAdmin, async (c) => {
   } catch (error: any) {
     console.error("❌ Update bus error:", error);
     return c.json({ success: false, error: "Failed to update bus" }, 500);
+  }
+});
+
+// Force-stop a live trip atomically so the bus and trip records stay aligned.
+buses.post("/:id/force-stop", requireAdmin, async (c) => {
+  try {
+    const id = c.req.param("id");
+    const adminId = c.get("userId");
+    const { reason = "관리자 강제 종료" } = await c.req.json().catch(() => ({}));
+    const { data: existingBus } = await db.from("buses").select("id").eq("id", id).maybeSingle();
+    if (!existingBus) return c.json({ success: false, error: "Bus not found" }, 404);
+
+    const { error } = await db.rpc("admin_force_stop_bus", { target_bus_id: id });
+    if (error) {
+      console.error("❌ Force-stop error:", error);
+      return c.json({ success: false, error: "운행 기록을 정리하지 못했습니다" }, 500);
+    }
+
+    await db.from("admin_action_logs").insert({
+      admin_id: adminId,
+      action: "bus_force_stopped",
+      target_type: "bus",
+      target_id: id,
+      metadata: { reason: String(reason).slice(0, 300) },
+    });
+    return c.json({ success: true });
+  } catch (error) {
+    console.error("❌ Force-stop error:", error);
+    return c.json({ success: false, error: "강제 운행 종료에 실패했습니다" }, 500);
   }
 });
 

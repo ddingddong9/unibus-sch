@@ -5,7 +5,8 @@ import webpush from "npm:web-push";
 import { db } from "../db.tsx";
 import { requireAdmin, requireAuth } from "../middleware/auth.tsx";
 
-const notifications = new Hono();
+const notifications = new Hono<{ Variables: { userId: string } }>();
+const validTargets = new Set(["all", "campus", "commuter", "system"]);
 
 const vapidPublicKey = Deno.env.get("VAPID_PUBLIC_KEY") || "";
 const vapidPrivateKey = Deno.env.get("VAPID_PRIVATE_KEY") || "";
@@ -102,6 +103,18 @@ const sendPushNotifications = async (target: string, payload: Record<string, unk
   return { attempted: subscriptions.length, sent, failed };
 };
 
+const recordDelivery = async (noticeId: string, target: string, result: { attempted: number; sent: number; failed: number }, adminId: string) => {
+  const { error } = await db.from("notification_deliveries").insert({
+    notice_id: noticeId,
+    target,
+    attempted: result.attempted,
+    sent: result.sent,
+    failed: result.failed,
+    created_by: adminId,
+  });
+  if (error) console.error("❌ Notification delivery history error:", error);
+};
+
 notifications.get("/vapid-public-key", async (c) => {
   return c.json({ success: true, data: { publicKey: vapidPublicKey } });
 });
@@ -174,6 +187,7 @@ notifications.post("/send", requireAdmin, async (c) => {
     if (!title || !message) {
       return c.json({ success: false, error: "Missing required fields" }, 400);
     }
+    if (!validTargets.has(target)) return c.json({ success: false, error: "Invalid notification target" }, 400);
 
     const category = targetCategory[target] || "general";
     const priority = category === "system" ? "high" : "medium";
@@ -211,11 +225,71 @@ notifications.post("/send", requireAdmin, async (c) => {
       noticeId: formattedNotice.id,
       createdAt: formattedNotice.createdAt,
     });
+    await recordDelivery(formattedNotice.id, target, pushResult, userId);
 
     return c.json({ success: true, data: { notice: formattedNotice, push: pushResult } });
   } catch (error: any) {
     console.error("❌ Notification send error:", error);
     return c.json({ success: false, error: "Failed to send notification" }, 500);
+  }
+});
+
+notifications.post("/send-existing", requireAdmin, async (c) => {
+  try {
+    const adminId = c.get("userId");
+    const { noticeId, target = "all" } = await c.req.json();
+    if (!noticeId || !validTargets.has(target)) {
+      return c.json({ success: false, error: "공지와 발송 대상을 확인해 주세요" }, 400);
+    }
+
+    const { data: notice, error } = await db.from("notices").select("*").eq("id", noticeId).single();
+    if (error || !notice) return c.json({ success: false, error: "공지를 찾을 수 없습니다" }, 404);
+
+    const push = await sendPushNotifications(target, {
+      title: notice.title,
+      body: notice.content,
+      url: "/notice",
+      noticeId: notice.id,
+      createdAt: notice.created_at,
+    });
+    await recordDelivery(notice.id, target, push, adminId);
+    await db.from("admin_action_logs").insert({
+      admin_id: adminId,
+      action: "notice_push_sent",
+      target_type: "notice",
+      target_id: notice.id,
+      metadata: { target, ...push },
+    });
+    return c.json({ success: true, data: push });
+  } catch (error) {
+    console.error("❌ Existing notice push error:", error);
+    return c.json({ success: false, error: "푸시 발송에 실패했습니다" }, 500);
+  }
+});
+
+notifications.get("/history", requireAdmin, async (c) => {
+  try {
+    const { data, error } = await db.from("notification_deliveries")
+      .select("*").order("created_at", { ascending: false }).limit(50);
+    if (error) throw error;
+    const noticeIds = [...new Set((data || []).map((item: any) => item.notice_id).filter(Boolean))];
+    const { data: notices } = noticeIds.length
+      ? await db.from("notices").select("id, title").in("id", noticeIds)
+      : { data: [] };
+    const titleById = new Map((notices || []).map((notice: any) => [notice.id, notice.title]));
+    return c.json({ success: true, data: (data || []).map((item: any) => ({
+      id: item.id,
+      noticeId: item.notice_id,
+      noticeTitle: titleById.get(item.notice_id) || "삭제된 공지",
+      target: item.target,
+      attempted: item.attempted,
+      sent: item.sent,
+      failed: item.failed,
+      createdAt: item.created_at,
+    })) });
+  } catch (error) {
+    console.error("❌ Notification history error:", error);
+    return c.json({ success: false, error: "발송 이력을 불러오지 못했습니다" }, 500);
   }
 });
 

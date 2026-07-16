@@ -49,6 +49,45 @@ export interface BusRoute {
   updatedAt: string;
 }
 
+export type ReportCategory = 'location' | 'schedule' | 'notification' | 'login' | 'lost' | 'other';
+export type ReportStatus = 'open' | 'in_progress' | 'resolved';
+
+export interface UserReport {
+  id: string;
+  userId: string;
+  userName: string;
+  userEmail: string;
+  category: ReportCategory;
+  title: string;
+  details: string;
+  status: ReportStatus;
+  relatedBusId?: string | null;
+  relatedRouteId?: string | null;
+  adminNote: string;
+  resolvedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface NotificationDelivery {
+  id: string;
+  noticeId: string | null;
+  noticeTitle: string;
+  target: 'all' | 'campus' | 'commuter' | 'system';
+  attempted: number;
+  sent: number;
+  failed: number;
+  createdAt: string;
+}
+
+export interface DemoSession {
+  id: string;
+  status: 'active' | 'completed' | 'failed';
+  plans: Array<{ busId: string; kind: 'campus' | 'commuter'; routeId: string | null; label: string }>;
+  startedAt: string;
+  endedAt?: string | null;
+}
+
 export type ShuttleVariant =
   | 'campus_loop'
   | 'campus_to_station'

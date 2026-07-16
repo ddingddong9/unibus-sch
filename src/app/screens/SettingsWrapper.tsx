@@ -15,6 +15,8 @@ import {
   setNotificationEnabled,
 } from "../utils/notificationPreferences";
 import { disablePushSubscription, ensurePushSubscription, isPushSupported } from "../utils/pushNotifications";
+import { api } from "../services/api";
+import type { ReportCategory } from "../types";
 
 const sectionVariants = {
   hidden: { opacity: 0 },
@@ -33,6 +35,10 @@ export default function SettingsWrapper() {
   const [notifications, setNotifications] = useState(() => isNotificationEnabled());
   const [notificationPermission, setNotificationPermission] = useState(() => getNotificationPermission());
   const [location, setLocation] = useState(true);
+  const [supportOpen, setSupportOpen] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [reportMessage, setReportMessage] = useState("");
+  const [reportForm, setReportForm] = useState({ category: "location" as ReportCategory, title: "", details: "" });
 
   const handleLogout = async () => {
     if (confirm(t("로그아웃 하시겠습니까?", "Are you sure you want to logout?"))) {
@@ -77,6 +83,25 @@ export default function SettingsWrapper() {
     setNotificationEnabled(false);
     if (permission === "denied") {
       alert("브라우저에서 알림 권한이 차단되어 있습니다. 브라우저 사이트 설정에서 알림을 허용해 주세요.");
+    }
+  };
+
+  const submitReport = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!reportForm.title.trim() || !reportForm.details.trim()) {
+      setReportMessage(t("제목과 내용을 모두 입력해 주세요.", "Please enter a title and details."));
+      return;
+    }
+    setReporting(true);
+    setReportMessage("");
+    try {
+      await api.createReport({ ...reportForm, title: reportForm.title.trim(), details: reportForm.details.trim() });
+      setReportMessage(t("문의가 접수되었습니다. 관리자가 확인할 수 있습니다.", "Your report has been submitted."));
+      setReportForm({ category: "location", title: "", details: "" });
+    } catch (error) {
+      setReportMessage(error instanceof Error ? error.message : t("문의 접수에 실패했습니다.", "Failed to submit your report."));
+    } finally {
+      setReporting(false);
     }
   };
 
@@ -158,12 +183,6 @@ export default function SettingsWrapper() {
             </div>
           </div>
 
-          <motion.button
-            whileTap={{ scale: 0.98 }}
-            className="w-full mt-4 bg-[#f1f5f9] h-[44px] rounded-[8px] font-['Public_Sans'] font-semibold text-[#1e3a8a] text-[14px] hover:bg-[#e2e8f0] transition-all"
-          >
-            {t("프로필 수정", "Edit Profile")}
-          </motion.button>
         </motion.div>
 
         {/* Preferences Section */}
@@ -198,6 +217,8 @@ export default function SettingsWrapper() {
               </div>
               <button
                 onClick={handleToggleNotifications}
+                aria-label={t("알림", "Notifications")}
+                aria-pressed={notifications}
                 className={`relative w-[52px] h-[28px] rounded-full transition-colors ${
                   notifications ? "bg-[#1e3a8a]" : "bg-[#cbd5e1]"
                 }`}
@@ -307,6 +328,7 @@ export default function SettingsWrapper() {
               <div className="flex gap-2">
                 <button
                   onClick={() => setLanguage('en')}
+                  aria-pressed={language === 'en'}
                   className={`px-3 py-1.5 rounded-[6px] font-['Public_Sans'] font-semibold text-[12px] transition-all ${
                     language === 'en' 
                       ? 'bg-[#1e3a8a] text-white' 
@@ -317,6 +339,7 @@ export default function SettingsWrapper() {
                 </button>
                 <button
                   onClick={() => setLanguage('ko')}
+                  aria-pressed={language === 'ko'}
                   className={`px-3 py-1.5 rounded-[6px] font-['Public_Sans'] font-semibold text-[12px] transition-all ${
                     language === 'ko' 
                       ? 'bg-[#1e3a8a] text-white' 
@@ -343,13 +366,13 @@ export default function SettingsWrapper() {
 
           <div className="space-y-2">
             {[
-              { label: t("도움말 & 지원", "Help & Support"), icon: "M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" },
-              { label: t("이용약관", "Terms & Conditions"), icon: "M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" },
+              { label: t("도움말 & 지원", "Help & Support"), icon: "M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z", onClick: () => { setReportMessage(""); setSupportOpen(true); } },
             ].map((item) => (
               <motion.button
                 key={item.label}
                 variants={rowVariant}
                 whileTap={{ scale: 0.98 }}
+                onClick={item.onClick}
                 className="w-full flex items-center justify-between p-4 bg-white border border-[#e2e8f0] rounded-[12px] hover:bg-gray-50 transition-colors"
               >
                 <div className="flex items-center gap-3">
@@ -437,6 +460,24 @@ export default function SettingsWrapper() {
         {/* ── End skeleton / content ────────────────────────── */}
 
       </div>
+
+      {supportOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/45 sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="support-title">
+          <form onSubmit={submitReport} className="w-full max-w-lg rounded-t-2xl bg-white p-5 pb-[calc(env(safe-area-inset-bottom)+20px)] shadow-2xl sm:rounded-2xl sm:p-6">
+            <div className="mb-5 flex items-center justify-between">
+              <div><h2 id="support-title" className="text-xl font-bold text-[#0f172a]">{t("문제 신고·문의", "Report a problem")}</h2><p className="mt-1 text-xs text-[#64748b]">{t("운영자가 관리자 페이지에서 바로 확인합니다.", "An operator will review it in the admin center.")}</p></div>
+              <button type="button" onClick={() => setSupportOpen(false)} aria-label={t("문의 창 닫기", "Close support form")} className="grid h-10 w-10 place-items-center rounded-full bg-slate-100 text-xl text-[#64748b]">×</button>
+            </div>
+            <div className="space-y-4">
+              <label className="block text-sm font-bold text-[#0f172a]">{t("문제 유형", "Category")}<select value={reportForm.category} onChange={(event) => setReportForm((current) => ({ ...current, category: event.target.value as ReportCategory }))} className="mt-2 h-12 w-full rounded-lg border border-[#cbd5e1] bg-white px-3 text-sm"><option value="location">{t("버스 위치 표시", "Bus location")}</option><option value="schedule">{t("노선·시간표", "Route or schedule")}</option><option value="notification">{t("알림", "Notification")}</option><option value="login">{t("로그인", "Login")}</option><option value="lost">{t("분실물", "Lost item")}</option><option value="other">{t("기타", "Other")}</option></select></label>
+              <label className="block text-sm font-bold text-[#0f172a]">{t("제목", "Title")}<input value={reportForm.title} onChange={(event) => setReportForm((current) => ({ ...current, title: event.target.value }))} maxLength={160} placeholder={t("무슨 문제가 생겼나요?", "What happened?")} className="mt-2 h-12 w-full rounded-lg border border-[#cbd5e1] px-3 text-sm" /></label>
+              <label className="block text-sm font-bold text-[#0f172a]">{t("상세 내용", "Details")}<textarea value={reportForm.details} onChange={(event) => setReportForm((current) => ({ ...current, details: event.target.value }))} rows={5} placeholder={t("발생한 화면과 상황을 적어 주세요.", "Tell us which screen and what you were doing.")} className="mt-2 w-full resize-none rounded-lg border border-[#cbd5e1] p-3 text-sm leading-6" /></label>
+            </div>
+            {reportMessage ? <p role="status" className="mt-4 rounded-lg bg-blue-50 px-3 py-2.5 text-sm text-blue-800">{reportMessage}</p> : null}
+            <button type="submit" disabled={reporting} className="mt-5 h-12 w-full rounded-lg bg-[#1e3a8a] text-sm font-bold text-white disabled:opacity-50">{reporting ? t("접수 중...", "Submitting...") : t("문의 접수", "Submit report")}</button>
+          </form>
+        </div>
+      ) : null}
 
       {/* Bottom Navigation */}
       <BottomNav />
