@@ -189,6 +189,8 @@ html.dark {
   padding-top: env(safe-area-inset-top, 0px);
 }
 .pb-safe-nav {
-  /* 하단 네비게이션: 홈 인디케이터 높이 + 기본 패딩 */
-  padding-bottom: max(20px, env(safe-area-inset-bottom, 20px));
+  /* 안전영역이 커져도 하단 바 전체가 위로 불어나지 않도록 상단 패딩을 상쇄한다. */
+  --unibus-nav-safe-bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  padding-top: max(0px, calc(33px - var(--unibus-nav-safe-bottom)));
+  padding-bottom: var(--unibus-nav-safe-bottom);
 }
