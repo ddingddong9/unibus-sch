@@ -1,3 +1,7 @@
+self.addEventListener("activate", (event) => {
+  event.waitUntil(caches.delete("api-cache"));
+});
+
 self.addEventListener("push", (event) => {
   let payload = {};
 
@@ -29,7 +33,13 @@ self.addEventListener("notificationclick", (event) => {
   event.waitUntil((async () => {
     const clientList = await clients.matchAll({ type: "window", includeUncontrolled: true });
     const origin = self.location.origin;
-    const absoluteTarget = new URL(targetUrl, origin).href;
+    let absoluteTarget = `${origin}/notice`;
+    try {
+      const requestedTarget = new URL(targetUrl, origin);
+      if (requestedTarget.origin === origin) absoluteTarget = requestedTarget.href;
+    } catch {
+      // Keep the safe in-app fallback.
+    }
 
     for (const client of clientList) {
       if ("focus" in client && client.url.startsWith(origin)) {

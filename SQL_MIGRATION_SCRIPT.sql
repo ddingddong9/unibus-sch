@@ -1,7 +1,15 @@
 -- ============================================================
--- SCH Shuttle App - 관계형 DB 마이그레이션 스크립트
+-- DEPRECATED: 보안 정책이 오래된 단일 파일이므로 실행하지 마세요.
+-- supabase/migrations 디렉터리의 순차 마이그레이션을 사용하세요.
+DO $$
+BEGIN
+  RAISE EXCEPTION 'Deprecated migration script: use supabase/migrations instead';
+END;
+$$;
+
+-- SCH Shuttle App - 관계형 DB 마이그레이션 스크립트 (보관용)
 -- ============================================================
--- 실행 방법: Supabase Dashboard → SQL Editor → 이 스크립트 복사 & 실행
+-- 실행 금지: 현재 스키마는 supabase/migrations로만 관리합니다.
 -- ============================================================
 
 -- ============================================================
@@ -263,10 +271,8 @@ ON CONFLICT (id) DO NOTHING;
 -- 4단계: 초기 데이터 삽입 (옵션)
 -- ============================================================
 
--- 관리자 계정 (이미 있으면 스킵)
-INSERT INTO users (email, password_hash, name, role, provider)
-VALUES ('admin@sch.ac.kr', 'admin123', '관리자', 'admin', 'local')
-ON CONFLICT (email) DO NOTHING;
+-- 관리자 계정은 공유 초기 비밀번호를 만들지 않는다.
+-- 현재 Supabase 마이그레이션과 SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD를 사용한다.
 
 -- 샘플 셔틀 노선
 INSERT INTO routes (id, name, type, description, color, is_active)

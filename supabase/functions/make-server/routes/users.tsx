@@ -38,6 +38,7 @@ users.get("/", requireAdmin, async (c) => {
 users.put("/:id", requireAdmin, async (c) => {
   try {
     const targetId = c.req.param("id");
+    const adminId = c.get('userId');
     const { name } = await c.req.json();
 
     const nextName = typeof name === "string" ? name.trim() : "";
@@ -59,6 +60,13 @@ users.put("/:id", requireAdmin, async (c) => {
     if (error || !updated) {
       return c.json({ success: false, error: "Failed to update user" }, 500);
     }
+
+    await db.from('admin_action_logs').insert({
+      admin_id: adminId,
+      action: 'user_name_updated',
+      target_type: 'user',
+      target_id: targetId,
+    });
 
     return c.json({
       success: true,
@@ -95,7 +103,7 @@ users.put("/:id/role", requireAdmin, async (c) => {
 
     const { data: target } = await db
       .from('users')
-      .select('id, email, name')
+      .select('id, name, role')
       .eq('id', targetId)
       .single();
 
@@ -105,10 +113,31 @@ users.put("/:id/role", requireAdmin, async (c) => {
 
     // driver → 다른 역할로 변경 시 운행 중이면 자동 종료
     if (role !== 'driver') {
-      await db
+      const { data: drivenBuses, error: busesError } = await db
         .from('buses')
-        .update({ is_running: false, current_driver_id: null, assigned_driver_id: null })
+        .select('id, is_running, current_driver_id')
         .or(`current_driver_id.eq.${targetId},assigned_driver_id.eq.${targetId}`);
+
+      if (busesError) {
+        return c.json({ success: false, error: "Failed to verify the driver's active buses" }, 500);
+      }
+
+      for (const bus of drivenBuses || []) {
+        if (bus.is_running && bus.current_driver_id === targetId) {
+          const { error: stopError } = await db.rpc('admin_force_stop_bus', { target_bus_id: bus.id });
+          if (stopError) {
+            return c.json({ success: false, error: "운행 종료 후 역할을 변경해 주세요" }, 409);
+          }
+        }
+      }
+
+      const { error: unassignError } = await db
+        .from('buses')
+        .update({ current_driver_id: null, assigned_driver_id: null })
+        .or(`current_driver_id.eq.${targetId},assigned_driver_id.eq.${targetId}`);
+      if (unassignError) {
+        return c.json({ success: false, error: "Failed to clear driver assignments" }, 500);
+      }
     }
 
     const { error: updateError } = await db
@@ -120,7 +149,15 @@ users.put("/:id/role", requireAdmin, async (c) => {
       return c.json({ success: false, error: "Failed to update role" }, 500);
     }
 
-    console.log(`✅ Role updated: ${target.email} → ${role}`);
+    console.log(`✅ Role updated for user ${target.id} → ${role}`);
+
+    await db.from('admin_action_logs').insert({
+      admin_id: adminId,
+      action: 'user_role_updated',
+      target_type: 'user',
+      target_id: targetId,
+      metadata: { previousRole: target.role, role },
+    });
 
     return c.json({ success: true, data: { id: targetId, role } });
   } catch (error: any) {

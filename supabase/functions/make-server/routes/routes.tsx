@@ -3,6 +3,7 @@
 import { Hono } from "npm:hono";
 import { db } from "../db.tsx";
 import { requireAdmin } from "../middleware/auth.tsx";
+import { enforceRateLimit, getRequestIdentity } from "../security/rate-limit.ts";
 
 const routes = new Hono();
 
@@ -326,6 +327,11 @@ routes.get("/:id/path", async (c) => {
       return c.json({ success: false, error: "No stops found" }, 404);
     }
 
+    if (stops.some((stop: any) => stop.latitude == null || stop.longitude == null)) {
+      const geocodeLimited = await enforceRateLimit(c, "route-geocode", getRequestIdentity(c), 10, 3600);
+      if (geocodeLimited) return geocodeLimited;
+    }
+
     // 좌표 없는 정류장은 Naver Geocoding API로 변환
     const resolved = await Promise.all(
       stops.map(async (stop: any) => {
@@ -346,6 +352,13 @@ routes.get("/:id/path", async (c) => {
             if (addr) {
               lng = parseFloat(addr.x);
               lat = parseFloat(addr.y);
+              if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                const { error: coordinateError } = await db
+                  .from("route_stops")
+                  .update({ latitude: lat, longitude: lng })
+                  .eq("id", stop.id);
+                if (coordinateError) console.warn(`Failed to save coordinates for "${stop.stop_name}"`);
+              }
             }
           } catch (e) {
             console.warn(`Geocoding failed for "${stop.stop_name}":`, e);
@@ -377,6 +390,9 @@ routes.get("/:id/path", async (c) => {
         data: { stops: resolved, shapePoints: shapePoints.map(formatShapePoint), path: cachedPath.path, cached: true },
       });
     }
+
+    const directionsLimited = await enforceRateLimit(c, "route-directions", getRequestIdentity(c), 30, 600);
+    if (directionsLimited) return directionsLimited;
 
     const path = await buildNaverPath(routePoints, clientId, secretKey);
 
@@ -541,7 +557,7 @@ routes.post("/", requireAdmin, async (c) => {
       if (detailError) {
         console.error("❌ Route detail creation error:", detailError);
         await db.from('routes').delete().eq('id', route.id);
-        return c.json({ success: false, error: "노선 상세 저장 실패: " + detailError.message }, 500);
+        return c.json({ success: false, error: "노선 상세 저장에 실패했습니다" }, 500);
       }
     }
 
@@ -661,7 +677,7 @@ routes.put("/:id", requireAdmin, async (c) => {
 
       if (detailError) {
         console.error("❌ Route detail update error:", detailError);
-        return c.json({ success: false, error: "노선 상세 저장 실패: " + detailError.message }, 500);
+        return c.json({ success: false, error: "노선 상세 저장에 실패했습니다" }, 500);
       }
     }
 

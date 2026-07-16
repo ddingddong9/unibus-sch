@@ -1,10 +1,13 @@
 import { Hono } from "npm:hono";
 import { db } from "../db.tsx";
 import { requireAdmin, requireAuth } from "../middleware/auth.tsx";
+import { enforceRateLimit } from "../security/rate-limit.ts";
 
 const reports = new Hono<{ Variables: { userId: string } }>();
 const categories = new Set(["location", "schedule", "notification", "login", "lost", "other"]);
 const statuses = new Set(["open", "in_progress", "resolved"]);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const BUS_ID_PATTERN = /^[A-Za-z0-9-]{1,20}$/;
 
 const formatReport = (report: any, user?: any) => ({
   id: report.id,
@@ -26,6 +29,9 @@ const formatReport = (report: any, user?: any) => ({
 reports.post("/", requireAuth, async (c) => {
   try {
     const userId = c.get("userId");
+    const limited = await enforceRateLimit(c, "report-create", userId, 5, 600);
+    if (limited) return limited;
+
     const body = await c.req.json();
     const category = String(body.category || "other");
     const title = String(body.title || "").trim();
@@ -34,11 +40,20 @@ reports.post("/", requireAuth, async (c) => {
     if (!categories.has(category) || !title || !details) {
       return c.json({ success: false, error: "문의 유형, 제목, 내용을 모두 입력해 주세요" }, 400);
     }
+    if (title.length > 160 || details.length > 5_000) {
+      return c.json({ success: false, error: "문의 제목 또는 내용이 허용 길이를 초과했습니다" }, 400);
+    }
+    if (body.relatedBusId && !BUS_ID_PATTERN.test(String(body.relatedBusId))) {
+      return c.json({ success: false, error: "올바르지 않은 버스 식별자입니다" }, 400);
+    }
+    if (body.relatedRouteId && !UUID_PATTERN.test(String(body.relatedRouteId))) {
+      return c.json({ success: false, error: "올바르지 않은 노선 식별자입니다" }, 400);
+    }
 
     const { data, error } = await db.from("user_reports").insert({
       user_id: userId,
       category,
-      title: title.slice(0, 160),
+      title,
       details,
       related_bus_id: body.relatedBusId || null,
       related_route_id: body.relatedRouteId || null,
@@ -87,7 +102,11 @@ reports.put("/:id", requireAdmin, async (c) => {
       updates.status = body.status;
       updates.resolved_at = body.status === "resolved" ? new Date().toISOString() : null;
     }
-    if (body.adminNote !== undefined) updates.admin_note = String(body.adminNote).trim();
+    if (body.adminNote !== undefined) {
+      const adminNote = String(body.adminNote).trim();
+      if (adminNote.length > 5_000) return c.json({ success: false, error: "관리자 메모가 너무 깁니다" }, 400);
+      updates.admin_note = adminNote;
+    }
     if (Object.keys(updates).length === 0) return c.json({ success: false, error: "변경할 내용이 없습니다" }, 400);
 
     const { data, error } = await db.from("user_reports").update(updates).eq("id", id).select("*").single();

@@ -4,6 +4,22 @@ import { Context } from "npm:hono";
 import { db } from "../db.tsx";
 import { findTokenRecord } from "../security/tokens.ts";
 
+export async function getOptionalUser(c: Context) {
+  const authToken = c.req.header('X-Auth-Token');
+  if (!authToken) return null;
+
+  const { data: tokenData, error: tokenError } = await findTokenRecord(authToken);
+  if (tokenError || !tokenData || new Date(tokenData.expires_at) < new Date()) return null;
+
+  const { data: user, error: userError } = await db
+    .from('users')
+    .select('id, email, role')
+    .eq('id', tokenData.user_id)
+    .maybeSingle();
+
+  return userError ? null : user;
+}
+
 export async function requireAuth(c: Context, next: () => Promise<void>) {
   const authToken = c.req.header('X-Auth-Token');
   

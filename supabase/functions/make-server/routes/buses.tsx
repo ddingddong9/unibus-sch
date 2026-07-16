@@ -2,7 +2,7 @@
 
 import { Hono } from "npm:hono";
 import { db } from "../db.tsx";
-import { requireAdmin, requireDriver } from "../middleware/auth.tsx";
+import { getOptionalUser, requireAdmin, requireDriver } from "../middleware/auth.tsx";
 
 const buses = new Hono<{
   Variables: {
@@ -13,6 +13,9 @@ const buses = new Hono<{
 
 const toClientBusType = (type: string) => type === 'shuttle' ? 'campus' : type === 'commute' ? 'commuter' : type;
 const toDbBusType = (type: string) => type === 'campus' ? 'shuttle' : type === 'commuter' || type === 'direct' ? 'commute' : type;
+const validBusTypes = new Set(['shuttle', 'commute']);
+const validBusStatuses = new Set(['active', 'inactive', 'maintenance']);
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const createBusId = (type: string) => {
   const prefix = toDbBusType(type) === 'shuttle' ? 'SH' : 'CM';
   const suffix = crypto.randomUUID().replace(/-/g, '').slice(0, 10).toUpperCase();
@@ -22,6 +25,7 @@ const createBusId = (type: string) => {
 // Get all buses - JOIN으로 노선 정보 포함
 buses.get("/", async (c) => {
   try {
+    const isAdmin = (await getOptionalUser(c))?.role === 'admin';
     // buses_with_routes 뷰 사용
     const { data: allBuses, error } = await db
       .from('buses_with_routes')
@@ -54,14 +58,8 @@ buses.get("/", async (c) => {
       name: bus.name,
       type: toClientBusType(bus.type),
       capacity: bus.capacity,
-      licensePlate: bus.license_plate,
       status: bus.status,
       isRunning: bus.is_running,
-      currentDriverId: bus.current_driver_id,
-      currentDriverName: bus.current_driver_name,
-      assignedDriverId: bus.assigned_driver_id,
-      assignedDriverName: bus.assigned_driver_name,
-      assignedDriverEmail: bus.assigned_driver_email,
       currentRoute: bus.route_id ? {
         id: bus.route_id,
         name: bus.route_name,
@@ -82,8 +80,15 @@ buses.get("/", async (c) => {
         timestamp: locationByBus.get(bus.id).timestamp,
       } : null,
       lastLocationAt: locationByBus.get(bus.id)?.timestamp || null,
-      createdAt: bus.created_at,
-      updatedAt: bus.updated_at,
+      ...(isAdmin ? {
+        licensePlate: bus.license_plate,
+        currentDriverId: bus.current_driver_id,
+        currentDriverName: bus.current_driver_name,
+        assignedDriverId: bus.assigned_driver_id,
+        assignedDriverName: bus.assigned_driver_name,
+        createdAt: bus.created_at,
+        updatedAt: bus.updated_at,
+      } : {}),
     })) || [];
 
     console.log(`✅ Fetched ${formattedBuses.length} buses`);
@@ -99,6 +104,7 @@ buses.get("/", async (c) => {
 buses.get("/:id", async (c) => {
   try {
     const id = c.req.param("id");
+    const isAdmin = (await getOptionalUser(c))?.role === 'admin';
 
     // 버스 정보 조회
     const { data: bus, error: busError } = await db
@@ -126,14 +132,8 @@ buses.get("/:id", async (c) => {
       name: bus.name,
       type: toClientBusType(bus.type),
       capacity: bus.capacity,
-      licensePlate: bus.license_plate,
       status: bus.status,
       isRunning: bus.is_running,
-      currentDriverId: bus.current_driver_id,
-      currentDriverName: bus.current_driver_name,
-      assignedDriverId: bus.assigned_driver_id,
-      assignedDriverName: bus.assigned_driver_name,
-      assignedDriverEmail: bus.assigned_driver_email,
       currentRoute: bus.route_id ? {
         id: bus.route_id,
         name: bus.route_name,
@@ -146,8 +146,15 @@ buses.get("/:id", async (c) => {
         heading: location.heading,
         timestamp: location.timestamp,
       } : null,
-      createdAt: bus.created_at,
-      updatedAt: bus.updated_at,
+      ...(isAdmin ? {
+        licensePlate: bus.license_plate,
+        currentDriverId: bus.current_driver_id,
+        currentDriverName: bus.current_driver_name,
+        assignedDriverId: bus.assigned_driver_id,
+        assignedDriverName: bus.assigned_driver_name,
+        createdAt: bus.created_at,
+        updatedAt: bus.updated_at,
+      } : {}),
     };
 
     console.log(`✅ Fetched bus: ${id}`);
@@ -201,9 +208,27 @@ buses.post("/", requireAdmin, async (c) => {
       return c.json({ success: false, error: "Missing required fields: name, type" }, 400);
     }
 
-    const dbType = toDbBusType(type);
-    if (!['shuttle', 'commute'].includes(dbType)) {
+    if (busName.length > 100) {
+      return c.json({ success: false, error: "Bus name must be 100 characters or fewer" }, 400);
+    }
+
+    const dbType = toDbBusType(String(type));
+    if (!validBusTypes.has(dbType)) {
       return c.json({ success: false, error: "Invalid bus type" }, 400);
+    }
+
+    const normalizedCapacity = capacity === undefined || capacity === null || capacity === '' ? 45 : Number(capacity);
+    if (!Number.isInteger(normalizedCapacity) || normalizedCapacity < 1 || normalizedCapacity > 100) {
+      return c.json({ success: false, error: "Capacity must be an integer between 1 and 100" }, 400);
+    }
+
+    const normalizedLicensePlate = typeof licensePlate === 'string' ? licensePlate.trim() : '';
+    if (normalizedLicensePlate.length > 30) {
+      return c.json({ success: false, error: "License plate must be 30 characters or fewer" }, 400);
+    }
+
+    if (routeId && !UUID_PATTERN.test(String(routeId))) {
+      return c.json({ success: false, error: "Invalid route ID" }, 400);
     }
 
     const { data: bus, error: insertError } = await db
@@ -212,8 +237,8 @@ buses.post("/", requireAdmin, async (c) => {
         id: createBusId(type),
         name: busName,
         type: dbType,
-        capacity: capacity || 45,
-        license_plate: licensePlate || null,
+        capacity: normalizedCapacity,
+        license_plate: normalizedLicensePlate || null,
         current_route_id: routeId || null,
         status: 'inactive',
       })
@@ -258,6 +283,17 @@ buses.post("/:id/location", requireDriver, async (c) => {
       return c.json({ success: false, error: "Missing required fields" }, 400);
     }
 
+    const latitude = Number(lat);
+    const longitude = Number(lng);
+    const normalizedSpeed = speed === undefined ? 0 : Number(speed);
+    const normalizedHeading = heading === undefined ? 0 : Number(heading);
+    if (!Number.isFinite(latitude) || latitude < -90 || latitude > 90
+      || !Number.isFinite(longitude) || longitude < -180 || longitude > 180
+      || !Number.isFinite(normalizedSpeed) || normalizedSpeed < 0 || normalizedSpeed > 250
+      || !Number.isFinite(normalizedHeading) || normalizedHeading < 0 || normalizedHeading >= 360) {
+      return c.json({ success: false, error: "Invalid location data" }, 400);
+    }
+
     // 버스 존재 여부 확인
     const { data: bus } = await db
       .from('buses')
@@ -289,10 +325,10 @@ buses.post("/:id/location", requireDriver, async (c) => {
       .from('bus_locations')
       .insert({
         bus_id: busId,
-        latitude: lat,
-        longitude: lng,
-        speed: speed || 0,
-        heading: heading || 0,
+        latitude,
+        longitude,
+        speed: normalizedSpeed,
+        heading: Math.round(normalizedHeading),
       })
       .select()
       .single();
@@ -342,16 +378,39 @@ buses.put("/:id", requireAdmin, async (c) => {
     const dbUpdates: any = {};
     if (updates.name !== undefined) {
       const name = String(updates.name).trim();
-      if (!name) {
+      if (!name || name.length > 100) {
         return c.json({ success: false, error: "Bus name is required" }, 400);
       }
       dbUpdates.name = name;
     }
-    if (updates.type) dbUpdates.type = toDbBusType(updates.type);
-    if (updates.capacity) dbUpdates.capacity = updates.capacity;
-    if (updates.licensePlate) dbUpdates.license_plate = updates.licensePlate;
-    if (updates.status) dbUpdates.status = updates.status;
-    if (updates.currentRouteId !== undefined) dbUpdates.current_route_id = updates.currentRouteId;
+    if (updates.type !== undefined) {
+      const dbType = toDbBusType(String(updates.type));
+      if (!validBusTypes.has(dbType)) return c.json({ success: false, error: "Invalid bus type" }, 400);
+      dbUpdates.type = dbType;
+    }
+    if (updates.capacity !== undefined) {
+      const capacity = Number(updates.capacity);
+      if (!Number.isInteger(capacity) || capacity < 1 || capacity > 100) {
+        return c.json({ success: false, error: "Capacity must be an integer between 1 and 100" }, 400);
+      }
+      dbUpdates.capacity = capacity;
+    }
+    if (updates.licensePlate !== undefined) {
+      const licensePlate = String(updates.licensePlate || '').trim();
+      if (licensePlate.length > 30) return c.json({ success: false, error: "Invalid license plate" }, 400);
+      dbUpdates.license_plate = licensePlate || null;
+    }
+    if (updates.status !== undefined) {
+      const status = String(updates.status);
+      if (!validBusStatuses.has(status)) return c.json({ success: false, error: "Invalid bus status" }, 400);
+      dbUpdates.status = status;
+    }
+    if (updates.currentRouteId !== undefined) {
+      if (updates.currentRouteId !== null && !UUID_PATTERN.test(String(updates.currentRouteId))) {
+        return c.json({ success: false, error: "Invalid route ID" }, 400);
+      }
+      dbUpdates.current_route_id = updates.currentRouteId;
+    }
     if (updates.assignedDriverId !== undefined) {
       if (updates.assignedDriverId === null || updates.assignedDriverId === "") {
         dbUpdates.assigned_driver_id = null;
@@ -373,6 +432,10 @@ buses.put("/:id", requireAdmin, async (c) => {
     if (updates.isRunning === false) {
       dbUpdates.is_running = false;
       dbUpdates.current_driver_id = null;
+    }
+
+    if (Object.keys(dbUpdates).length === 0) {
+      return c.json({ success: false, error: "No valid updates provided" }, 400);
     }
 
     // 버스 수정

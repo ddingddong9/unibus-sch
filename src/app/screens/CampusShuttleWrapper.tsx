@@ -310,14 +310,13 @@ export default function CampusShuttleWrapper() {
           });
         }
       )
-      .on(
-        "postgres_changes",
-        { event: "UPDATE", schema: "public", table: "buses" },
-        () => fetchInitial()
-      )
       .subscribe();
+    const busRefreshTimer = window.setInterval(() => {
+      api.getBuses().then(setAllBuses).catch(() => {});
+    }, 15_000);
 
     return () => {
+      window.clearInterval(busRefreshTimer);
       supabase.removeChannel(channel);
     };
   }, [fetchInitial, pageVisible]);
