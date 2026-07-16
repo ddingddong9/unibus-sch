@@ -26,6 +26,7 @@ const allowedOriginPatterns = [
   /^http:\/\/localhost:\d+$/,
   /^http:\/\/127\.0\.0\.1:\d+$/,
   /^https:\/\/unibus-sch\.vercel\.app$/,
+  /^https:\/\/unibus-sch-two\.vercel\.app$/,
   /^https:\/\/unibus-sch-git-[a-z0-9-]+-ddingddong9s-projects\.vercel\.app$/,
   /^https:\/\/unibus-sch-[a-z0-9]+-ddingddong9s-projects\.vercel\.app$/,
   /^https:\/\/unibus-[a-z0-9]+-ddingddong9s-projects\.vercel\.app$/,
