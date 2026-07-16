@@ -24,7 +24,7 @@ export default function BottomNav() {
   return (
     <nav
       aria-label={t("주요 화면", "Primary")}
-      className="absolute inset-x-0 bottom-0 z-50 flex w-full max-w-[430px] items-center justify-center border-t border-[#e2e8f0] bg-[rgba(255,255,255,0.95)] px-[24px] pb-safe-nav pt-[13px] backdrop-blur-[12px]"
+      className="absolute inset-x-0 bottom-0 z-50 flex w-full max-w-[430px] items-center justify-center border-t border-[#e2e8f0] bg-[rgba(255,255,255,0.95)] px-[24px] pb-safe-nav backdrop-blur-[12px]"
     >
       <div className="flex items-center justify-between w-full">
         {/* Home */}
