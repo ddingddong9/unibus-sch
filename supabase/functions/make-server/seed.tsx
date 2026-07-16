@@ -7,50 +7,40 @@ export async function seedDatabase() {
   console.log("🌱 Starting database seeding...");
 
   try {
-    // 1. Create admin user
-    const adminPassword = await bcrypt.hash("admin123", 10);
-    
-    const { data: admin, error: adminError } = await db
-      .from('users')
-      .upsert({
-        email: 'admin@sch.ac.kr',
-        password_hash: adminPassword,
-        name: '관리자',
-        role: 'admin',
-        provider: 'local',
-      }, { onConflict: 'email' })
-      .select()
-      .single();
+    // Admin creation is opt-in so a fresh environment never receives a shared password.
+    const adminEmail = Deno.env.get('SEED_ADMIN_EMAIL')?.trim().toLowerCase();
+    const adminPassword = Deno.env.get('SEED_ADMIN_PASSWORD') || '';
+    let admin: any = null;
 
-    if (adminError && adminError.code !== '23505') { // 23505 = unique violation
-      console.error("❌ Admin creation error:", adminError);
+    if (adminEmail && adminPassword) {
+      if (adminPassword.length < 12 || adminPassword.length > 72) {
+        throw new Error('SEED_ADMIN_PASSWORD must be between 12 and 72 characters');
+      }
+
+      const passwordHash = await bcrypt.hash(adminPassword, 12);
+      const { data, error: adminError } = await db
+        .from('users')
+        .upsert({
+          email: adminEmail,
+          password_hash: passwordHash,
+          name: '관리자',
+          role: 'admin',
+          provider: 'local',
+        }, { onConflict: 'email' })
+        .select()
+        .single();
+
+      if (adminError) {
+        console.error("❌ Admin creation error:", adminError);
+      } else {
+        admin = data;
+        console.log("✅ Admin user created/updated");
+      }
     } else {
-      console.log("✅ Admin user created/updated");
+      console.warn("⚠️ SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD not set; skipping admin creation");
     }
 
-    // 2. Create sample user
-    const userPassword = await bcrypt.hash("user123", 10);
-    
-    const { data: user, error: userError } = await db
-      .from('users')
-      .upsert({
-        email: 'user@sch.ac.kr',
-        password_hash: userPassword,
-        name: '학생',
-        student_id: '20240001',
-        role: 'user',
-        provider: 'local',
-      }, { onConflict: 'email' })
-      .select()
-      .single();
-
-    if (userError && userError.code !== '23505') {
-      console.error("❌ User creation error:", userError);
-    } else {
-      console.log("✅ Sample user created/updated");
-    }
-
-    // 3. Create routes
+    // 2. Create routes
     const routes = [
       {
         name: '순환선 A',
@@ -86,7 +76,7 @@ export async function seedDatabase() {
       console.log(`✅ Created ${insertedRoutes?.length || 0} routes`);
     }
 
-    // 4. Create buses
+    // 3. Create buses
     const buses = [
       {
         id: 'SCH-01',
@@ -133,7 +123,7 @@ export async function seedDatabase() {
       console.log(`✅ Created ${insertedBuses?.length || 0} buses`);
     }
 
-    // 5. Create bus locations
+    // 4. Create bus locations
     const busLocations = [
       {
         bus_id: 'SCH-01',
@@ -169,7 +159,7 @@ export async function seedDatabase() {
       console.log(`✅ Created ${insertedLocations?.length || 0} bus locations`);
     }
 
-    // 6. Create sample notices (관리자가 작성)
+    // 5. Create sample notices (관리자가 작성)
     if (admin) {
       const notices = [
         {
@@ -221,10 +211,6 @@ export async function seedDatabase() {
     return {
       success: true,
       message: "Database seeded successfully",
-      credentials: {
-        admin: { email: 'admin@sch.ac.kr', password: 'admin123' },
-        user: { email: 'user@sch.ac.kr', password: 'user123' },
-      }
     };
 
   } catch (error: any) {

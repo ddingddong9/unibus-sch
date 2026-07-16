@@ -4,6 +4,7 @@ import { Hono } from "npm:hono";
 import webpush from "npm:web-push";
 import { db } from "../db.tsx";
 import { requireAdmin, requireAuth } from "../middleware/auth.tsx";
+import { enforceRateLimit } from "../security/rate-limit.ts";
 
 const notifications = new Hono<{ Variables: { userId: string } }>();
 const validTargets = new Set(["all", "campus", "commuter", "system"]);
@@ -18,6 +19,39 @@ const targetCategory: Record<string, "general" | "route" | "system"> = {
   commuter: "route",
   system: "system",
 };
+
+const configuredPushHosts = (Deno.env.get("PUSH_ALLOWED_HOSTS") || "")
+  .split(",")
+  .map((host) => host.trim().toLowerCase())
+  .filter(Boolean);
+const allowedPushHosts = new Set([
+  "fcm.googleapis.com",
+  "updates.push.services.mozilla.com",
+  "web.push.apple.com",
+  "webpush.push.apple.com",
+  ...configuredPushHosts,
+]);
+
+const isAllowedPushEndpoint = (value: unknown) => {
+  if (typeof value !== "string" || value.length > 2048) return false;
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.toLowerCase();
+    return url.protocol === "https:"
+      && (!url.port || url.port === "443")
+      && (allowedPushHosts.has(hostname)
+        || hostname.endsWith(".notify.windows.com")
+        || hostname.endsWith(".push.apple.com"));
+  } catch {
+    return false;
+  }
+};
+
+const isValidSubscriptionKey = (value: unknown, min: number, max: number) =>
+  typeof value === "string"
+  && value.length >= min
+  && value.length <= max
+  && /^[A-Za-z0-9_-]+$/.test(value);
 
 const formatNotice = (notice: any, authorName = "Admin") => ({
   id: notice.id,
@@ -75,6 +109,15 @@ const sendPushNotifications = async (target: string, payload: Record<string, unk
   let failed = 0;
 
   await Promise.all(subscriptions.map(async (subscription) => {
+    if (!isAllowedPushEndpoint(subscription.endpoint)) {
+      failed += 1;
+      await db
+        .from("push_subscriptions")
+        .update({ enabled: false, last_error: "Blocked invalid push endpoint" })
+        .eq("id", subscription.id);
+      return;
+    }
+
     try {
       await webpush.sendNotification(
         {
@@ -122,28 +165,44 @@ notifications.get("/vapid-public-key", async (c) => {
 notifications.post("/subscribe", requireAuth, async (c) => {
   try {
     const userId = c.get("userId");
+    const limited = await enforceRateLimit(c, "push-subscribe", userId, 20, 3600);
+    if (limited) return limited;
+
     const { subscription } = await c.req.json();
     const endpoint = subscription?.endpoint;
     const p256dh = subscription?.keys?.p256dh;
     const auth = subscription?.keys?.auth;
 
-    if (!endpoint || !p256dh || !auth) {
+    if (!isAllowedPushEndpoint(endpoint)
+      || !isValidSubscriptionKey(p256dh, 40, 200)
+      || !isValidSubscriptionKey(auth, 10, 100)) {
       return c.json({ success: false, error: "Invalid push subscription" }, 400);
     }
 
-    const { data, error } = await db
+    const { data: existing } = await db
       .from("push_subscriptions")
-      .upsert({
+      .select("id, user_id")
+      .eq("endpoint", endpoint)
+      .maybeSingle();
+
+    if (existing && existing.user_id !== userId) {
+      return c.json({ success: false, error: "This push subscription belongs to another account" }, 409);
+    }
+
+    const values = {
         user_id: userId,
         endpoint,
         p256dh,
         auth,
-        user_agent: c.req.header("user-agent") || null,
+        user_agent: (c.req.header("user-agent") || "").slice(0, 500) || null,
         enabled: true,
         last_error: null,
-      }, { onConflict: "endpoint" })
-      .select("id")
-      .single();
+    };
+
+    const query = existing
+      ? db.from("push_subscriptions").update(values).eq("id", existing.id)
+      : db.from("push_subscriptions").insert(values);
+    const { data, error } = await query.select("id").single();
 
     if (error) {
       console.error("❌ Push subscribe error:", error);
@@ -162,7 +221,7 @@ notifications.post("/unsubscribe", requireAuth, async (c) => {
     const userId = c.get("userId");
     const { endpoint } = await c.req.json();
 
-    if (!endpoint) {
+    if (!isAllowedPushEndpoint(endpoint)) {
       return c.json({ success: false, error: "endpoint is required" }, 400);
     }
 
@@ -183,9 +242,14 @@ notifications.post("/send", requireAdmin, async (c) => {
   try {
     const userId = c.get("userId");
     const { title, message, target = "all" } = await c.req.json();
+    const normalizedTitle = typeof title === "string" ? title.trim() : "";
+    const normalizedMessage = typeof message === "string" ? message.trim() : "";
 
-    if (!title || !message) {
+    if (!normalizedTitle || !normalizedMessage) {
       return c.json({ success: false, error: "Missing required fields" }, 400);
+    }
+    if (normalizedTitle.length > 160 || normalizedMessage.length > 5_000) {
+      return c.json({ success: false, error: "Notification content is too long" }, 400);
     }
     if (!validTargets.has(target)) return c.json({ success: false, error: "Invalid notification target" }, 400);
 
@@ -195,8 +259,8 @@ notifications.post("/send", requireAdmin, async (c) => {
     const { data: notice, error: insertError } = await db
       .from("notices")
       .insert({
-        title,
-        content: message,
+        title: normalizedTitle,
+        content: normalizedMessage,
         category,
         priority,
         author_id: userId,

@@ -101,22 +101,11 @@ export default defineConfig({
         clientsClaim: true,
         importScripts: ['push-handler.js'],
         globIgnores: ['**/Campus3DPage-*.js', '**/campus-3d-vendor-*.js'],
-        // 캐싱 전략: API 요청은 network-first, 정적 파일은 cache-first
+        // 인증/실시간 API 응답은 사용자별 헤더를 캐시 키로 구분하지 못하므로 저장하지 않는다.
         runtimeCaching: [
           {
-            urlPattern: /^https:\/\/oxxnjtwglhbbvxndpykk\.supabase\.co\/functions\/v1\/.*/,
-            handler: 'NetworkFirst',
-            options: {
-              cacheName: 'api-cache',
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 5, // 5분
-              },
-              networkTimeoutSeconds: 10,
-            },
-          },
-          {
-            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/,
+            urlPattern: ({ url, request }) =>
+              url.origin === self.location.origin && request.destination === 'image',
             handler: 'CacheFirst',
             options: {
               cacheName: 'image-cache',

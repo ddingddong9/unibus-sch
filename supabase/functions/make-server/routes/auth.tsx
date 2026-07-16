@@ -9,26 +9,39 @@ import {
   KakaoLoginRequest,
 } from "../types/index.tsx";
 import { createSessionToken, deleteTokenRecord, hashSessionToken } from "../security/tokens.ts";
+import { clearRateLimit, enforceRateLimit, getRequestIdentity } from "../security/rate-limit.ts";
 
 const auth = new Hono();
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MIN_PASSWORD_LENGTH = 8;
 const MAX_PASSWORD_LENGTH = 72;
+const DUMMY_PASSWORD_HASH = '$2b$10$lQNuP4A50wwzI6F9pHVk.eKOdopKISxcT598MTscQR8hgciVaZ8/u';
 
 // Sign up
 auth.post("/signup", async (c) => {
   try {
     const { email, password, name, studentId }: SignupRequest = await c.req.json();
     
-    if (!email || !password || !name) {
+    if (typeof email !== 'string' || typeof password !== 'string' || typeof name !== 'string') {
       return c.json({ success: false, error: "Missing required fields" }, 400);
     }
 
     const normalizedEmail = email.trim().toLowerCase();
     const trimmedName = name.trim();
 
-    if (!EMAIL_PATTERN.test(normalizedEmail)) {
+    const limited = await enforceRateLimit(c, "auth-signup", getRequestIdentity(c), 30, 3600);
+    if (limited) return limited;
+
+    if (normalizedEmail.length > 254 || !EMAIL_PATTERN.test(normalizedEmail)) {
       return c.json({ success: false, error: "Invalid email format" }, 400);
+    }
+
+    if (!trimmedName || trimmedName.length > 100) {
+      return c.json({ success: false, error: "Name must be between 1 and 100 characters" }, 400);
+    }
+
+    if (studentId !== undefined && (typeof studentId !== 'string' || studentId.trim().length > 50)) {
+      return c.json({ success: false, error: "Invalid student ID" }, 400);
     }
 
     if (password.length < MIN_PASSWORD_LENGTH || password.length > MAX_PASSWORD_LENGTH) {
@@ -59,7 +72,7 @@ auth.post("/signup", async (c) => {
         email: normalizedEmail,
         password_hash: passwordHash,
         name: trimmedName,
-        student_id: studentId || null,
+        student_id: studentId?.trim() || null,
         role: 'user',
         provider: 'local',
       })
@@ -71,7 +84,7 @@ auth.post("/signup", async (c) => {
       return c.json({ success: false, error: "Failed to create user" }, 500);
     }
 
-    console.log("✅ User signed up:", { id: user.id, email: normalizedEmail, name: trimmedName });
+    console.log("✅ User signed up:", { id: user.id });
 
     return c.json({ 
       success: true, 
@@ -96,11 +109,21 @@ auth.post("/login", async (c) => {
   try {
     const { email, password }: LoginRequest = await c.req.json();
 
-    if (!email || !password) {
+    if (typeof email !== 'string' || typeof password !== 'string') {
       return c.json({ success: false, error: "Missing email or password" }, 400);
     }
 
     const normalizedEmail = email.trim().toLowerCase();
+    if (normalizedEmail.length > 254 || !EMAIL_PATTERN.test(normalizedEmail)
+      || password.length < 1 || password.length > MAX_PASSWORD_LENGTH) {
+      return c.json({ success: false, error: "Invalid credentials" }, 401);
+    }
+
+    const clientIdentity = getRequestIdentity(c);
+    const ipLimited = await enforceRateLimit(c, "auth-login-ip", clientIdentity, 100, 900);
+    if (ipLimited) return ipLimited;
+    const accountLimited = await enforceRateLimit(c, "auth-login-account", normalizedEmail, 10, 900);
+    if (accountLimited) return accountLimited;
 
     // 사용자 조회 (관계형 DB)
     const { data: user, error } = await db
@@ -110,15 +133,14 @@ auth.post("/login", async (c) => {
       .single();
 
     if (error || !user) {
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
       return c.json({ success: false, error: "Invalid credentials" }, 401);
     }
 
     // 로컬 계정이 아닌 경우
     if (user.provider !== 'local') {
-      return c.json({ 
-        success: false, 
-        error: `Please login with ${user.provider}` 
-      }, 401);
+      await bcrypt.compare(password, DUMMY_PASSWORD_HASH);
+      return c.json({ success: false, error: "Invalid credentials" }, 401);
     }
 
     // 비밀번호 검증 (bcrypt)
@@ -127,6 +149,8 @@ auth.post("/login", async (c) => {
     if (!isPasswordValid) {
       return c.json({ success: false, error: "Invalid credentials" }, 401);
     }
+
+    await clearRateLimit("auth-login-account", normalizedEmail);
 
     // 토큰 생성 (관계형 DB)
     const token = createSessionToken();
@@ -147,7 +171,7 @@ auth.post("/login", async (c) => {
       return c.json({ success: false, error: "Failed to create token" }, 500);
     }
 
-    console.log("✅ User logged in:", { email: normalizedEmail, userId: user.id });
+    console.log("✅ User logged in:", { userId: user.id });
 
     return c.json({ 
       success: true, 
@@ -171,9 +195,12 @@ auth.post("/kakao", async (c) => {
   try {
     const { accessToken }: KakaoLoginRequest = await c.req.json();
 
-    if (!accessToken) {
+    if (typeof accessToken !== 'string' || accessToken.length < 20 || accessToken.length > 4096) {
       return c.json({ success: false, error: "Missing Kakao access token" }, 400);
     }
+
+    const limited = await enforceRateLimit(c, "auth-kakao", getRequestIdentity(c), 100, 900);
+    if (limited) return limited;
 
     const kakaoResponse = await fetch("https://kapi.kakao.com/v2/user/me", {
       headers: {

@@ -25,11 +25,6 @@ ALTER TABLE buses ADD COLUMN IF NOT EXISTS is_running BOOLEAN DEFAULT FALSE;
 ALTER TABLE buses ADD COLUMN IF NOT EXISTS current_driver_id UUID REFERENCES users(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_buses_running ON buses(is_running);
 
-UPDATE users
-SET password_hash = '$2a$10$ESjDbWfCsrJi0liWDS.0P.c1KPMFjSGdfBNxZsTBeCxUJZh/BCH6O'
-WHERE email = 'admin@sch.ac.kr'
-  AND password_hash = 'admin123';
-
 ALTER TABLE auth_tokens ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS auth_tokens_select_all ON auth_tokens;
 DROP POLICY IF EXISTS auth_tokens_insert_all ON auth_tokens;

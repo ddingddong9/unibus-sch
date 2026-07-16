@@ -25,8 +25,10 @@ const configuredOrigins = (Deno.env.get("ALLOWED_ORIGINS") || "")
 const allowedOriginPatterns = [
   /^http:\/\/localhost:\d+$/,
   /^http:\/\/127\.0\.0\.1:\d+$/,
-  /^https:\/\/unibus-sch(?:-[a-z0-9-]+)?\.vercel\.app$/,
+  /^https:\/\/unibus-sch\.vercel\.app$/,
   /^https:\/\/unibus-sch-git-[a-z0-9-]+-ddingddong9s-projects\.vercel\.app$/,
+  /^https:\/\/unibus-sch-[a-z0-9]+-ddingddong9s-projects\.vercel\.app$/,
+  /^https:\/\/unibus-[a-z0-9]+-ddingddong9s-projects\.vercel\.app$/,
 ];
 
 const resolveAllowedOrigin = (origin: string) => {
@@ -40,7 +42,25 @@ app.use('*', cors({
   origin: resolveAllowedOrigin,
   allowHeaders: ['authorization', 'x-client-info', 'apikey', 'content-type', 'x-auth-token'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  maxAge: 86400,
 }));
+
+app.use('*', async (c, next) => {
+  const contentLength = Number(c.req.header('content-length') || 0);
+  if (!Number.isFinite(contentLength) || contentLength < 0 || contentLength > 6 * 1024 * 1024) {
+    return c.json({ success: false, error: 'Request body is too large' }, 413);
+  }
+
+  await next();
+  c.header('X-Content-Type-Options', 'nosniff');
+  const vary = c.res.headers.get('Vary');
+  if (!vary?.toLowerCase().includes('x-auth-token')) {
+    c.header('Vary', vary ? `${vary}, X-Auth-Token` : 'X-Auth-Token');
+  }
+  if (c.req.header('X-Auth-Token')) {
+    c.header('Cache-Control', 'private, no-store');
+  }
+});
 
 // Production: Kong strips the /functions/v1/make-server prefix before forwarding
 app.route('/auth', auth);
@@ -69,5 +89,9 @@ app.route(`${DEV_PREFIX}/reports`, reports);
 app.route(`${DEV_PREFIX}/demo`, demo);
 
 app.notFound((c) => c.json({ error: 'Not Found' }, 404));
+app.onError((error, c) => {
+  console.error('Unhandled API error:', error);
+  return c.json({ success: false, error: 'Internal server error' }, 500);
+});
 
 Deno.serve(app.fetch);

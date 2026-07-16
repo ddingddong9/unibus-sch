@@ -1,5 +1,6 @@
 import { Hono } from "npm:hono";
 import { db } from "../db.tsx";
+import { enforceRateLimit, getRequestIdentity } from "../security/rate-limit.ts";
 
 const campus = new Hono();
 
@@ -23,6 +24,30 @@ const ROUTE_POINTS = [
 ];
 
 const CAMPUS_ROUTE_ID = "00000000-0000-0000-0000-000000000001";
+let memoryCache: { hash: string; path: [number, number][]; expiresAt: number } | null = null;
+
+const routeInputHash = async (points: Array<{ lat: number; lng: number }>) => {
+  const input = points.map((point) => [Number(point.lng).toFixed(7), Number(point.lat).toFixed(7)]);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(JSON.stringify(input)));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+};
+
+const fallbackPath = (stops: Array<{ lat: number; lng: number }>) => {
+  const path: [number, number][] = [];
+  const allStops = [...stops, stops[0]];
+  for (let index = 0; index < allStops.length - 1; index += 1) {
+    const from = allStops[index];
+    const to = allStops[index + 1];
+    for (let step = 1; step <= 20; step += 1) {
+      const ratio = step / 20;
+      path.push([
+        from.lng + (to.lng - from.lng) * ratio,
+        from.lat + (to.lat - from.lat) * ratio,
+      ]);
+    }
+  }
+  return path;
+};
 
 const getStoredCampusRoute = async () => {
   const { data: routeById } = await db
@@ -87,60 +112,77 @@ const getStoredCampusRoute = async () => {
     }
   }
 
-  return { stops: visibleStops, routePoints };
+  return { id: route.id, stops: visibleStops, routePoints };
 };
 
 campus.get("/path", async (c) => {
   const clientId  = Deno.env.get("NAVER_CLIENT_ID");
   const secretKey = Deno.env.get("NAVER_SECRET_KEY");
 
-  if (!clientId || !secretKey) {
-    return c.json({ success: false, error: "Naver API keys not configured" }, 500);
-  }
-
   const storedRoute = await getStoredCampusRoute();
   const visibleStops = storedRoute?.stops?.length ? storedRoute.stops : STOPS;
   const routePoints = storedRoute?.routePoints?.length ? storedRoute.routePoints : ROUTE_POINTS;
+  const inputHash = await routeInputHash(routePoints);
+
+  c.header("Cache-Control", "public, max-age=300, stale-while-revalidate=3600");
+
+  if (storedRoute?.id) {
+    const { data: cached } = await db
+      .from("route_path_cache")
+      .select("input_hash, path")
+      .eq("route_id", storedRoute.id)
+      .maybeSingle();
+    if (cached?.input_hash === inputHash && Array.isArray(cached.path) && cached.path.length > 1) {
+      return c.json({ success: true, data: { path: cached.path, stops: visibleStops, cached: true } });
+    }
+  }
+
+  if (memoryCache?.hash === inputHash && memoryCache.expiresAt > Date.now()) {
+    return c.json({ success: true, data: { path: memoryCache.path, stops: visibleStops, cached: true } });
+  }
+
+  const limited = await enforceRateLimit(c, "campus-path", getRequestIdentity(c), 30, 600);
+  if (limited) return limited;
 
   const start     = `${routePoints[0].lng},${routePoints[0].lat}`;
   const goal      = `${routePoints[routePoints.length - 1].lng},${routePoints[routePoints.length - 1].lat}`;
   const waypoints = routePoints.slice(1, -1).slice(0, 5).map((point) => `${point.lng},${point.lat}`).join("|");
   const url = `https://maps.apigw.ntruss.com/map-direction/v1/driving?start=${start}&goal=${goal}&waypoints=${waypoints}&option=traoptimal`;
 
-  let data: any;
-  try {
-    const response = await fetch(url, {
-      headers: {
-        "X-NCP-APIGW-API-KEY-ID": clientId,
-        "X-NCP-APIGW-API-KEY": secretKey,
-      },
+  let path: [number, number][] = [];
+  if (clientId && secretKey) {
+    try {
+      const response = await fetch(url, {
+        headers: {
+          "X-NCP-APIGW-API-KEY-ID": clientId,
+          "X-NCP-APIGW-API-KEY": secretKey,
+        },
+      });
+      const data = await response.json();
+      if (response.ok && data.code === 0) {
+        path = data.route?.traoptimal?.[0]?.path ?? [];
+      } else {
+        console.warn("Directions5 API returned a non-success response", data.code);
+      }
+    } catch (error) {
+      console.warn("Directions5 API request failed", error);
+    }
+  }
+
+  if (path.length < 2) path = fallbackPath(visibleStops);
+
+  memoryCache = { hash: inputHash, path, expiresAt: Date.now() + 30 * 60 * 1000 };
+  if (storedRoute?.id) {
+    const { error } = await db.from("route_path_cache").upsert({
+      route_id: storedRoute.id,
+      input_hash: inputHash,
+      path,
+      generated_at: new Date().toISOString(),
     });
-    data = await response.json();
-  } catch (e: any) {
-    console.error("fetch error:", e.message);
-    return c.json({ success: false, error: "fetch failed: " + e.message }, 502);
-  }
-  console.log("Directions5 API response code:", data.code, data.message ?? data.error?.message);
-
-  if (data.code === 0) {
-    const path: [number, number][] = data.route?.traoptimal?.[0]?.path ?? [];
-    if (path.length > 0) {
-      return c.json({ success: true, data: { path, stops: visibleStops } });
-    }
+    if (error) console.warn("Campus route cache write failed", error.message);
   }
 
-  // fallback: 정류장 직선 연결 (API 실패 시)
-  const fallback: [number, number][] = [];
-  const allStops = [...visibleStops, visibleStops[0]];
-  for (let i = 0; i < allStops.length - 1; i++) {
-    const from = allStops[i], to = allStops[i + 1];
-    for (let s = 1; s <= 20; s++) {
-      const t = s / 20;
-      fallback.push([from.lng + (to.lng - from.lng) * t, from.lat + (to.lat - from.lat) * t]);
-    }
-  }
-  console.warn("Directions5 fallback. code:", data.code, data.message ?? JSON.stringify(data.error));
-  return c.json({ success: true, data: { path: fallback, stops: visibleStops, source: "fallback", debug: { code: data.code, message: data.message, error: data.error } } });
+  return c.json({ success: true, data: { path, stops: visibleStops, cached: false } });
 });
 
 export default campus;

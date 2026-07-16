@@ -1,5 +1,6 @@
 type VercelRequest = {
   method?: string;
+  url?: string;
 };
 
 type VercelResponse = {
@@ -16,6 +17,8 @@ const STOPS = [
   { id: "library",   name: "도서관", lat: 36.768856, lng: 126.930700 },
   { id: "main-gate", name: "정문",   lat: 36.769014, lng: 126.927978 },
 ];
+
+let memoryCache: { path: [number, number][]; expiresAt: number } | null = null;
 
 function getFallbackPath(): [number, number][] {
   const STEPS = 30;
@@ -35,13 +38,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "GET") {
+    res.setHeader("Allow", "GET, OPTIONS");
+    return res.status(405).json({ success: false, error: "Method not allowed" });
+  }
+  if (new URL(req.url || "/api/campus-route", "https://unibus.invalid").search) {
+    return res.status(400).json({ success: false, error: "Query parameters are not supported" });
+  }
+
+  res.setHeader("Cache-Control", "public, max-age=300");
+  res.setHeader("CDN-Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
+  res.setHeader("Vercel-CDN-Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
+
+  if (memoryCache && memoryCache.expiresAt > Date.now()) {
+    return res.json({ success: true, data: { path: memoryCache.path, stops: STOPS, source: "cache" } });
+  }
 
   const clientId  = process.env.VITE_NAVER_CLIENT_ID || process.env.NAVER_CLIENT_ID;
-  const secretKey = process.env.VITE_NAVER_SECRET_KEY || process.env.NAVER_SECRET_KEY;
+  const secretKey = process.env.NAVER_SECRET_KEY;
 
   if (!clientId || !secretKey) {
-    console.warn("Naver keys missing, using fallback");
-    return res.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_no_key", debug: { clientIdSet: !!clientId, secretKeySet: !!secretKey } } });
+    const path = getFallbackPath();
+    memoryCache = { path, expiresAt: Date.now() + 30 * 60 * 1000 };
+    return res.json({ success: true, data: { path, stops: STOPS, source: "fallback" } });
   }
 
   try {
@@ -58,19 +77,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     });
 
     const data = await apiRes.json();
-    console.log("Naver Directions:", data.code, data.message);
 
-    if (data.code === 0) {
+    if (apiRes.ok && data.code === 0) {
       const path: [number, number][] = data.route?.traoptimal?.[0]?.path ?? [];
       if (path.length > 0) {
+        memoryCache = { path, expiresAt: Date.now() + 30 * 60 * 1000 };
         return res.json({ success: true, data: { path, stops: STOPS, source: "directions5" } });
       }
     }
 
-    console.warn("Directions5 failed, fallback. code:", data.code, data.message);
-    return res.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_api_error", apiCode: data.code, apiMessage: data.message } });
-  } catch (e: any) {
-    console.error("Directions error:", e.message);
-    return res.json({ success: true, data: { path: getFallbackPath(), stops: STOPS, source: "fallback_exception", error: e.message } });
+    console.warn("Naver Directions returned a non-success response");
+  } catch {
+    console.warn("Naver Directions request failed");
   }
+
+  const path = getFallbackPath();
+  memoryCache = { path, expiresAt: Date.now() + 5 * 60 * 1000 };
+  return res.json({ success: true, data: { path, stops: STOPS, source: "fallback" } });
 }

@@ -335,9 +335,12 @@ POST /auth/login
 # 1. 관리자 계정으로 로그인
 POST /auth/login
 {
-  "email": "admin@sch.ac.kr",
-  "password": "admin1234"
+  "email": "<SEED_ADMIN_EMAIL>",
+  "password": "<고유한 관리자 비밀번호>"
 }
+
+# 공유 기본 비밀번호는 제공하지 않습니다.
+# 관리자 계정은 SEED_ADMIN_EMAIL/SEED_ADMIN_PASSWORD로 별도 생성하세요.
 
 # 2. /home 접근 → 성공
 # 3. /admin/dashboard 접근 → 성공

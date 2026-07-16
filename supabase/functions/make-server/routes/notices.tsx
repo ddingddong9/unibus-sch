@@ -6,6 +6,57 @@ import { requireAdmin } from "../middleware/auth.tsx";
 import { CreateNoticeRequest } from "../types/index.tsx";
 
 const notices = new Hono<{ Variables: { userId: string } }>();
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_NOTICE_IMAGES = 10;
+const validCategories = new Set(['general', 'route', 'system', 'lost']);
+const validPriorities = new Set(['low', 'medium', 'high', 'urgent']);
+const imageExtensions = new Map([
+  ['image/jpeg', 'jpg'],
+  ['image/png', 'png'],
+  ['image/webp', 'webp'],
+  ['image/gif', 'gif'],
+]);
+
+const hasValidImageSignature = (mimeType: string, bytes: Uint8Array) => {
+  if (mimeType === 'image/jpeg') return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (mimeType === 'image/png') return [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]
+    .every((value, index) => bytes[index] === value);
+  if (mimeType === 'image/gif') {
+    const header = new TextDecoder().decode(bytes.slice(0, 6));
+    return header === 'GIF87a' || header === 'GIF89a';
+  }
+  if (mimeType === 'image/webp') {
+    return new TextDecoder().decode(bytes.slice(0, 4)) === 'RIFF'
+      && new TextDecoder().decode(bytes.slice(8, 12)) === 'WEBP';
+  }
+  return false;
+};
+
+const normalizeImageUrls = (value: unknown) => {
+  if (!Array.isArray(value) || value.length > MAX_NOTICE_IMAGES) return null;
+
+  const supabaseUrl = Deno.env.get('DB_URL') || Deno.env.get('SUPABASE_URL') || '';
+  let storageOrigin = '';
+  try {
+    storageOrigin = new URL(supabaseUrl).origin;
+  } catch {
+    return null;
+  }
+
+  const urls: string[] = [];
+  for (const item of value) {
+    if (typeof item !== 'string' || item.length > 2048) return null;
+    try {
+      const url = new URL(item);
+      if (url.origin !== storageOrigin
+        || !url.pathname.startsWith('/storage/v1/object/public/notice-images/')) return null;
+      urls.push(url.href);
+    } catch {
+      return null;
+    }
+  }
+  return urls;
+};
 
 // Get all notices (public) - JOIN으로 작성자 정보 포함
 notices.get("/", async (c) => {
@@ -106,12 +157,21 @@ notices.post("/images", requireAdmin, async (c) => {
       return c.json({ success: false, error: "Image file is required" }, 400);
     }
 
-    if (!file.type.startsWith("image/")) {
-      return c.json({ success: false, error: "Only image files are allowed" }, 400);
+    const extension = imageExtensions.get(file.type);
+    if (!extension) {
+      return c.json({ success: false, error: "JPEG, PNG, WebP, GIF 이미지만 업로드할 수 있습니다" }, 400);
     }
 
-    const ext = file.name.split(".").pop() || "bin";
-    const filename = `${Date.now()}_${crypto.randomUUID()}.${ext}`;
+    if (file.size <= 0 || file.size > MAX_IMAGE_BYTES) {
+      return c.json({ success: false, error: "이미지는 5MB 이하여야 합니다" }, 413);
+    }
+
+    const signature = new Uint8Array(await file.slice(0, 16).arrayBuffer());
+    if (!hasValidImageSignature(file.type, signature)) {
+      return c.json({ success: false, error: "파일 형식과 실제 이미지 내용이 일치하지 않습니다" }, 400);
+    }
+
+    const filename = `${Date.now()}_${crypto.randomUUID()}.${extension}`;
     const bytes = new Uint8Array(await file.arrayBuffer());
 
     const { error: uploadError } = await db.storage
@@ -140,10 +200,29 @@ notices.post("/images", requireAdmin, async (c) => {
 // Create notice (admin only)
 notices.post("/", requireAdmin, async (c) => {
   try {
-    const { title, content, category, priority, imageUrls, contentBelow }: CreateNoticeRequest = await c.req.json();
+    const { title, content, category, priority, imageUrls, contentBelow, isPinned }: CreateNoticeRequest & { isPinned?: boolean } = await c.req.json();
 
-    if (!title || !content) {
+    const normalizedTitle = typeof title === 'string' ? title.trim() : '';
+    const normalizedContent = typeof content === 'string' ? content.trim() : '';
+    const normalizedContentBelow = typeof contentBelow === 'string' ? contentBelow.trim() : '';
+    const normalizedCategory = category || 'general';
+    const normalizedPriority = priority || 'medium';
+    const normalizedImages = normalizeImageUrls(imageUrls ?? []);
+
+    if (!normalizedTitle || !normalizedContent) {
       return c.json({ success: false, error: "Missing required fields" }, 400);
+    }
+    if (normalizedTitle.length > 255 || normalizedContent.length > 20_000 || normalizedContentBelow.length > 20_000) {
+      return c.json({ success: false, error: "공지 내용이 허용 길이를 초과했습니다" }, 400);
+    }
+    if (!validCategories.has(normalizedCategory) || !validPriorities.has(normalizedPriority)) {
+      return c.json({ success: false, error: "공지 분류 또는 중요도가 올바르지 않습니다" }, 400);
+    }
+    if (!normalizedImages) {
+      return c.json({ success: false, error: "공지 이미지는 전용 저장소의 이미지 10개까지만 사용할 수 있습니다" }, 400);
+    }
+    if (isPinned !== undefined && typeof isPinned !== 'boolean') {
+      return c.json({ success: false, error: "Invalid pinned state" }, 400);
     }
 
     const userId = c.get('userId');
@@ -152,13 +231,14 @@ notices.post("/", requireAdmin, async (c) => {
     const { data: notice, error: insertError } = await db
       .from('notices')
       .insert({
-        title,
-        content,
-        category: category || 'general',
-        priority: priority || 'medium',
+        title: normalizedTitle,
+        content: normalizedContent,
+        category: normalizedCategory,
+        priority: normalizedPriority,
         author_id: userId,
-        image_urls: imageUrls ?? [],
-        content_below: contentBelow ?? '',
+        is_pinned: isPinned ?? false,
+        image_urls: normalizedImages,
+        content_below: normalizedContentBelow,
       })
       .select('*')
       .single();
@@ -220,13 +300,45 @@ notices.put("/:id", requireAdmin, async (c) => {
 
     // snake_case로 변환
     const dbUpdates: any = {};
-    if (updates.title) dbUpdates.title = updates.title;
-    if (updates.content) dbUpdates.content = updates.content;
-    if (updates.category) dbUpdates.category = updates.category;
-    if (updates.priority) dbUpdates.priority = updates.priority;
-    if (updates.isPinned !== undefined) dbUpdates.is_pinned = updates.isPinned;
-    if (updates.imageUrls !== undefined) dbUpdates.image_urls = updates.imageUrls;
-    if (updates.contentBelow !== undefined) dbUpdates.content_below = updates.contentBelow;
+    if (updates.title !== undefined) {
+      if (typeof updates.title !== 'string' || !updates.title.trim() || updates.title.trim().length > 255) {
+        return c.json({ success: false, error: "Invalid notice title" }, 400);
+      }
+      dbUpdates.title = updates.title.trim();
+    }
+    if (updates.content !== undefined) {
+      if (typeof updates.content !== 'string' || !updates.content.trim() || updates.content.trim().length > 20_000) {
+        return c.json({ success: false, error: "Invalid notice content" }, 400);
+      }
+      dbUpdates.content = updates.content.trim();
+    }
+    if (updates.category !== undefined) {
+      if (!validCategories.has(updates.category)) return c.json({ success: false, error: "Invalid notice category" }, 400);
+      dbUpdates.category = updates.category;
+    }
+    if (updates.priority !== undefined) {
+      if (!validPriorities.has(updates.priority)) return c.json({ success: false, error: "Invalid notice priority" }, 400);
+      dbUpdates.priority = updates.priority;
+    }
+    if (updates.isPinned !== undefined) {
+      if (typeof updates.isPinned !== 'boolean') return c.json({ success: false, error: "Invalid pinned state" }, 400);
+      dbUpdates.is_pinned = updates.isPinned;
+    }
+    if (updates.imageUrls !== undefined) {
+      const imageUrls = normalizeImageUrls(updates.imageUrls);
+      if (!imageUrls) return c.json({ success: false, error: "Invalid notice images" }, 400);
+      dbUpdates.image_urls = imageUrls;
+    }
+    if (updates.contentBelow !== undefined) {
+      if (typeof updates.contentBelow !== 'string' || updates.contentBelow.length > 20_000) {
+        return c.json({ success: false, error: "Invalid notice content" }, 400);
+      }
+      dbUpdates.content_below = updates.contentBelow.trim();
+    }
+
+    if (Object.keys(dbUpdates).length === 0) {
+      return c.json({ success: false, error: "No valid updates provided" }, 400);
+    }
 
     // 공지사항 수정 (관계형 DB)
     const { data: updatedNotice, error: updateError } = await db
