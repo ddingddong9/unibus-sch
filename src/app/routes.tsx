@@ -1,5 +1,5 @@
 import { lazy } from "react";
-import { createBrowserRouter } from "react-router-dom";
+import { Navigate, createBrowserRouter } from "react-router-dom";
 import SplashScreen from "../imports/SplashScreen";
 import { Layout } from "./components/Layout";
 import { AnimatedMobileLayout } from "./components/AnimatedMobileLayout";
@@ -25,8 +25,8 @@ const RouteManagement = lazy(() => import("./admin/RouteManagement"));
 const BusManagement = lazy(() => import("./admin/BusManagement"));
 const Campus3DManagement = lazy(() => import("./admin/Campus3DManagement"));
 const BusDemo = lazy(() => import("./admin/BusDemo"));
-const NotificationSender = lazy(() => import("./admin/NotificationSender"));
 const UserManagement = lazy(() => import("./admin/UserManagement"));
+const SupportManagement = lazy(() => import("./admin/SupportManagement"));
 const Campus3DPage = lazy(() => import("./campus3d/Campus3DPage"));
 
 export const router = createBrowserRouter([
@@ -86,7 +86,8 @@ export const router = createBrowserRouter([
       { path: "/admin/buses",         element: <BusManagement /> },
       { path: "/admin/campus-3d",     element: <Campus3DManagement /> },
       { path: "/admin/demo",          element: <BusDemo /> },
-      { path: "/admin/notifications", element: <NotificationSender /> },
+      { path: "/admin/notifications", element: <Navigate to="/admin/notices" replace /> },
+      { path: "/admin/support",       element: <SupportManagement /> },
       { path: "/admin/users",         element: <UserManagement /> },
     ],
   },

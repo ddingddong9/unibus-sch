@@ -5,7 +5,7 @@ import { db } from "../db.tsx";
 import { requireAdmin } from "../middleware/auth.tsx";
 import { CreateNoticeRequest } from "../types/index.tsx";
 
-const notices = new Hono();
+const notices = new Hono<{ Variables: { userId: string } }>();
 
 // Get all notices (public) - JOIN으로 작성자 정보 포함
 notices.get("/", async (c) => {

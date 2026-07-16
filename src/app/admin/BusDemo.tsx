@@ -68,6 +68,7 @@ export default function BusDemo() {
   const [plans, setPlans] = useState<DemoBusPlan[]>([]);
   const [running, setRunning] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [recoverableSession, setRecoverableSession] = useState(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useState("데모를 시작하면 기존 등록 버스 최대 5대가 발표용 경로로 움직입니다.");
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -82,6 +83,11 @@ export default function BusDemo() {
   ], []);
 
   useEffect(() => {
+    void api.getDemoSession().then((session) => {
+      if (!session) return;
+      setRecoverableSession(true);
+      setStatus(`이전 데모 세션이 ${new Date(session.startedAt).toLocaleString("ko-KR")}부터 남아 있습니다. '데모 종료'를 눌러 원래 차량 상태를 복구해 주세요.`);
+    }).catch(() => setError("서버의 데모 복구 상태를 확인하지 못했습니다."));
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
@@ -146,7 +152,7 @@ export default function BusDemo() {
   };
 
   const startDemo = async () => {
-    if (running || loading) return;
+    if (running || loading || recoverableSession) return;
     setLoading(true);
     setError("");
 
@@ -207,14 +213,13 @@ export default function BusDemo() {
         };
       });
 
-      await Promise.all(nextPlans.map((plan) =>
-        api.updateBus(plan.busId, {
-          type: plan.kind,
-          status: "active",
-          currentRouteId: plan.routeId,
-          isRunning: false,
-        })
-      ));
+      await api.startDemoSession(nextPlans.map((plan) => ({
+        busId: plan.busId,
+        kind: plan.kind,
+        routeId: plan.routeId,
+        label: plan.label,
+      })));
+      setRecoverableSession(true);
 
       plansRef.current = nextPlans;
       setPlans(nextPlans);
@@ -238,18 +243,11 @@ export default function BusDemo() {
     setError("");
 
     try {
-      const results = await Promise.allSettled(plansRef.current.map((plan) =>
-        api.updateBus(plan.busId, {
-          type: plan.original.type,
-          status: plan.original.status,
-          currentRouteId: plan.original.currentRouteId,
-          isRunning: false,
-        })
-      ));
-      const failedCount = results.filter((result) => result.status === "rejected").length;
-      setStatus(failedCount > 0
-        ? `데모를 종료했지만 ${failedCount}대 상태 복구를 다시 확인해야 합니다.`
-        : "데모를 종료하고 버스 상태를 시작 전으로 되돌렸습니다.");
+      await api.stopDemoSession();
+      plansRef.current = [];
+      setPlans([]);
+      setRecoverableSession(false);
+      setStatus("데모를 종료하고 서버에 저장된 복구 지점으로 버스 상태를 되돌렸습니다.");
     } catch (err: any) {
       setError(err.message || "데모 종료에 실패했습니다.");
     } finally {
@@ -258,7 +256,7 @@ export default function BusDemo() {
   };
 
   const resetDemo = async () => {
-    if (running || plansRef.current.length > 0) {
+    if (running || recoverableSession || plansRef.current.length > 0) {
       await stopDemo();
     }
     plansRef.current = [];
@@ -289,9 +287,9 @@ export default function BusDemo() {
                 </p>
               </div>
               <div className={`px-3 py-1.5 rounded-full text-[12px] font-['Public_Sans'] font-semibold ${
-                running ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
+                running ? "bg-green-100 text-green-700" : recoverableSession ? "bg-amber-100 text-amber-700" : "bg-gray-100 text-gray-500"
               }`}>
-                {running ? "데모 실행 중" : "대기 중"}
+                {running ? "데모 실행 중" : recoverableSession ? "복구 필요" : "대기 중"}
               </div>
             </div>
 
@@ -370,7 +368,7 @@ export default function BusDemo() {
             <div className="flex flex-wrap gap-3">
               <button
                 onClick={startDemo}
-                disabled={running || loading}
+                disabled={running || loading || recoverableSession}
                 className="flex items-center gap-2 px-5 py-2.5 bg-[#1e3b8a] text-white rounded-lg font-['Public_Sans'] font-semibold text-[14px] hover:bg-[#1e3b8a]/90 transition-colors disabled:opacity-50"
               >
                 <Play className="w-4 h-4" />
@@ -378,7 +376,7 @@ export default function BusDemo() {
               </button>
               <button
                 onClick={stopDemo}
-                disabled={!running || loading}
+                disabled={(!running && !recoverableSession) || loading}
                 className="flex items-center gap-2 px-5 py-2.5 border border-red-200 text-red-600 rounded-lg font-['Public_Sans'] font-semibold text-[14px] hover:bg-red-50 transition-colors disabled:opacity-50"
               >
                 <Square className="w-4 h-4" />
@@ -415,7 +413,7 @@ export default function BusDemo() {
             </div>
             <div className="mt-5 p-4 rounded-lg bg-amber-50 border border-amber-100">
               <p className="font-['Public_Sans'] text-amber-800 text-[12px] leading-5">
-                데모는 실제 원격 DB에 위치 데이터를 넣습니다. 발표 후 데모 종료를 눌러 버스 상태를 되돌려 주세요.
+                데모 시작 시 서버가 차량 원본 상태를 저장합니다. 화면을 새로고침해도 ‘데모 종료’를 누르면 원래 상태로 복구할 수 있습니다.
               </p>
             </div>
             <p className="mt-4 font-['Public_Sans'] text-[#64748b] text-[13px] leading-6">{status}</p>

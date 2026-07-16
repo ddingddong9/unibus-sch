@@ -1,15 +1,15 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import {
-  Bell,
-  Box,
   Bus,
+  CircleHelp,
   FileText,
   Home,
   LayoutDashboard,
   LogOut,
   Menu,
   MonitorPlay,
+  Route,
   Users,
   X,
   type LucideIcon,
@@ -24,6 +24,7 @@ interface AdminMenuItem {
   path: string;
   icon: LucideIcon;
   label: string;
+  section: string;
 }
 
 interface SidebarContentProps {
@@ -69,10 +70,15 @@ function SidebarContent({
 
       <nav className="flex-1 overflow-y-auto p-4">
         <ul className="space-y-1.5">
-          {menuItems.map((item) => {
+          {menuItems.map((item, index) => {
             const isActive = currentPath === item.path;
             return (
               <li key={item.path}>
+                {index === 0 || menuItems[index - 1].section !== item.section ? (
+                  <p className="mb-2 mt-4 px-4 text-[10px] font-bold uppercase tracking-[0.14em] text-[#94a3b8] first:mt-0">
+                    {item.section}
+                  </p>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => onNavigate(item.path)}
@@ -125,14 +131,13 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   const [menuOpen, setMenuOpen] = useState(false);
 
   const menuItems: AdminMenuItem[] = [
-    { path: "/admin/dashboard", icon: LayoutDashboard, label: "대시보드" },
-    { path: "/admin/notices", icon: FileText, label: "공지사항 관리" },
-    { path: "/admin/routes", icon: Bus, label: "버스 노선 관리" },
-    { path: "/admin/buses", icon: Bus, label: "버스 관리" },
-    { path: "/admin/campus-3d", icon: Box, label: "3D 캠퍼스" },
-    { path: "/admin/demo", icon: MonitorPlay, label: "운행 데모" },
-    { path: "/admin/notifications", icon: Bell, label: "알림 전송" },
-    { path: "/admin/users", icon: Users, label: "사용자 관리" },
+    { path: "/admin/dashboard", icon: LayoutDashboard, label: "운영 센터", section: "실시간 운영" },
+    { path: "/admin/buses", icon: Bus, label: "운행 관리", section: "실시간 운영" },
+    { path: "/admin/routes", icon: Route, label: "노선·시간표", section: "콘텐츠 관리" },
+    { path: "/admin/notices", icon: FileText, label: "공지·알림", section: "콘텐츠 관리" },
+    { path: "/admin/support", icon: CircleHelp, label: "문의·장애", section: "사용자 대응" },
+    { path: "/admin/users", icon: Users, label: "사용자", section: "사용자 대응" },
+    { path: "/admin/demo", icon: MonitorPlay, label: "프로토타입 도구", section: "학술제" },
   ];
   const currentItem = menuItems.find((item) => item.path === location.pathname);
 

@@ -1,505 +1,138 @@
-import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router";
-import { Bell, Bus, FileText, Users, Activity, RefreshCw, Play, Square } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Activity, AlertTriangle, BellRing, Bus, CheckCircle2, CircleHelp, RefreshCw, Route, Server, UserRound } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import AdminLayout from "./AdminLayout";
 import { api } from "../services/api";
-import { createRouteTrack, distanceMeters, headingAtDistance, sampleTrack, type RouteTrack } from "../utils/routeMotion";
+import type { BusRoute, Notice, UserReport } from "../types";
 
-interface DashboardStats {
-  totalNotices: number;
-  activeRoutes: number;
-  totalRoutes: number;
-  totalBuses: number;
-  activeBuses: number;
-  totalUsers: number;
-}
-
-// 데모 시뮬레이션용 경로 — 중간점 보간으로 매끄러운 이동
-function interpolateRoute(waypoints: { lat: number; lng: number }[], steps = 8) {
-  const result: { lat: number; lng: number }[] = [];
-  for (let i = 0; i < waypoints.length - 1; i++) {
-    const from = waypoints[i], to = waypoints[i + 1];
-    for (let s = 0; s < steps; s++) {
-      const t = s / steps;
-      result.push({ lat: from.lat + (to.lat - from.lat) * t, lng: from.lng + (to.lng - from.lng) * t });
-    }
-  }
-  result.push(waypoints[waypoints.length - 1]);
-  return result;
-}
-
-const CAMPUS_ROUTE = interpolateRoute([
-  { lat: 36.772760, lng: 126.933816 },
-  { lat: 36.768228, lng: 126.935383 },
-  { lat: 36.767905, lng: 126.932505 },
-  { lat: 36.768856, lng: 126.931303 },
-  { lat: 36.769014, lng: 126.927978 },
-], 6);
-
-const SEOUL_ROUTE = interpolateRoute([
-  { lat: 36.769014, lng: 126.927978 },
-  { lat: 36.800000, lng: 127.073000 },
-  { lat: 37.145000, lng: 127.065000 },
-  { lat: 37.263000, lng: 127.029000 },
-  { lat: 37.361000, lng: 126.935000 },
-  { lat: 37.430000, lng: 126.896000 },
-  { lat: 37.497000, lng: 127.047000 },
-], 10);
-
-const INCHEON_ROUTE = interpolateRoute([
-  { lat: 36.769014, lng: 126.927978 },
-  { lat: 36.808000, lng: 127.073000 },
-  { lat: 37.120000, lng: 126.900000 },
-  { lat: 37.320000, lng: 126.831000 },
-  { lat: 37.499000, lng: 126.789000 },
-  { lat: 37.456000, lng: 126.705000 },
-], 10);
-
-interface SimBus {
-  busId: string;
+interface ManagedBus {
+  id: string;
   name: string;
-  type: "campus" | "commuter";
-  track: RouteTrack;
-  label: string;
-  progressMeters: number;
-  dir: 1 | -1;
-  speedMetersPerSecond: number;
-  pingPong: boolean;
+  status: string;
+  isRunning: boolean;
+  currentDriverId?: string | null;
+  currentDriverName?: string | null;
+  currentRoute?: { id: string; name: string } | null;
+  activeTrip?: { id: string } | null;
+  lastLocationAt?: string | null;
 }
 
-function isClosedPath(path: { lat: number; lng: number }[]) {
-  if (path.length < 3) return false;
-  return distanceMeters(path[0], path[path.length - 1]) < 80;
+interface EndpointState {
+  label: string;
+  ok: boolean;
+}
+
+function timeAgo(value?: string | null) {
+  if (!value) return "수신 없음";
+  const seconds = Math.max(0, Math.floor((Date.now() - new Date(value).getTime()) / 1000));
+  if (seconds < 10) return "방금 전";
+  if (seconds < 60) return `${seconds}초 전`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}분 전`;
+  return `${Math.floor(seconds / 3600)}시간 전`;
 }
 
 export default function AdminDashboard() {
   const navigate = useNavigate();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentNotices, setRecentNotices] = useState<any[]>([]);
+  const [buses, setBuses] = useState<ManagedBus[]>([]);
+  const [routes, setRoutes] = useState<BusRoute[]>([]);
+  const [notices, setNotices] = useState<Notice[]>([]);
+  const [reports, setReports] = useState<UserReport[]>([]);
+  const [userCount, setUserCount] = useState(0);
+  const [health, setHealth] = useState<EndpointState[]>([]);
   const [loading, setLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [allBuses, setAllBuses] = useState<any[]>([]);
-  const [simRunning, setSimRunning] = useState(false);
-  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const simIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const simBusesRef = useRef<SimBus[]>([]);
-  const simLastTickRef = useRef<number | null>(null);
-  const simBusyRef = useRef(false);
+  const [lastCheckedAt, setLastCheckedAt] = useState<Date | null>(null);
 
-  const fetchData = async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const [notices, routes, buses, users] = await Promise.allSettled([
-        api.getNotices(),
-        api.getRoutes(),
-        api.getBuses(),
-        api.getUsers(),
-      ]);
-
-      const noticesData = notices.status === "fulfilled" ? notices.value : [];
-      const routesData  = routes.status  === "fulfilled" ? routes.value  : [];
-      const busesData   = buses.status   === "fulfilled" ? buses.value   : [];
-      const usersData   = users.status   === "fulfilled" ? users.value   : [];
-
-      setAllBuses(busesData);
-      setStats({
-        totalNotices: noticesData.length,
-        activeRoutes: routesData.filter((r: any) => r.isActive).length,
-        totalRoutes:  routesData.length,
-        totalBuses:   busesData.length,
-        activeBuses:  busesData.filter((b: any) => b.status === "active").length,
-        totalUsers:   usersData.length,
-      });
-
-      const sorted = [...noticesData].sort(
-        (a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      );
-      setRecentNotices(sorted.slice(0, 5));
-      setLastUpdated(new Date());
-    } catch (e) {
-      console.error("Dashboard fetch error:", e);
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  };
-
-  const buildSimBuses = (buses: any[]): SimBus[] => {
-    const campusBuses = buses.filter((b) => b.type === "campus");
-    const commuterBuses = buses.filter((b) => b.type === "commuter");
-    const result: SimBus[] = [];
-
-    campusBuses.forEach((b, i) => {
-      const track = createRouteTrack(CAMPUS_ROUTE, 5);
-      const progressMeters = track.lengthMeters > 0
-        ? (track.lengthMeters / Math.max(campusBuses.length, 1)) * i
-        : 0;
-      result.push({
-        busId: b.id,
-        name: b.name,
-        type: "campus",
-        track,
-        label: "캠퍼스 순환",
-        progressMeters,
-        dir: 1,
-        speedMetersPerSecond: 6,
-        pingPong: !isClosedPath(CAMPUS_ROUTE),
-      });
-    });
-
-    commuterBuses.forEach((b, i) => {
-      const route = i % 2 === 0 ? SEOUL_ROUTE : INCHEON_ROUTE;
-      const label = i % 2 === 0 ? "서울행" : "인천행";
-      result.push({
-        busId: b.id,
-        name: b.name,
-        type: "commuter",
-        track: createRouteTrack(route, 12),
-        label,
-        progressMeters: 0,
-        dir: 1,
-        speedMetersPerSecond: 18,
-        pingPong: true,
-      });
-    });
-
-    return result;
-  };
-
-  const startSimulation = async () => {
-    const simBuses = buildSimBuses(allBuses);
-    if (simBuses.length === 0) return;
-
-    simBusesRef.current = simBuses;
-    await Promise.allSettled(simBuses.map((b) => api.updateBus(b.busId, { status: "active" })));
-    setSimRunning(true);
-    simLastTickRef.current = null;
-
-    simIntervalRef.current = setInterval(async () => {
-      if (simBusyRef.current) return;
-      simBusyRef.current = true;
-      const now = performance.now();
-      const elapsedSeconds = simLastTickRef.current ? Math.min((now - simLastTickRef.current) / 1000, 1) : 0.5;
-      simLastTickRef.current = now;
-
-      const updated = simBusesRef.current.map((b) => {
-        let dir = b.dir;
-        const trackLength = b.track.lengthMeters;
-        let progressMeters = b.progressMeters + b.speedMetersPerSecond * elapsedSeconds * dir;
-
-        if (trackLength <= 0) return b;
-
-        if (!b.pingPong) {
-          progressMeters = ((progressMeters % trackLength) + trackLength) % trackLength;
-        } else {
-          if (progressMeters >= trackLength) {
-            progressMeters = trackLength - (progressMeters - trackLength);
-            dir = -1;
-          } else if (progressMeters <= 0) {
-            progressMeters = Math.abs(progressMeters);
-            dir = 1;
-          }
-        }
-        return { ...b, progressMeters, dir };
-      });
-      simBusesRef.current = updated;
-
-      try {
-        await Promise.allSettled(
-          updated.map((b) => {
-            const pos = sampleTrack(b.track, b.progressMeters);
-            const heading = b.dir === 1
-              ? headingAtDistance(b.track, b.progressMeters)
-              : (headingAtDistance(b.track, Math.max(b.progressMeters - 12, 0)) + 180) % 360;
-            return api.updateBusLocation(b.busId, {
-              lat: pos.lat,
-              lng: pos.lng,
-              speed: Math.round(b.speedMetersPerSecond * 3.6),
-              heading,
-            });
-          })
-        );
-      } finally {
-        simBusyRef.current = false;
-      }
-    }, 500);
-  };
-
-  const stopSimulation = async () => {
-    if (simIntervalRef.current) clearInterval(simIntervalRef.current);
-    await Promise.allSettled(simBusesRef.current.map((b) => api.updateBus(b.busId, { status: "inactive" })));
-    simBusesRef.current = [];
-    setSimRunning(false);
-  };
-
-  useEffect(() => {
-    fetchData();
-    intervalRef.current = setInterval(() => fetchData(true), 30000);
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-      if (simIntervalRef.current) clearInterval(simIntervalRef.current);
-    };
+  const loadOperations = useCallback(async () => {
+    setLoading(true);
+    const results = await Promise.allSettled([
+      api.getBuses(), api.getRoutes(), api.getNotices(), api.getReports(), api.getUsers(),
+    ]);
+    const labels = ["버스·GPS", "노선", "공지", "문의", "사용자"];
+    setHealth(results.map((result, index) => ({ label: labels[index], ok: result.status === "fulfilled" })));
+    if (results[0].status === "fulfilled") setBuses(results[0].value);
+    if (results[1].status === "fulfilled") setRoutes(results[1].value);
+    if (results[2].status === "fulfilled") setNotices(results[2].value);
+    if (results[3].status === "fulfilled") setReports(results[3].value);
+    if (results[4].status === "fulfilled") setUserCount(results[4].value.length);
+    setLastCheckedAt(new Date());
+    setLoading(false);
   }, []);
 
-  const timeAgo = (dateStr: string) => {
-    const diff = Date.now() - new Date(dateStr).getTime();
-    const mins  = Math.floor(diff / 60000);
-    const hours = Math.floor(diff / 3600000);
-    const days  = Math.floor(diff / 86400000);
-    if (mins  < 1)  return "방금 전";
-    if (mins  < 60) return `${mins}분 전`;
-    if (hours < 24) return `${hours}시간 전`;
-    return `${days}일 전`;
-  };
+  useEffect(() => {
+    void loadOperations();
+    const interval = window.setInterval(() => void loadOperations(), 15000);
+    return () => window.clearInterval(interval);
+  }, [loadOperations]);
 
-  const categoryColor: Record<string, string> = {
-    general: "bg-blue-500",
-    route:   "bg-green-500",
-    system:  "bg-red-500",
-    lost:    "bg-orange-500",
-  };
+  const runningBuses = buses.filter((bus) => bus.isRunning);
+  const openReports = reports.filter((report) => report.status !== "resolved");
+  const issues = useMemo(() => {
+    const now = lastCheckedAt?.getTime() ?? Date.now();
+    return buses.flatMap((bus) => {
+      const busIssues: Array<{ id: string; severity: "critical" | "warning"; title: string; detail: string }> = [];
+      if (bus.isRunning && !bus.currentDriverId) busIssues.push({ id: `${bus.id}-driver`, severity: "critical", title: `${bus.name}: 기사 정보 없음`, detail: "운행 중인데 현재 기사 연결이 없습니다." });
+      if (bus.isRunning && !bus.currentRoute) busIssues.push({ id: `${bus.id}-route`, severity: "critical", title: `${bus.name}: 노선 미지정`, detail: "운행 중인데 표시할 노선이 없습니다." });
+      if (bus.isRunning && !bus.lastLocationAt) busIssues.push({ id: `${bus.id}-gps-none`, severity: "critical", title: `${bus.name}: GPS 수신 없음`, detail: "운행 시작 후 위치가 한 번도 들어오지 않았습니다." });
+      if (bus.isRunning && bus.lastLocationAt && now - new Date(bus.lastLocationAt).getTime() > 15000) busIssues.push({ id: `${bus.id}-gps-stale`, severity: "warning", title: `${bus.name}: GPS 지연`, detail: `마지막 위치 ${timeAgo(bus.lastLocationAt)}` });
+      if (bus.isRunning !== Boolean(bus.activeTrip)) busIssues.push({ id: `${bus.id}-state`, severity: "critical", title: `${bus.name}: 운행 상태 불일치`, detail: "버스 상태와 운행 기록이 서로 다릅니다." });
+      return busIssues;
+    });
+  }, [buses, lastCheckedAt]);
 
-  const categoryLabel: Record<string, string> = {
-    general: "일반",
-    route:   "노선",
-    system:  "시스템",
-    lost:    "분실물",
-  };
-
-  const statCards = stats ? [
-    { label: "총 공지사항",  value: stats.totalNotices.toLocaleString(), sub: "등록된 전체 공지",           icon: FileText, color: "bg-[#1e3b8a]" },
-    { label: "활성 노선",    value: stats.activeRoutes.toLocaleString(), sub: `전체 ${stats.totalRoutes}개 중`, icon: Bus,      color: "bg-[#1e3b8a]" },
-    { label: "등록된 버스",  value: stats.totalBuses.toLocaleString(),   sub: `운행중 ${stats.activeBuses}대`,  icon: Bus,      color: "bg-[#1e3b8a]" },
-    { label: "등록된 사용자", value: stats.totalUsers.toLocaleString(),  sub: "전체 가입자 수",               icon: Users,    color: "bg-[#1e3b8a]" },
-  ] : [];
-
-  const quickLinks = [
-    { title: "공지사항 작성", path: "/admin/notices",       icon: FileText },
-    { title: "노선 추가",     path: "/admin/routes",        icon: Bus },
-    { title: "버스 관리",     path: "/admin/buses",         icon: Bus },
-    { title: "운행 데모",     path: "/admin/demo",          icon: Bus },
-    { title: "알림 보내기",   path: "/admin/notifications", icon: Bell },
-    { title: "사용자 관리",   path: "/admin/users",         icon: Users },
+  const criticalCount = issues.filter((issue) => issue.severity === "critical").length;
+  const stats = [
+    { label: "현재 운행", value: runningBuses.length, sub: `전체 ${buses.length}대`, icon: Bus, color: "bg-[#1e3b8a]" },
+    { label: "즉시 확인", value: criticalCount, sub: `주의 포함 ${issues.length}건`, icon: AlertTriangle, color: criticalCount ? "bg-red-500" : "bg-green-500" },
+    { label: "미해결 문의", value: openReports.length, sub: `신규 ${reports.filter((report) => report.status === "open").length}건`, icon: CircleHelp, color: "bg-amber-500" },
+    { label: "활성 노선", value: routes.filter((route) => route.isActive).length, sub: `전체 ${routes.length}개`, icon: Route, color: "bg-cyan-600" },
   ];
 
   return (
     <AdminLayout>
       <div className="p-4 sm:p-6 lg:p-8">
-        {/* Header */}
-        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-start sm:justify-between">
+        <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h1 className="mb-2 font-['Public_Sans'] text-[26px] font-bold text-[#0f172a] sm:text-[32px]">대시보드</h1>
-            <p className="font-['Public_Sans'] text-[#64748b] text-[16px]">UNIBUS SCH 시스템 현황을 한눈에 확인하세요</p>
+            <h1 className="text-[26px] font-bold text-[#0f172a] sm:text-[32px]">운영 센터</h1>
+            <p className="mt-1 text-[15px] text-[#64748b]">운행 이상과 사용자 문제를 한 화면에서 확인합니다.</p>
           </div>
-          <button
-            onClick={() => fetchData()}
-            disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-lg border border-[#cbd5e1] px-4 py-2.5 font-['Public_Sans'] text-[14px] font-medium text-[#64748b] transition-colors hover:bg-gray-50 sm:w-auto"
-          >
-            <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
-            {lastUpdated ? `${timeAgo(lastUpdated.toISOString())} 업데이트` : "새로고침"}
-          </button>
-        </div>
-
-        {/* Stats Grid */}
-        <div className="mb-8 grid grid-cols-2 gap-3 sm:gap-6 xl:grid-cols-4">
-          {loading ? (
-            Array.from({ length: 4 }).map((_, i) => (
-              <div key={i} className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 animate-pulse">
-                <div className="h-4 bg-gray-200 rounded w-2/3 mb-4" />
-                <div className="h-9 bg-gray-200 rounded w-1/2 mb-2" />
-                <div className="h-3 bg-gray-100 rounded w-1/3" />
-              </div>
-            ))
-          ) : (
-            statCards.map((stat, index) => (
-              <div key={index} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:p-6">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <p className="font-['Public_Sans'] text-[#64748b] text-[14px] mb-2">{stat.label}</p>
-                    <h3 className="mb-1 font-['Public_Sans'] text-[30px] font-bold leading-none text-[#0f172a] sm:text-[36px]">{stat.value}</h3>
-                    <span className="font-['Public_Sans'] text-[#94a3b8] text-[12px]">{stat.sub}</span>
-                  </div>
-                  <div className={`${stat.color} flex h-10 w-10 shrink-0 items-center justify-center rounded-lg sm:h-12 sm:w-12`}>
-                    <stat.icon className="h-5 w-5 text-white sm:h-6 sm:w-6" />
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-          {/* Quick Links */}
-          <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6">
-            <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px] mb-4">빠른 작업</h2>
-            <div className="space-y-3">
-              {quickLinks.map((link, index) => (
-                <button
-                  key={index}
-                  onClick={() => navigate(link.path)}
-                  className="w-full flex items-center gap-3 p-4 rounded-lg border border-gray-200 hover:border-[#1e3b8a] hover:bg-[#1e3b8a]/5 transition-all group"
-                >
-                  <link.icon className="w-5 h-5 text-[#1e3b8a] group-hover:scale-110 transition-transform" />
-                  <span className="font-['Public_Sans'] text-[#0f172a] text-[15px] font-medium">{link.title}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Recent Notices */}
-          <div className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-6 xl:col-span-2">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px] flex items-center gap-2">
-                <Activity className="w-5 h-5" />
-                최근 공지사항
-              </h2>
-              <button onClick={() => navigate("/admin/notices")} className="text-[#1e3b8a] text-[13px] font-['Public_Sans'] font-semibold hover:underline">
-                전체보기
-              </button>
-            </div>
-
-            {loading ? (
-              <div className="space-y-4">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="animate-pulse flex gap-3 py-3 border-b border-gray-100">
-                    <div className="w-2 h-2 rounded-full bg-gray-200 mt-2 shrink-0" />
-                    <div className="flex-1">
-                      <div className="h-4 bg-gray-200 rounded w-3/4 mb-2" />
-                      <div className="h-3 bg-gray-100 rounded w-1/4" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : recentNotices.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 text-[#94a3b8]">
-                <FileText className="w-10 h-10 mb-2 opacity-30" />
-                <p className="font-['Public_Sans'] text-[14px]">등록된 공지사항이 없습니다</p>
-              </div>
-            ) : (
-              <div className="space-y-1">
-                {recentNotices.map((notice, index) => (
-                  <div
-                    key={notice.id || index}
-                    className="flex items-center justify-between py-3 border-b border-gray-100 last:border-0 hover:bg-gray-50 px-3 rounded-lg transition-colors cursor-pointer"
-                    onClick={() => navigate("/admin/notices")}
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-2 h-2 rounded-full shrink-0 ${categoryColor[notice.category] ?? "bg-gray-400"}`} />
-                      <div>
-                        <p className="font-['Public_Sans'] font-medium text-[#0f172a] text-[14px] line-clamp-1">{notice.title}</p>
-                        <p className="font-['Public_Sans'] text-[#94a3b8] text-[12px]">
-                          {categoryLabel[notice.category] ?? notice.category} · {notice.authorName}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="font-['Public_Sans'] text-[#64748b] text-[12px] shrink-0 ml-4">{timeAgo(notice.createdAt)}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* System Status */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <h3 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[16px] mb-4">시스템 상태</h3>
-            <div className="space-y-3">
-              {[
-                { label: "API 서버",      ok: !loading },
-                { label: "데이터베이스",   ok: stats !== null },
-                { label: "Edge Function", ok: stats !== null },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between">
-                  <span className="font-['Public_Sans'] text-[#64748b] text-[14px]">{item.label}</span>
-                  <span className={`px-3 py-1 rounded-full text-[12px] font-medium ${
-                    loading ? "bg-yellow-100 text-yellow-700" :
-                    item.ok  ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
-                  }`}>
-                    {loading ? "확인 중" : item.ok ? "정상" : "오류"}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-            <h3 className="font-['Public_Sans'] font-semibold text-[#0f172a] text-[16px] mb-4">데이터 요약</h3>
-            {loading ? (
-              <div className="space-y-3 animate-pulse">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="flex justify-between">
-                    <div className="h-4 bg-gray-200 rounded w-1/3" />
-                    <div className="h-4 bg-gray-200 rounded w-1/6" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {[
-                  { label: "전체 노선",  value: stats?.totalRoutes  ?? "-" },
-                  { label: "등록 버스",  value: stats?.totalBuses   ?? "-" },
-                  { label: "총 공지",    value: stats?.totalNotices ?? "-" },
-                  { label: "가입 사용자", value: stats?.totalUsers  ?? "-" },
-                ].map(row => (
-                  <div key={row.label} className="flex items-center justify-between">
-                    <span className="font-['Public_Sans'] text-[#64748b] text-[14px]">{row.label}</span>
-                    <span className="font-['Public_Sans'] text-[#0f172a] text-[16px] font-bold">{row.value}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* 데모 시뮬레이션 패널 */}
-        <div className="mt-6 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="flex flex-col gap-4 border-b border-gray-100 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
-            <div>
-              <h2 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[20px]">데모 시뮬레이션</h2>
-              <p className="font-['Public_Sans'] text-[#64748b] text-[13px] mt-0.5">학술제용 가상 다중 버스 운행 시뮬레이션</p>
-            </div>
-            <button
-              onClick={simRunning ? stopSimulation : startSimulation}
-              disabled={allBuses.length === 0}
-              className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-['Public_Sans'] font-bold text-[14px] transition-all disabled:opacity-40 ${
-                simRunning
-                  ? "bg-red-500 hover:bg-red-600 text-white shadow-lg shadow-red-200"
-                  : "bg-[#1e3b8a] hover:bg-[#1e3b8a]/90 text-white shadow-lg shadow-blue-200"
-              }`}
-            >
-              {simRunning ? <Square className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-              {simRunning ? "시뮬레이션 종료" : "시뮬레이션 시작"}
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-[#94a3b8]">{lastCheckedAt ? `${lastCheckedAt.toLocaleTimeString("ko-KR")} 확인` : "확인 중"}</span>
+            <button type="button" onClick={() => void loadOperations()} disabled={loading} className="flex items-center gap-2 rounded-lg border border-[#cbd5e1] bg-white px-4 py-2.5 text-sm font-semibold text-[#475569] disabled:opacity-50">
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> 새로고침
             </button>
           </div>
+        </div>
 
-          {allBuses.length === 0 ? (
-            <div className="p-6 text-center text-[#94a3b8] font-['Public_Sans'] text-[14px]">
-              등록된 버스가 없습니다. 먼저 버스를 등록해 주세요.
+        <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
+          {stats.map((stat) => <div key={stat.label} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs text-[#64748b]">{stat.label}</p><p className="mt-2 text-3xl font-bold text-[#0f172a]">{stat.value}</p><p className="mt-1 text-xs text-[#94a3b8]">{stat.sub}</p></div><span className={`grid h-10 w-10 place-items-center rounded-xl ${stat.color}`}><stat.icon className="h-5 w-5 text-white" /></span></div></div>)}
+        </div>
+
+        <div className="mb-6 grid gap-6 xl:grid-cols-[1.35fr_1fr]">
+          <section className="rounded-xl border border-gray-100 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4"><div><h2 className="flex items-center gap-2 text-lg font-bold text-[#0f172a]"><AlertTriangle className="h-5 w-5 text-amber-500" />운영 이상</h2><p className="mt-1 text-xs text-[#94a3b8]">운행 데이터에서 자동 감지한 항목</p></div><button type="button" onClick={() => navigate("/admin/buses")} className="text-xs font-bold text-[#1e3b8a]">운행 관리</button></div>
+            <div className="max-h-[350px] overflow-auto p-3">
+              {loading && buses.length === 0 ? <p className="p-8 text-center text-sm text-[#94a3b8]">운영 상태 분석 중...</p> : issues.length === 0 ? <div className="flex flex-col items-center py-10 text-green-700"><CheckCircle2 className="mb-2 h-8 w-8" /><p className="text-sm font-bold">감지된 운행 이상이 없습니다.</p></div> : issues.map((issue) => <button type="button" key={issue.id} onClick={() => navigate("/admin/buses")} className="mb-2 flex w-full items-start gap-3 rounded-lg border border-gray-100 p-3 text-left hover:bg-gray-50"><span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${issue.severity === "critical" ? "bg-red-500" : "bg-amber-400"}`} /><span><span className="block text-sm font-bold text-[#0f172a]">{issue.title}</span><span className="mt-1 block text-xs text-[#64748b]">{issue.detail}</span></span></button>)}
             </div>
-          ) : (
-            <div className="p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-              {buildSimBuses(allBuses).map((b) => (
-                <div
-                  key={b.busId}
-                  className={`rounded-xl border p-4 flex items-center gap-3 transition-all ${
-                    simRunning ? "border-[#1e3b8a]/30 bg-[#1e3b8a]/5" : "border-gray-200 bg-gray-50"
-                  }`}
-                >
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${simRunning ? "bg-[#1e3b8a]" : "bg-gray-200"}`}>
-                    <Bus className={`w-5 h-5 ${simRunning ? "text-white" : "text-gray-500"}`} />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-['Public_Sans'] font-bold text-[#0f172a] text-[13px] truncate">{b.name}</p>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      {simRunning && <div className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse" />}
-                      <span className="font-['Public_Sans'] text-[#64748b] text-[12px]">{b.label}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
+          </section>
+
+          <section className="rounded-xl border border-gray-100 bg-white shadow-sm">
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4"><div><h2 className="flex items-center gap-2 text-lg font-bold text-[#0f172a]"><CircleHelp className="h-5 w-5 text-[#1e3b8a]" />사용자 문의</h2><p className="mt-1 text-xs text-[#94a3b8]">미해결 {openReports.length}건</p></div><button type="button" onClick={() => navigate("/admin/support")} className="text-xs font-bold text-[#1e3b8a]">전체 보기</button></div>
+            <div className="max-h-[350px] overflow-auto p-3">
+              {openReports.length === 0 ? <p className="p-8 text-center text-sm text-[#94a3b8]">미해결 문의가 없습니다.</p> : openReports.slice(0, 6).map((report) => <button type="button" key={report.id} onClick={() => navigate("/admin/support")} className="mb-2 w-full rounded-lg p-3 text-left hover:bg-gray-50"><div className="flex items-center justify-between gap-3"><p className="line-clamp-1 text-sm font-bold text-[#0f172a]">{report.title}</p><span className={`shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${report.status === "open" ? "bg-red-50 text-red-600" : "bg-amber-50 text-amber-700"}`}>{report.status === "open" ? "신규" : "처리 중"}</span></div><p className="mt-1 text-xs text-[#64748b]">{report.userName} · {timeAgo(report.createdAt)}</p></button>)}
             </div>
-          )}
+          </section>
+        </div>
+
+        <section className="mb-6 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4"><div><h2 className="flex items-center gap-2 text-lg font-bold text-[#0f172a]"><Activity className="h-5 w-5 text-green-600" />실시간 운행</h2><p className="mt-1 text-xs text-[#94a3b8]">운행 여부는 차량 활성 상태가 아닌 실제 운행 기록 기준입니다.</p></div></div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="bg-slate-50 text-left text-xs text-[#64748b]"><tr><th className="px-5 py-3">버스</th><th className="px-5 py-3">노선</th><th className="px-5 py-3">기사</th><th className="px-5 py-3">GPS</th><th className="px-5 py-3">상태</th></tr></thead><tbody>{buses.map((bus) => <tr key={bus.id} className="border-t border-gray-100"><td className="px-5 py-4 font-bold text-[#0f172a]">{bus.name}</td><td className="px-5 py-4 text-[#475569]">{bus.currentRoute?.name || "미지정"}</td><td className="px-5 py-4 text-[#475569]">{bus.currentDriverName || "-"}</td><td className="px-5 py-4"><span className={bus.isRunning && (!bus.lastLocationAt || Date.now() - new Date(bus.lastLocationAt).getTime() > 15000) ? "text-red-600" : "text-[#475569]"}>{timeAgo(bus.lastLocationAt)}</span></td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${bus.isRunning ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>{bus.isRunning ? "운행 중" : "대기"}</span></td></tr>)}</tbody></table></div>
+        </section>
+
+        <div className="grid gap-4 lg:grid-cols-[1fr_1.5fr]">
+          <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm"><h2 className="mb-4 flex items-center gap-2 text-base font-bold text-[#0f172a]"><Server className="h-5 w-5" />데이터 연결 상태</h2><div className="grid grid-cols-2 gap-2">{health.map((item) => <div key={item.label} className="flex items-center justify-between rounded-lg bg-slate-50 px-3 py-2.5"><span className="text-xs text-[#475569]">{item.label}</span><span className={`text-xs font-bold ${item.ok ? "text-green-600" : "text-red-600"}`}>{item.ok ? "정상" : "오류"}</span></div>)}</div><p className="mt-3 text-xs text-[#94a3b8]">사용자 {userCount}명 · 공지 {notices.length}건</p></section>
+          <section className="rounded-xl border border-gray-100 bg-white p-5 shadow-sm"><h2 className="mb-4 text-base font-bold text-[#0f172a]">빠른 대응</h2><div className="grid grid-cols-2 gap-3 sm:grid-cols-4">{[
+            ["운행 조치", "/admin/buses", Bus], ["공지 발송", "/admin/notices", BellRing], ["문의 처리", "/admin/support", CircleHelp], ["사용자 확인", "/admin/users", UserRound],
+          ].map(([label, path, Icon]) => <button key={String(path)} type="button" onClick={() => navigate(String(path))} className="flex flex-col items-center gap-2 rounded-lg border border-gray-200 p-4 text-xs font-bold text-[#334155] hover:border-[#1e3b8a] hover:bg-[#1e3b8a]/5"><Icon className="h-5 w-5 text-[#1e3b8a]" />{String(label)}</button>)}</div></section>
         </div>
       </div>
     </AdminLayout>

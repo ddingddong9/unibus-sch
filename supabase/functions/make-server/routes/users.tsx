@@ -4,7 +4,7 @@ import { Hono } from "npm:hono";
 import { db } from "../db.tsx";
 import { requireAdmin } from "../middleware/auth.tsx";
 
-const users = new Hono();
+const users = new Hono<{ Variables: { userId: string } }>();
 
 // 전체 사용자 목록 조회
 users.get("/", requireAdmin, async (c) => {

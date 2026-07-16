@@ -4,7 +4,12 @@ import type {
   User,
   Notice,
   BusRoute,
-  SignupRequest
+  SignupRequest,
+  UserReport,
+  ReportCategory,
+  ReportStatus,
+  NotificationDelivery,
+  DemoSession
 } from '../types';
 
 type RouteStopInput = {
@@ -297,6 +302,21 @@ class ApiClient {
     throw new Error(response.error || 'Failed to send notification');
   }
 
+  async sendNoticePush(noticeId: string, target: NotificationDelivery['target']): Promise<{ attempted: number; sent: number; failed: number }> {
+    const response = await this.request<ApiResponse<{ attempted: number; sent: number; failed: number }>>('/notifications/send-existing', {
+      method: 'POST',
+      body: JSON.stringify({ noticeId, target }),
+    });
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to send notice push');
+  }
+
+  async getNotificationHistory(): Promise<NotificationDelivery[]> {
+    const response = await this.request<ApiResponse<NotificationDelivery[]>>('/notifications/history');
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to fetch notification history');
+  }
+
   // ============ ROUTE ENDPOINTS ============
 
   async getRoutes(): Promise<BusRoute[]> {
@@ -436,6 +456,64 @@ class ApiClient {
     if (!response.success) {
       throw new Error(response.error || 'Failed to update bus location');
     }
+  }
+
+  async forceStopBus(busId: string, reason = '관리자 강제 종료'): Promise<void> {
+    const response = await this.request<ApiResponse>(`/buses/${busId}/force-stop`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    });
+    if (!response.success) throw new Error(response.error || 'Failed to force-stop bus');
+  }
+
+  // ============ USER REPORT ENDPOINTS ============
+
+  async createReport(data: { category: ReportCategory; title: string; details: string; relatedBusId?: string; relatedRouteId?: string }): Promise<UserReport> {
+    const response = await this.request<ApiResponse<UserReport>>('/reports', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to create report');
+  }
+
+  async getReports(status?: ReportStatus): Promise<UserReport[]> {
+    const query = status ? `?status=${encodeURIComponent(status)}` : '';
+    const response = await this.request<ApiResponse<UserReport[]>>(`/reports${query}`);
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to fetch reports');
+  }
+
+  async updateReport(id: string, updates: Partial<{ status: ReportStatus; adminNote: string }>): Promise<UserReport> {
+    const response = await this.request<ApiResponse<UserReport>>(`/reports/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to update report');
+  }
+
+  // ============ DEMO SESSION ENDPOINTS ============
+
+  async getDemoSession(): Promise<DemoSession | null> {
+    const response = await this.request<ApiResponse<DemoSession | null>>('/demo/status');
+    if (response.success) return response.data ?? null;
+    throw new Error(response.error || 'Failed to fetch demo session');
+  }
+
+  async startDemoSession(plans: DemoSession['plans']): Promise<DemoSession> {
+    const response = await this.request<ApiResponse<DemoSession>>('/demo/start', {
+      method: 'POST',
+      body: JSON.stringify({ plans }),
+    });
+    if (response.success && response.data) return response.data;
+    throw new Error(response.error || 'Failed to start demo session');
+  }
+
+  async stopDemoSession(): Promise<DemoSession | null> {
+    const response = await this.request<ApiResponse<DemoSession | null>>('/demo/stop', { method: 'POST' });
+    if (response.success) return response.data ?? null;
+    throw new Error(response.error || 'Failed to stop demo session');
   }
 
   // ============ USER MANAGEMENT ENDPOINTS (Admin) ============
