@@ -427,7 +427,7 @@ export default function HomeWrapper() {
                       key={notice.id}
                       type="button"
                       onClick={() => navigate("/notice")}
-                      className={`unibus-pressable flex min-h-[66px] w-full items-center gap-3 px-4 text-left hover:bg-[#f8fafc] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--unibus-focus)] ${index > 0 ? "border-t border-[#f1f5f9]" : ""}`}
+                      className={`unibus-pressable flex min-h-[66px] w-full items-center gap-3 px-4 text-left hover:bg-unibus-surface-subtle focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--unibus-focus)] ${index > 0 ? "border-t border-[#f1f5f9]" : ""}`}
                     >
                       <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#eef3ff] text-[#1e3a8a]">
                         <Bell className="size-4" aria-hidden="true" />
