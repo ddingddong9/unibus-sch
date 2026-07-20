@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router";
 import RouteMapModal from "../components/RouteMapModal";
 import { useLanguage } from "../contexts/LanguageContext";
@@ -21,6 +22,7 @@ function openPayco() {
 export default function CommuterBusWrapper() {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const reduceMotion = useReducedMotion();
   const [selectedRegion, setSelectedRegion] = useState<string>("to-school");
   const [expandedRoute, setExpandedRoute] = useState<string | null>(null);
   const [routes, setRoutes] = useState<any[]>([]);
@@ -123,8 +125,10 @@ export default function CommuterBusWrapper() {
         <div className="sticky top-0 z-30 w-full pt-safe">
           <div className="backdrop-blur-[6px] bg-[rgba(255,255,255,0.9)] flex items-center justify-between pb-[12px] pt-[16px] px-[16px] w-full">
             <button
+              type="button"
+              aria-label={t("홈으로 돌아가기", "Back to home")}
               onClick={() => navigate("/home")}
-              className="flex items-center justify-center size-[40px] hover:bg-gray-100 rounded-full active:scale-95 transition-all"
+              className="flex size-[40px] items-center justify-center rounded-full transition-all hover:bg-gray-100 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none"
             >
               <svg className="w-3 h-5" fill="none" viewBox="0 0 12 20" stroke="#0F172A" strokeWidth="2">
                 <path d="M11 1L1 10L11 19" />
@@ -144,23 +148,41 @@ export default function CommuterBusWrapper() {
           </div>
 
           {/* Region Filter */}
-          <div className="flex gap-2 px-[16px] py-[12px] overflow-x-auto scrollbar-hide border-b border-[#f1f5f9]">
+          <div
+            role="group"
+            aria-label={t("통학버스 지역 필터", "Commuter bus region filter")}
+            className="flex gap-2 overflow-x-auto border-b border-[#f1f5f9] px-[16px] py-[12px] scrollbar-hide"
+          >
             {regions.map((region) => (
-              <button
+              <motion.button
                 key={region}
+                type="button"
+                aria-pressed={selectedRegion === region}
                 onClick={() => setSelectedRegion(region)}
-                className={`px-4 py-2 rounded-[9999px] font-['Public_Sans'] font-semibold text-[12px] whitespace-nowrap transition-all ${
+                whileHover={reduceMotion ? undefined : { y: -1 }}
+                whileTap={reduceMotion ? undefined : { scale: 0.96 }}
+                transition={{ type: "spring", stiffness: 420, damping: 30 }}
+                className={`relative isolate overflow-hidden rounded-[9999px] px-4 py-2 font-['Public_Sans'] text-[12px] font-semibold whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2 ${
                   selectedRegion === region
-                    ? "bg-[#1e3a8a] text-white"
+                    ? "text-white"
                     : "bg-[#f1f5f9] text-[#64748b] hover:bg-[#e2e8f0]"
                 }`}
               >
-                {region === "to-school"
-                  ? t("등교", "To School")
-                  : region === "from-school"
-                  ? t("하교", "From School")
-                  : region}
-              </button>
+                {selectedRegion === region ? (
+                  <motion.span
+                    layoutId="commuter-region-indicator"
+                    className="absolute inset-0 -z-10 rounded-[9999px] bg-[#1e3a8a] shadow-[0_5px_14px_rgba(30,58,138,0.22)]"
+                    transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 430, damping: 34 }}
+                  />
+                ) : null}
+                <span className="relative z-10">
+                  {region === "to-school"
+                    ? t("등교", "To School")
+                    : region === "from-school"
+                    ? t("하교", "From School")
+                    : region}
+                </span>
+              </motion.button>
             ))}
           </div>
         </div>
@@ -170,7 +192,7 @@ export default function CommuterBusWrapper() {
           {/* Loading */}
           {loading && (
             <div className="flex flex-col items-center justify-center py-16 gap-3">
-              <div className="w-8 h-8 border-2 border-[#1e3a8a] border-t-transparent rounded-full animate-spin" />
+              <div className="h-8 w-8 rounded-full border-2 border-[#1e3a8a] border-t-transparent animate-spin motion-reduce:animate-none" />
               <p className="font-['Public_Sans'] text-[#64748b] text-[14px]">
                 {t("노선 불러오는 중...", "Loading routes...")}
               </p>
@@ -191,7 +213,7 @@ export default function CommuterBusWrapper() {
               <p className="font-['Public_Sans'] text-[#94a3b8] text-[13px] text-center">{error}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="mt-2 px-5 py-2 bg-[#1e3a8a] text-white rounded-lg font-['Public_Sans'] font-semibold text-[13px]"
+                className="mt-2 rounded-lg bg-[#1e3a8a] px-5 py-2 font-['Public_Sans'] text-[13px] font-semibold text-white transition-transform active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none"
               >
                 {t("다시 시도", "Retry")}
               </button>
@@ -199,8 +221,17 @@ export default function CommuterBusWrapper() {
           )}
 
           {/* Routes */}
-          {!loading && !error &&
-            filteredRoutes.map((route) => {
+          <AnimatePresence initial={false} mode="wait">
+            {!loading && !error ? (
+              <motion.div
+                key={selectedRegion}
+                initial={reduceMotion ? { opacity: 1 } : { opacity: 0, x: 6 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, x: -6 }}
+                transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+                className="space-y-3"
+              >
+              {filteredRoutes.map((route) => {
               const stopNames: string[] =
                 route.stops?.map((s: any) => s.name) || [];
               const color = getColor(route.color);
@@ -208,15 +239,28 @@ export default function CommuterBusWrapper() {
               const liveInfo = routeBusMap[route.id];
 
               return (
-                <div
+                <motion.article
                   key={route.id}
-                  className="bg-white border border-[#e2e8f0] rounded-[16px] overflow-hidden shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] hover:shadow-md transition-all"
+                  layout={!reduceMotion}
+                  initial={reduceMotion ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={reduceMotion ? undefined : { opacity: 0, y: -6 }}
+                  whileHover={reduceMotion ? undefined : { y: -2 }}
+                  transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 360, damping: 30 }}
+                  className={`overflow-hidden rounded-[16px] border bg-white shadow-[0px_1px_2px_0px_rgba(0,0,0,0.05)] transition-[border-color,box-shadow] hover:shadow-[0_10px_24px_rgba(15,23,42,0.08)] ${
+                    isExpanded ? "border-[#1e3a8a]/30 shadow-[0_10px_24px_rgba(30,58,138,0.08)]" : "border-[#e2e8f0]"
+                  }`}
                 >
-                  <button
+                  <motion.button
+                    type="button"
+                    id={`route-toggle-${route.id}`}
+                    aria-expanded={isExpanded}
+                    aria-controls={`route-details-${route.id}`}
                     onClick={() =>
                       setExpandedRoute(isExpanded ? null : route.id)
                     }
-                    className="w-full p-[16px] text-left"
+                    whileTap={reduceMotion ? undefined : { scale: 0.992 }}
+                    className="w-full p-[16px] text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#1e3a8a]"
                   >
                     <div className="flex items-start gap-3">
                       <div
@@ -245,7 +289,7 @@ export default function CommuterBusWrapper() {
                           )}
                           {liveInfo ? (
                             <span className="flex items-center gap-1 bg-[#22c55e]/10 text-[#16a34a] px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px]">
-                              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e] animate-pulse inline-block" />
+                              <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#22c55e] animate-pulse motion-reduce:animate-none" />
                               {t("운행 중", "In Service")}
                             </span>
                           ) : !route.isActive ? (
@@ -298,7 +342,7 @@ export default function CommuterBusWrapper() {
                       </div>
 
                       <svg
-                        className={`w-5 h-5 text-[#64748b] transition-transform shrink-0 mt-2 ${
+                        className={`mt-2 h-5 w-5 shrink-0 text-[#64748b] transition-transform duration-300 motion-reduce:transition-none ${
                           isExpanded ? "rotate-180" : ""
                         }`}
                         fill="none"
@@ -308,10 +352,20 @@ export default function CommuterBusWrapper() {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                       </svg>
                     </div>
-                  </button>
+                  </motion.button>
 
-                  {isExpanded && (
-                    <div className="px-[16px] pb-[16px] border-t border-[#f1f5f9]">
+                  <AnimatePresence initial={false}>
+                    {isExpanded ? (
+                    <motion.div
+                      id={`route-details-${route.id}`}
+                      role="region"
+                      aria-labelledby={`route-toggle-${route.id}`}
+                      initial={reduceMotion ? { opacity: 1 } : { height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={reduceMotion ? { opacity: 0 } : { height: 0, opacity: 0 }}
+                      transition={reduceMotion ? { duration: 0 } : { duration: 0.32, ease: [0.22, 1, 0.36, 1] }}
+                      className="overflow-hidden border-t border-[#f1f5f9] px-[16px] pb-[16px]"
+                    >
                       <div className="pt-[16px]">
                         <h4 className="font-['Public_Sans'] font-bold text-[#0f172a] text-[14px] mb-3">
                           {t("정류장 목록", "Route Stops")}
@@ -319,7 +373,13 @@ export default function CommuterBusWrapper() {
                         {stopNames.length > 0 ? (
                           <div className="space-y-2">
                             {stopNames.map((stop, index) => (
-                              <div key={index} className="flex items-center gap-3">
+                              <motion.div
+                                key={`${route.id}-${stop}-${index}`}
+                                initial={reduceMotion ? false : { opacity: 0, x: -5 }}
+                                animate={{ opacity: 1, x: 0 }}
+                                transition={reduceMotion ? { duration: 0 } : { delay: Math.min(index * 0.025, 0.18), duration: 0.22 }}
+                                className="flex items-center gap-3"
+                              >
                                 <div className="relative flex flex-col items-center">
                                   <div
                                     className="rounded-full size-[24px] flex items-center justify-center font-['Public_Sans'] font-bold text-[10px] z-10 text-white"
@@ -343,7 +403,7 @@ export default function CommuterBusWrapper() {
                                     {stop}
                                   </p>
                                 </div>
-                              </div>
+                              </motion.div>
                             ))}
                           </div>
                         ) : (
@@ -354,11 +414,12 @@ export default function CommuterBusWrapper() {
 
                         <div className="flex gap-2 mt-4">
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setRouteModalId(route.id);
                             }}
-                            className="flex-1 h-[44px] rounded-[8px] font-['Public_Sans'] font-bold text-[#1e3a8a] text-[14px] border-2 border-[#1e3a8a] hover:bg-[#f0f4ff] active:scale-[0.98] transition-all flex items-center justify-center gap-2"
+                            className="flex h-[44px] flex-1 items-center justify-center gap-2 rounded-[8px] border-2 border-[#1e3a8a] font-['Public_Sans'] text-[14px] font-bold text-[#1e3a8a] transition-all hover:bg-[#f0f4ff] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none"
                           >
                             <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
@@ -366,8 +427,9 @@ export default function CommuterBusWrapper() {
                             {t("노선 전체 보기", "View Full Route")}
                           </button>
                           <button
+                            type="button"
                             onClick={route.isActive ? openPayco : undefined}
-                            className={`flex-1 h-[44px] rounded-[8px] font-['Public_Sans'] font-bold text-white text-[14px] shadow-lg hover:shadow-xl active:scale-[0.98] transition-all ${
+                            className={`h-[44px] flex-1 rounded-[8px] font-['Public_Sans'] text-[14px] font-bold text-white shadow-lg transition-all hover:shadow-xl active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fa2828] focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none ${
                               !route.isActive ? "opacity-50 cursor-not-allowed" : ""
                             }`}
                             style={{
@@ -383,15 +445,20 @@ export default function CommuterBusWrapper() {
                           </button>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    </motion.div>
+                    ) : null}
+                  </AnimatePresence>
+                </motion.article>
               );
-            })}
+              })}
 
-          {/* Empty state */}
-          {!loading && !error && filteredRoutes.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12">
+              {/* Empty state */}
+              {filteredRoutes.length === 0 ? (
+            <motion.div
+              initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="flex flex-col items-center justify-center py-12"
+            >
               <div className="bg-[#f1f5f9] rounded-full p-6 mb-4">
                 <svg className="w-12 h-12 text-[#94a3b8]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path
@@ -412,8 +479,11 @@ export default function CommuterBusWrapper() {
                   ? t("하교 노선이 없습니다", "No from-school routes")
                   : t(`${selectedRegion} 지역 노선이 없습니다`, `No routes in ${selectedRegion}`)}
               </p>
-            </div>
-          )}
+            </motion.div>
+              ) : null}
+              </motion.div>
+            ) : null}
+          </AnimatePresence>
         </div>
       </div>
 

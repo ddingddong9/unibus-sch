@@ -2,6 +2,18 @@
 
 :root {
   --font-size: 16px;
+  --unibus-brand: #1e3a8a;
+  --unibus-brand-foreground: #ffffff;
+  --unibus-brand-soft: #eef3ff;
+  --unibus-brand-border: #dce6f7;
+  --unibus-surface: #ffffff;
+  --unibus-surface-subtle: #f8fafc;
+  --unibus-text-strong: #0f172a;
+  --unibus-text-muted: #64748b;
+  --unibus-divider: #e2e8f0;
+  --unibus-focus: rgb(30 58 138 / 0.45);
+  --unibus-shadow-soft: 0 8px 24px rgb(30 58 138 / 0.1);
+  --unibus-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --background: #ffffff;
   --foreground: oklch(0.145 0 0);
   --card: #ffffff;
@@ -42,6 +54,17 @@
 }
 
 .dark {
+  --unibus-brand: #78a9d4;
+  --unibus-brand-foreground: #102a43;
+  --unibus-brand-soft: #172554;
+  --unibus-brand-border: #334b78;
+  --unibus-surface: #1c1c1e;
+  --unibus-surface-subtle: #2c2c2e;
+  --unibus-text-strong: #f8fafc;
+  --unibus-text-muted: #aeaeb2;
+  --unibus-divider: rgb(84 84 88 / 0.65);
+  --unibus-focus: rgb(120 169 212 / 0.55);
+  --unibus-shadow-soft: 0 8px 24px rgb(0 0 0 / 0.28);
   --background: #000000;
   --foreground: #ffffff;
   --card: #1c1c1e;
@@ -81,6 +104,14 @@
 }
 
 @theme inline {
+  --color-unibus-brand: var(--unibus-brand);
+  --color-unibus-brand-foreground: var(--unibus-brand-foreground);
+  --color-unibus-brand-soft: var(--unibus-brand-soft);
+  --color-unibus-surface: var(--unibus-surface);
+  --color-unibus-surface-subtle: var(--unibus-surface-subtle);
+  --color-unibus-text: var(--unibus-text-strong);
+  --color-unibus-muted: var(--unibus-text-muted);
+  --color-unibus-divider: var(--unibus-divider);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);

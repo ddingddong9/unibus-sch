@@ -157,11 +157,13 @@ export default function CampusShuttleWrapper() {
   const [campusStops, setCampusStops] = useState<ShuttleStop[]>(CAMPUS_STOPS);
   const [stationStops, setStationStops] = useState<ShuttleStop[]>([]);
   const [sheetExpanded, setSheetExpanded] = useState(false);
+  const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
   const [isPreparing3d, setIsPreparing3d] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [clockTick, setClockTick] = useState(() => Date.now());
   const [simulationTick, setSimulationTick] = useState(() => Date.now());
   const isDragging = useRef(false);
+  const didDragSheet = useRef(false);
   const dragStartY = useRef(0);
   const currentDragY = useRef(0);
 
@@ -513,6 +515,7 @@ export default function CampusShuttleWrapper() {
 
   const handleDragStart = (e: React.PointerEvent) => {
     isDragging.current = true;
+    didDragSheet.current = false;
     dragStartY.current = e.clientY;
     currentDragY.current = 0;
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
@@ -520,6 +523,7 @@ export default function CampusShuttleWrapper() {
   const handleDragMove = (e: React.PointerEvent) => {
     if (!isDragging.current) return;
     const rawDelta = e.clientY - dragStartY.current;
+    if (Math.abs(rawDelta) > 4) didDragSheet.current = true;
     const delta = sheetExpanded ? Math.max(0, rawDelta) : Math.min(0, rawDelta);
     currentDragY.current = delta;
     setDragY(delta);
@@ -584,7 +588,10 @@ export default function CampusShuttleWrapper() {
                     buses={displayBuses}
                     onSelectStop={(stopId) => {
                       const stop = activeStops.find((item) => item.id === stopId);
-                      if (stop) setFocusLocation({ lat: stop.lat, lng: stop.lng, zoom: 18, key: Date.now() });
+                      if (stop) {
+                        setSelectedStopId(stop.id);
+                        setFocusLocation({ lat: stop.lat, lng: stop.lng, zoom: 18, key: Date.now() });
+                      }
                     }}
                   />
                 </Suspense>
@@ -595,30 +602,47 @@ export default function CampusShuttleWrapper() {
 
         <div className="absolute left-0 right-0 top-0 z-20 pt-safe">
           <div className="mx-4 mt-4 rounded-[20px] bg-white/95 backdrop-blur-md border border-white shadow-[0_8px_24px_rgba(15,23,42,0.12)] p-2">
-            <div className="grid grid-cols-2 gap-2">
+            <div
+              role="group"
+              aria-label="셔틀 운행 모드"
+              className="grid grid-cols-2 gap-2"
+            >
               {([
                 { key: "campus", label: "학내순환" },
                 { key: "station", label: "신창역 셔틀" },
               ] as const).map((item) => (
-                <button
+                <motion.button
                   key={item.key}
+                  type="button"
+                  aria-pressed={mode === item.key}
                   onClick={() => {
                     setMode(item.key);
                     setFocusLocation(null);
+                    setSelectedStopId(null);
                     if (item.key === "station" && stationDepartureRoute) {
                       setStationRouteId(stationDepartureRoute.id);
                     }
                     setFitBoundsKey((key) => key + 1);
                     setSheetExpanded(false);
                   }}
-                  className={`h-10 rounded-[14px] font-['Public_Sans'] text-[13px] font-bold transition-all ${
+                  whileHover={reduceMotion ? undefined : { y: -1 }}
+                  whileTap={reduceMotion ? undefined : { scale: 0.97 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 32 }}
+                  className={`relative isolate h-10 overflow-hidden rounded-[14px] font-['Public_Sans'] text-[13px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2 ${
                     mode === item.key
-                      ? "bg-[#1e3a8a] text-white shadow-sm"
+                      ? "text-white"
                       : "text-[#64748b] hover:bg-[#f1f5f9]"
                   }`}
                 >
-                  {item.label}
-                </button>
+                  {mode === item.key ? (
+                    <motion.span
+                      layoutId="campus-shuttle-mode-indicator"
+                      className="absolute inset-0 -z-10 rounded-[14px] bg-[#1e3a8a] shadow-[0_6px_16px_rgba(30,58,138,0.22)]"
+                      transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 430, damping: 34 }}
+                    />
+                  ) : null}
+                  <span className="relative z-10">{item.label}</span>
+                </motion.button>
               ))}
             </div>
           </div>
@@ -629,7 +653,7 @@ export default function CampusShuttleWrapper() {
             { key: "2d", label: "2D 지도", icon: MapIcon },
             { key: "3d", label: "3D 캠퍼스", icon: Box },
           ] as const).map((item) => (
-            <button
+            <motion.button
               key={item.key}
               type="button"
               title={item.label}
@@ -641,10 +665,19 @@ export default function CampusShuttleWrapper() {
               onPointerDown={item.key === "3d" ? prepare3DMap : undefined}
               onFocus={item.key === "3d" ? prepare3DMap : undefined}
               onClick={() => void handleMapModeChange(item.key)}
-              className={`grid h-9 w-9 place-items-center rounded-lg transition-colors disabled:cursor-wait ${mapMode === item.key ? "bg-[#1e3a8a] text-white" : "text-[#64748b] hover:bg-[#f1f5f9]"}`}
+              whileHover={reduceMotion ? undefined : { scale: 1.04 }}
+              whileTap={reduceMotion ? undefined : { scale: 0.94 }}
+              className={`relative isolate grid h-9 w-9 place-items-center overflow-hidden rounded-lg transition-colors disabled:cursor-wait focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-1 ${mapMode === item.key ? "text-white" : "text-[#64748b] hover:bg-[#f1f5f9]"}`}
             >
-              <item.icon className={`h-4 w-4 ${item.key === "3d" && isPreparing3d ? "animate-pulse" : ""}`} aria-hidden="true" />
-            </button>
+              {mapMode === item.key ? (
+                <motion.span
+                  layoutId="campus-map-mode-indicator"
+                  className="absolute inset-0 -z-10 rounded-lg bg-[#1e3a8a]"
+                  transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 450, damping: 34 }}
+                />
+              ) : null}
+              <item.icon className={`relative z-10 h-4 w-4 ${item.key === "3d" && isPreparing3d ? "animate-pulse motion-reduce:animate-none" : ""}`} aria-hidden="true" />
+            </motion.button>
           ))}
         </div>
 
@@ -653,28 +686,42 @@ export default function CampusShuttleWrapper() {
           style={{
             height: sheetExpanded ? "68dvh" : compact3d ? "164px" : "320px",
             transform: `translateY(${dragY}px)`,
-            transition: isDragging.current
+            transition: reduceMotion
+              ? "none"
+              : isDragging.current
               ? "none"
               : "height 0.38s cubic-bezier(0.32,0.72,0,1), transform 0.32s cubic-bezier(0.32,0.72,0,1)",
           }}
         >
-          <div
-            className="relative flex h-8 w-full shrink-0 cursor-grab touch-none items-center justify-center active:cursor-grabbing"
+          <button
+            type="button"
+            aria-label={sheetExpanded ? "안내 접기" : "상세 안내 펼치기"}
+            aria-expanded={sheetExpanded}
+            className="relative flex h-8 w-full shrink-0 cursor-grab touch-none items-center justify-center active:cursor-grabbing focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#1e3a8a]"
+            onClick={() => {
+              if (didDragSheet.current) {
+                didDragSheet.current = false;
+                return;
+              }
+              setSheetExpanded((expanded) => !expanded);
+            }}
             onPointerDown={handleDragStart}
             onPointerMove={handleDragMove}
             onPointerUp={handleDragEnd}
             onPointerCancel={handleDragEnd}
           >
             <div className="h-1 w-10 shrink-0 rounded-full bg-[rgba(30,58,138,0.24)]" />
-          </div>
+          </button>
 
           {compact3d ? (
-            <button
+            <motion.button
               type="button"
               aria-label="상세 안내 펼치기"
               aria-expanded={false}
               onClick={() => setSheetExpanded(true)}
-              className="mx-4 flex h-12 w-[calc(100%-2rem)] shrink-0 items-center gap-3 rounded-lg border border-[rgba(30,58,138,0.16)] bg-white px-3 text-left shadow-sm"
+              whileHover={reduceMotion ? undefined : { y: -1 }}
+              whileTap={reduceMotion ? undefined : { scale: 0.985 }}
+              className="mx-4 flex h-12 w-[calc(100%-2rem)] shrink-0 items-center gap-3 rounded-lg border border-[rgba(30,58,138,0.16)] bg-white px-3 text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2"
             >
               <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#1e3a8a] text-white">
                 {mode === "station" ? <MapPin className="size-4" /> : <Bus className="size-4" />}
@@ -692,7 +739,7 @@ export default function CampusShuttleWrapper() {
                 </span>
               </span>
               <ChevronUp className="size-4 shrink-0 text-[#1e3a8a]" />
-            </button>
+            </motion.button>
           ) : <div className="relative min-h-0 w-full flex-1 overflow-auto overscroll-contain">
             <div className="relative flex w-full flex-col items-start gap-3 px-[22px] pb-[104px]">
               <div className="content-stretch flex items-center justify-between relative shrink-0 w-full">
@@ -708,8 +755,9 @@ export default function CampusShuttleWrapper() {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <button
+                    type="button"
                     onClick={() => setFitBoundsKey((key) => key + 1)}
-                    className="rounded-full bg-[rgba(30,58,138,0.05)] px-3 py-[7px] transition-all hover:bg-[rgba(30,58,138,0.1)] active:scale-95"
+                    className="rounded-full bg-[rgba(30,58,138,0.05)] px-3 py-[7px] transition-all hover:bg-[rgba(30,58,138,0.1)] active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none"
                   >
                     <span className="font-['Public_Sans'] text-[12px] font-bold leading-4 text-[#1e3a8a]">{t("전체보기", "View All")}</span>
                   </button>
@@ -719,22 +767,37 @@ export default function CampusShuttleWrapper() {
                     aria-label={sheetExpanded ? "안내 접기" : "상세 안내 펼치기"}
                     aria-expanded={sheetExpanded}
                     onClick={() => setSheetExpanded((expanded) => !expanded)}
-                    className="grid size-8 place-items-center rounded-lg border border-[rgba(30,58,138,0.18)] bg-white text-[#1e3a8a] transition-colors hover:bg-[rgba(30,58,138,0.05)]"
+                    className="grid size-8 place-items-center rounded-lg border border-[rgba(30,58,138,0.18)] bg-white text-[#1e3a8a] transition-colors hover:bg-[rgba(30,58,138,0.05)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2 motion-reduce:transition-none"
                   >
                     {sheetExpanded ? <ChevronDown className="size-4" /> : <ChevronUp className="size-4" />}
                   </button>
                 </div>
               </div>
 
-              {locationError && (
-                <div className="w-full rounded-[14px] bg-[#1e3a8a] px-4 py-3 text-[12px] font-semibold text-white">
-                  {locationError}
-                </div>
-              )}
+              <AnimatePresence initial={false}>
+                {locationError ? (
+                  <motion.div
+                    role="status"
+                    initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: -6, height: 0 }}
+                    animate={{ opacity: 1, y: 0, height: "auto" }}
+                    exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4, height: 0 }}
+                    transition={reduceMotion ? { duration: 0 } : { duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+                    className="w-full overflow-hidden rounded-[14px] bg-[#1e3a8a] px-4 py-3 text-[12px] font-semibold text-white"
+                  >
+                    {locationError}
+                  </motion.div>
+                ) : null}
+              </AnimatePresence>
 
               {mode === "station" && (
                 <div className="w-full space-y-3">
-                  <div className="overflow-hidden rounded-lg bg-[#1e3a8a] text-white shadow-[0_12px_30px_rgba(30,58,138,0.2)]">
+                  <motion.div
+                    key={selectedStationRoute?.id ?? "station-route-empty"}
+                    initial={reduceMotion ? false : { opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={reduceMotion ? { duration: 0 } : { duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                    className="overflow-hidden rounded-lg bg-[#1e3a8a] text-white shadow-[0_12px_30px_rgba(30,58,138,0.2)]"
+                  >
                     <div className="flex items-start gap-3 p-4">
                       <div className="grid size-10 shrink-0 place-items-center rounded-lg bg-white text-[#1e3a8a]">
                         {selectedStationDirection === "to-station" ? <MapPin className="h-5 w-5" /> : <Train className="h-5 w-5" />}
@@ -762,30 +825,52 @@ export default function CampusShuttleWrapper() {
                         {stationDeparture || "--:--"} 출발
                       </span>
                     </div>
-                  </div>
+                  </motion.div>
 
-                  {sheetExpanded && selectedStationRoute && (
-                    <p className="px-1 text-[11px] font-semibold text-[rgba(30,58,138,0.68)]">
-                      {selectedStationDirection === "to-station"
-                        ? `열차 출발 ${stationOffset}분 전에 후문에서 출발합니다`
-                        : `열차 도착 ${stationWait}분 후 출발 · ${continuesCampusLoop(selectedStationRoute) ? "후문 도착 후 학내순환 1회" : "후문 종착"}`}
-                    </p>
-                  )}
+                  <AnimatePresence initial={false}>
+                    {sheetExpanded && selectedStationRoute ? (
+                      <motion.p
+                        initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: -4 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -4 }}
+                        transition={reduceMotion ? { duration: 0 } : { duration: 0.22 }}
+                        className="px-1 text-[11px] font-semibold text-[rgba(30,58,138,0.68)]"
+                      >
+                        {selectedStationDirection === "to-station"
+                          ? `열차 출발 ${stationOffset}분 전에 후문에서 출발합니다`
+                          : `열차 도착 ${stationWait}분 후 출발 · ${continuesCampusLoop(selectedStationRoute) ? "후문 도착 후 학내순환 1회" : "후문 종착"}`}
+                      </motion.p>
+                    ) : null}
+                  </AnimatePresence>
 
                   {sheetExpanded && stationRoutes.length > 0 && (
                     <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
                       {stationRoutes.map((route) => (
-                        <button
+                        <motion.button
                           key={route.id}
-                          onClick={() => setStationRouteId(route.id)}
-                          className={`shrink-0 rounded-full px-4 py-2 font-['Public_Sans'] text-[12px] font-bold transition-all ${
+                          type="button"
+                          aria-pressed={selectedStationRoute?.id === route.id}
+                          onClick={() => {
+                            setStationRouteId(route.id);
+                            setSelectedStopId(null);
+                          }}
+                          whileHover={reduceMotion ? undefined : { y: -1 }}
+                          whileTap={reduceMotion ? undefined : { scale: 0.96 }}
+                          className={`relative isolate shrink-0 overflow-hidden rounded-full px-4 py-2 font-['Public_Sans'] text-[12px] font-bold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2 ${
                             selectedStationRoute?.id === route.id
-                              ? "bg-[#1e3a8a] text-white"
+                              ? "text-white"
                               : "border border-[rgba(30,58,138,0.18)] bg-white text-[#1e3a8a]"
                           }`}
                         >
-                          {formatStationRouteName(route.name)}
-                        </button>
+                          {selectedStationRoute?.id === route.id ? (
+                            <motion.span
+                              layoutId="station-route-indicator"
+                              className="absolute inset-0 -z-10 rounded-full bg-[#1e3a8a]"
+                              transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 430, damping: 34 }}
+                            />
+                          ) : null}
+                          <span className="relative z-10">{formatStationRouteName(route.name)}</span>
+                        </motion.button>
                       ))}
                     </div>
                   )}
@@ -793,10 +878,12 @@ export default function CampusShuttleWrapper() {
               )}
 
               {mode === "campus" && !sheetExpanded && (
-                <button
+                <motion.button
                   type="button"
                   onClick={() => setSheetExpanded(true)}
-                  className="flex w-full items-center gap-3 rounded-lg border border-[rgba(30,58,138,0.16)] bg-white p-3 text-left transition-colors hover:bg-[rgba(30,58,138,0.04)]"
+                  whileHover={reduceMotion ? undefined : { y: -1 }}
+                  whileTap={reduceMotion ? undefined : { scale: 0.99 }}
+                  className="flex w-full items-center gap-3 rounded-lg border border-[rgba(30,58,138,0.16)] bg-white p-3 text-left transition-colors hover:bg-[rgba(30,58,138,0.04)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2"
                 >
                   <span className="grid size-10 shrink-0 place-items-center rounded-lg bg-[#1e3a8a] text-white">
                     <Bus className="size-5" />
@@ -811,10 +898,17 @@ export default function CampusShuttleWrapper() {
                     <span className="block text-[10px] font-bold text-[rgba(30,58,138,0.5)]">정류장</span>
                     <span className="block text-[16px] font-black text-[#1e3a8a]">{activeStops.length}개</span>
                   </span>
-                </button>
+                </motion.button>
               )}
 
-              {sheetExpanded && <div className="relative flex w-full shrink-0 flex-col items-start gap-3 scrollbar-hide">
+              <AnimatePresence initial={false}>
+              {sheetExpanded ? <motion.div
+                initial={reduceMotion ? { opacity: 1 } : { opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 6 }}
+                transition={reduceMotion ? { duration: 0 } : { duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
+                className="relative flex w-full shrink-0 flex-col items-start gap-3 scrollbar-hide"
+              >
                 {stopsWithArrival.length === 0 ? (
                   <div className="w-full rounded-[18px] border border-dashed border-[rgba(30,58,138,0.24)] p-6 text-center">
                     <MapPin className="mx-auto mb-2 h-6 w-6 text-[rgba(30,58,138,0.5)]" />
@@ -827,10 +921,22 @@ export default function CampusShuttleWrapper() {
                   </div>
                 ) : (
                   stopsWithArrival.map((stop) => (
-                    <button
+                    <motion.button
                       key={stop.id}
-                      onClick={() => setFocusLocation({ lat: stop.lat, lng: stop.lng, zoom: 18, key: Date.now() })}
-                      className={`relative w-full shrink-0 rounded-[16px] border border-[rgba(30,58,138,0.1)] bg-white text-left transition-all active:scale-[0.99] ${
+                      type="button"
+                      aria-pressed={selectedStopId === stop.id}
+                      onClick={() => {
+                        setSelectedStopId(stop.id);
+                        setFocusLocation({ lat: stop.lat, lng: stop.lng, zoom: 18, key: Date.now() });
+                      }}
+                      whileHover={reduceMotion ? undefined : { y: -2 }}
+                      whileTap={reduceMotion ? undefined : { scale: 0.99 }}
+                      transition={{ type: "spring", stiffness: 380, damping: 30 }}
+                      className={`relative w-full shrink-0 rounded-[16px] border bg-white text-left transition-[border-color,background-color,box-shadow,opacity] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2 ${
+                        selectedStopId === stop.id
+                          ? "border-[#1e3a8a]/40 bg-[#f8faff] shadow-[0_8px_22px_rgba(30,58,138,0.1)]"
+                          : "border-[rgba(30,58,138,0.1)]"
+                      } ${
                         !stop.estimate?.minutes ? "opacity-80" : ""
                       }`}
                     >
@@ -877,10 +983,11 @@ export default function CampusShuttleWrapper() {
                           </div>
                         </div>
                       </div>
-                    </button>
+                    </motion.button>
                   ))
                 )}
-              </div>}
+              </motion.div> : null}
+              </AnimatePresence>
 
             </div>
           </div>}
