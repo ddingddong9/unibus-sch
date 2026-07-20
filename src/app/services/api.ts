@@ -92,9 +92,13 @@ class ApiClient {
       upstreamSignal?.addEventListener('abort', abortFromUpstream, { once: true });
     }
 
-    const timeoutId = window.setTimeout(() => {
-      requestController.abort(new DOMException('Request timed out', 'TimeoutError'));
-    }, REQUEST_TIMEOUT_MS);
+    const requestMethod = (options.method ?? 'GET').toUpperCase();
+    const shouldTimeout = requestMethod === 'GET' || requestMethod === 'HEAD';
+    const timeoutId = shouldTimeout
+      ? window.setTimeout(() => {
+          requestController.abort(new DOMException('Request timed out', 'TimeoutError'));
+        }, REQUEST_TIMEOUT_MS)
+      : undefined;
 
     try {
       const response = await fetch(url, {
@@ -152,7 +156,7 @@ class ApiClient {
       }
       throw requestError;
     } finally {
-      window.clearTimeout(timeoutId);
+      if (timeoutId !== undefined) window.clearTimeout(timeoutId);
       upstreamSignal?.removeEventListener('abort', abortFromUpstream);
     }
   }

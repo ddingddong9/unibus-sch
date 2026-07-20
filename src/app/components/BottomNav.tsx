@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import svgPaths from "../../imports/svg-l5s7zp6z8c";
 import { useLanguage } from "../contexts/LanguageContext";
-import { preloadRouteModule } from "../routeModules";
 import { getUnreadNoticeCount } from "../utils/notificationPreferences";
 
 type NavIconName = "home" | "shuttle" | "notice" | "profile";
@@ -100,10 +99,7 @@ export default function BottomNav() {
               type="button"
               aria-current={active ? "page" : undefined}
               aria-label={label}
-              onFocus={() => preloadRouteModule(item.path)}
               onClick={() => navigate(item.path)}
-              onPointerDown={() => preloadRouteModule(item.path)}
-              onPointerEnter={() => preloadRouteModule(item.path)}
               className="group relative z-10 flex min-h-[56px] min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl px-1 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--unibus-focus)] focus-visible:ring-offset-1 active:bg-[var(--unibus-brand-soft)]"
             >
               <span
