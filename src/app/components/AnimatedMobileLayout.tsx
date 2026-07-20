@@ -57,7 +57,7 @@ export function AnimatedMobileLayout() {
 
   return (
     <div
-      className={`flex h-dvh w-full items-center justify-center overflow-hidden p-0 transition-colors duration-200 motion-reduce:transition-none md:h-screen md:bg-gradient-to-br md:from-blue-50 md:to-slate-100 md:p-4 md:dark:from-slate-950 md:dark:to-black ${
+      className={`unibus-mobile-viewport flex h-dvh w-full items-center justify-center overflow-hidden p-0 transition-colors duration-200 motion-reduce:transition-none md:h-screen md:bg-gradient-to-br md:from-blue-50 md:to-slate-100 md:p-4 md:dark:from-slate-950 md:dark:to-black ${
         isSplash ? "bg-[#1e3a8a]" : "bg-background"
       }`}
     >

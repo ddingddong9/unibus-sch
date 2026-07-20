@@ -174,9 +174,13 @@ html.unibus-mobile-scroll-lock #root {
   overscroll-behavior: none;
 }
 
-/* iOS 홈 화면 PWA의 absolute 하단 오계산을 실제 viewport 기준으로 우회한다. */
+/* iOS 홈 화면 PWA의 dvh/absolute 하단 오계산을 실제 viewport 기준으로 우회한다. */
 @supports (-webkit-touch-callout: none) {
   @media (display-mode: standalone) and (max-width: 767px) {
+    .unibus-mobile-viewport {
+      height: 100vh;
+    }
+
     .unibus-bottom-nav {
       position: fixed;
       right: auto;
