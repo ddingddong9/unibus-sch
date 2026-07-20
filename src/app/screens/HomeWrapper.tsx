@@ -229,7 +229,7 @@ export default function HomeWrapper() {
               <button
                 onClick={() => navigate("/notice")}
                 aria-label={t("공지사항 보기", "View notices")}
-                className="bg-[#f1f5f9] content-stretch flex items-center justify-center relative rounded-[9999px] shrink-0 size-[40px] text-[#0f172a] hover:bg-[#e2e8f0] transition-colors active:scale-95"
+                className="unibus-pressable bg-[#f1f5f9] content-stretch flex items-center justify-center relative rounded-[9999px] shrink-0 size-[40px] text-[#0f172a] hover:bg-[#e2e8f0]"
               >
                 <div className="h-[20px] relative shrink-0 w-[16px]">
                   <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 16 20">
@@ -248,10 +248,12 @@ export default function HomeWrapper() {
         >
 
               {/* Nearest Stop Card */}
-              <div className="relative shrink-0 w-full animate-[routeLift_220ms_ease-out]">
+              <div className="unibus-section-reveal relative shrink-0 w-full">
                 <div className="content-stretch flex flex-col items-start px-[24px] py-[16px] relative w-full">
-                  <div
-                    className="home-accent-gradient bg-[#1e3a8a] relative rounded-[16px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] shrink-0 w-full overflow-hidden cursor-pointer active:scale-[0.98] transition-transform"
+                  <button
+                    type="button"
+                    aria-label={t("셔틀버스 운행 현황 보기", "View shuttle service status")}
+                    className="unibus-pressable group home-accent-gradient bg-[#1e3a8a] relative rounded-[16px] shadow-[0px_10px_15px_-3px_rgba(0,0,0,0.1),0px_4px_6px_-4px_rgba(0,0,0,0.1)] shrink-0 w-full overflow-hidden cursor-pointer text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--unibus-focus)] focus-visible:ring-offset-2"
                     onClick={() => navigate("/campus-shuttle")}
                   >
                     <div className="content-stretch flex flex-col items-start p-[24px] relative w-full">
@@ -305,26 +307,25 @@ export default function HomeWrapper() {
                             </div>
                           </div>
 
-                          <button
-                            onClick={(e) => { e.stopPropagation(); navigate("/campus-shuttle"); }}
-                            aria-label={t("셔틀버스 지도 보기", "View shuttle map")}
-                            className="content-stretch flex items-center justify-center p-[4px] relative rounded-[9999px] shrink-0 size-[48px] border-4 border-[rgba(255,255,255,0.2)] hover:border-[rgba(255,255,255,0.4)] transition-all active:scale-95"
+                          <span
+                            aria-hidden="true"
+                            className="content-stretch flex items-center justify-center p-[4px] relative rounded-[9999px] shrink-0 size-[48px] border-4 border-[rgba(255,255,255,0.2)] transition-colors group-hover:border-[rgba(255,255,255,0.4)]"
                           >
                             <div className="h-[22.167px] relative shrink-0 w-[18.667px]">
                               <svg className="absolute block size-full" fill="none" preserveAspectRatio="none" viewBox="0 0 18.6667 22.1667">
                                 <path d={svgPaths.p5416200} fill="white" />
                               </svg>
                             </div>
-                          </button>
+                          </span>
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 </div>
               </div>
 
               {/* Compact navigation */}
-              <div className="w-full px-6 py-3 animate-[routeLift_260ms_ease-out]">
+              <div className="unibus-section-reveal unibus-section-delay-1 w-full px-6 py-3">
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { path: "/campus-shuttle", label: t("셔틀", "Shuttle"), icon: MapPinned },
@@ -335,7 +336,7 @@ export default function HomeWrapper() {
                       key={action.path}
                       type="button"
                       onClick={() => navigate(action.path)}
-                      className="flex h-[76px] flex-col items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] bg-white text-[#1e3a8a] shadow-sm transition-all hover:bg-[#f8fafc] active:scale-[0.97]"
+                      className="unibus-pressable flex h-[76px] flex-col items-center justify-center gap-2 rounded-xl border border-[#e2e8f0] bg-white text-[#1e3a8a] shadow-sm hover:border-[#c9d6ea] hover:bg-[#f8fafc] hover:shadow-[0_8px_22px_rgba(30,58,138,0.09)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a]/40"
                     >
                       <action.icon className="size-5" strokeWidth={2.2} aria-hidden="true" />
                       <span className="text-[12px] font-extrabold">{action.label}</span>
@@ -345,7 +346,7 @@ export default function HomeWrapper() {
               </div>
 
               {/* Sinchang timetable */}
-              <section className="w-full px-6 py-4 animate-[routeLift_280ms_ease-out]">
+              <section className="unibus-section-reveal unibus-section-delay-2 w-full px-6 py-4">
                 <div className="mb-3 flex items-end justify-between">
                   <div>
                     <h2 className="text-[18px] font-extrabold leading-7 text-[#0f172a]">신창역 전철</h2>
@@ -360,7 +361,7 @@ export default function HomeWrapper() {
                   type="button"
                   onClick={openTimetable}
                   aria-label="신창역 전체 전철 시간표 보기"
-                  className="w-full overflow-hidden rounded-xl border border-[#dbe4f5] bg-white text-left shadow-[0_4px_18px_rgba(30,58,138,0.08)] transition-all hover:shadow-md active:scale-[0.985]"
+                  className="unibus-pressable w-full overflow-hidden rounded-xl border border-[#dbe4f5] bg-white text-left shadow-[0_4px_18px_rgba(30,58,138,0.08)] hover:border-[#c9d6ea] hover:shadow-[0_10px_26px_rgba(30,58,138,0.12)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a]/40"
                 >
                   <div className="flex items-center justify-between bg-[#eef3ff] px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -408,13 +409,13 @@ export default function HomeWrapper() {
               </section>
 
               {/* Important notices */}
-              <section className="mb-5 w-full px-6 py-4 animate-[routeLift_300ms_ease-out]">
+              <section className="unibus-section-reveal unibus-section-delay-3 mb-5 w-full px-6 py-4">
                 <div className="mb-3 flex items-center justify-between">
                   <h2 className="text-[18px] font-extrabold leading-7 text-[#0f172a]">운행 공지</h2>
                   <button
                     type="button"
                     onClick={() => navigate("/notice")}
-                    className="flex items-center gap-0.5 text-[11px] font-extrabold text-[#64748b]"
+                    className="unibus-pressable flex items-center gap-0.5 rounded-lg px-2 py-1 text-[11px] font-extrabold text-[#64748b] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--unibus-focus)]"
                   >
                     전체보기 <ChevronRight className="size-4" aria-hidden="true" />
                   </button>
@@ -426,7 +427,7 @@ export default function HomeWrapper() {
                       key={notice.id}
                       type="button"
                       onClick={() => navigate("/notice")}
-                      className={`flex min-h-[66px] w-full items-center gap-3 px-4 text-left transition-colors hover:bg-[#f8fafc] ${index > 0 ? "border-t border-[#f1f5f9]" : ""}`}
+                      className={`unibus-pressable flex min-h-[66px] w-full items-center gap-3 px-4 text-left hover:bg-[#f8fafc] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--unibus-focus)] ${index > 0 ? "border-t border-[#f1f5f9]" : ""}`}
                     >
                       <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#eef3ff] text-[#1e3a8a]">
                         <Bell className="size-4" aria-hidden="true" />
@@ -443,7 +444,7 @@ export default function HomeWrapper() {
                     <button
                       type="button"
                       onClick={() => navigate("/notice")}
-                      className="flex min-h-[66px] w-full items-center gap-3 px-4 text-left"
+                      className="unibus-pressable flex min-h-[66px] w-full items-center gap-3 px-4 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--unibus-focus)]"
                     >
                       <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#f1f5f9] text-[#64748b]">
                         <Bell className="size-4" aria-hidden="true" />

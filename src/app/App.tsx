@@ -5,14 +5,7 @@ import { router } from "./routes";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import { AuthProvider } from "./contexts/AuthContext";
 import NotificationManager from "./components/NotificationManager";
-
-function AppLoadingFallback() {
-  return (
-    <div className="flex min-h-screen w-full items-center justify-center bg-white dark:bg-black">
-      <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1e3a8a] border-t-transparent" />
-    </div>
-  );
-}
+import { AppLoadingSkeleton } from "./components/SkeletonLoaders";
 
 function ThemeModeMigration() {
   const { theme, setTheme } = useTheme();
@@ -26,13 +19,13 @@ function ThemeModeMigration() {
 
 export default function App() {
   return (
-    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} themes={["light", "dark"]} disableTransitionOnChange>
+    <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false} themes={["light", "dark"]}>
       <ThemeModeMigration />
       <AuthProvider>
         <LanguageProvider>
-          <div className="unibus-theme min-h-dvh bg-background text-foreground">
+          <div className="unibus-theme min-h-dvh bg-background text-foreground transition-colors duration-200 motion-reduce:transition-none">
             <NotificationManager />
-            <Suspense fallback={<AppLoadingFallback />}>
+            <Suspense fallback={<AppLoadingSkeleton />}>
               <RouterProvider router={router} />
             </Suspense>
           </div>

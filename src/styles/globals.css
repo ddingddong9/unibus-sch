@@ -86,6 +86,60 @@
   contain-intrinsic-size: 560px;
 }
 
+/* Select Codes-inspired micro interactions, tuned for the existing mobile UI. */
+.unibus-pressable {
+  transform: translate3d(0, 0, 0);
+  transition:
+    transform 180ms var(--unibus-ease-out),
+    box-shadow 180ms var(--unibus-ease-out),
+    background-color 180ms ease,
+    border-color 180ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .unibus-pressable:hover {
+    transform: translate3d(0, -2px, 0);
+  }
+}
+
+.unibus-pressable:active {
+  transform: translate3d(0, 1px, 0) scale(0.985);
+  transition-duration: 90ms;
+}
+
+@keyframes unibusSectionReveal {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+}
+
+.unibus-section-reveal {
+  animation: unibusSectionReveal 420ms var(--unibus-ease-out) both;
+}
+
+.unibus-section-delay-1 { animation-delay: 45ms; }
+.unibus-section-delay-2 { animation-delay: 90ms; }
+.unibus-section-delay-3 { animation-delay: 135ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .unibus-section-reveal {
+    animation: none;
+  }
+
+  .unibus-pressable,
+  .unibus-pressable:hover,
+  .unibus-pressable:active {
+    transform: none;
+    transition-duration: 0ms;
+  }
+}
+
 * {
   box-sizing: border-box;
 }
