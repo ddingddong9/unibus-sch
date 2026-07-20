@@ -38,6 +38,7 @@ type RouteMutationPayload = Omit<Partial<BusRoute>, 'stops'> & {
 const SUPABASE_URL = supabaseUrl;
 const API_BASE_URL = `${SUPABASE_URL}/functions/v1/make-server`;
 const isDev = import.meta.env.DEV;
+const REQUEST_TIMEOUT_MS = 15_000;
 
 class ApiClient {
   private token: string | null = null;
@@ -81,10 +82,25 @@ class ApiClient {
     const url = `${API_BASE_URL}${endpoint}`;
     if (isDev) console.log(`[API] ${options.method || 'GET'} ${url}`);
 
+    const requestController = new AbortController();
+    const upstreamSignal = options.signal;
+    const abortFromUpstream = () => requestController.abort(upstreamSignal?.reason);
+
+    if (upstreamSignal?.aborted) {
+      abortFromUpstream();
+    } else {
+      upstreamSignal?.addEventListener('abort', abortFromUpstream, { once: true });
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      requestController.abort(new DOMException('Request timed out', 'TimeoutError'));
+    }, REQUEST_TIMEOUT_MS);
+
     try {
       const response = await fetch(url, {
         ...options,
         headers,
+        signal: requestController.signal,
       });
 
       // Handle non-JSON responses
@@ -123,13 +139,21 @@ class ApiClient {
       if (isDev) console.log(`[API] Success:`, { endpoint, success: data.success });
       return data;
     } catch (error) {
+      const requestError = requestController.signal.reason instanceof DOMException &&
+          requestController.signal.reason.name === 'TimeoutError'
+        ? new Error('요청 시간이 초과되었습니다. 네트워크 연결을 확인해 주세요.')
+        : error;
+
       if (isDev) {
         console.error('[API] Request failed:', {
           endpoint,
-          error: error instanceof Error ? error.message : String(error)
+          error: requestError instanceof Error ? requestError.message : String(requestError)
         });
       }
-      throw error;
+      throw requestError;
+    } finally {
+      window.clearTimeout(timeoutId);
+      upstreamSignal?.removeEventListener('abort', abortFromUpstream);
     }
   }
 
