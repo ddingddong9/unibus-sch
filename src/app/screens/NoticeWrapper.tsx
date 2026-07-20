@@ -302,7 +302,7 @@ export default function NoticeWrapper() {
                           aria-controls={panelId}
                           onClick={() => toggleNotice(notice.id)}
                           whileTap={reduceMotion ? undefined : { scale: 0.992 }}
-                          className="w-full p-[16px] text-left outline-none transition-colors hover:bg-[#f8fafc] focus-visible:bg-[#f8fafc] focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#1e3a8a]/45"
+                          className="w-full p-[16px] text-left outline-none transition-colors hover:bg-unibus-surface-subtle focus-visible:bg-unibus-surface-subtle focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--unibus-focus)]"
                         >
                           <span className="flex items-start justify-between gap-3">
                             <span className="min-w-0 flex-1">
