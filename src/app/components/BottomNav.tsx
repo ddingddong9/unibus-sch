@@ -1,4 +1,3 @@
-import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router";
 import svgPaths from "../../imports/svg-l5s7zp6z8c";
@@ -58,11 +57,11 @@ export default function BottomNav() {
   const navigate = useNavigate();
   const location = useLocation();
   const { t } = useLanguage();
-  const reduceMotion = useReducedMotion();
   const [unreadNotices, setUnreadNotices] = useState(() => getUnreadNoticeCount());
 
   const isActive = (path: string) =>
     location.pathname === path || (path === "/campus-shuttle" && location.pathname === "/shuttle");
+  const activeIndex = NAV_ITEMS.findIndex((item) => isActive(item.path));
 
   useEffect(() => {
     const handleUnread = (event: Event) => {
@@ -78,7 +77,18 @@ export default function BottomNav() {
       aria-label={t("주요 화면", "Primary")}
       className="absolute inset-x-0 bottom-0 z-50 w-full max-w-[430px] border-t border-[var(--unibus-divider)] bg-white/90 px-2 pt-2 pb-[max(env(safe-area-inset-bottom),6px)] shadow-[0_-10px_30px_rgba(15,23,42,0.06)] backdrop-blur-xl"
     >
-      <div className="grid grid-cols-5 gap-1">
+      <div className="relative grid grid-cols-5 gap-1">
+        {activeIndex >= 0 ? (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-y-0 left-0 z-0 rounded-2xl border border-[var(--unibus-brand-border)] bg-[var(--unibus-brand-soft)] shadow-[var(--unibus-shadow-soft)] transition-transform duration-200 ease-[var(--unibus-ease-out)] motion-reduce:transition-none"
+            style={{
+              transform: `translate3d(calc(${activeIndex * 100}% + ${activeIndex * 0.25}rem), 0, 0)`,
+              width: "calc((100% - 1rem) / 5)",
+            }}
+          />
+        ) : null}
+
         {NAV_ITEMS.map((item) => {
           const active = isActive(item.path);
           const label = t(item.labelKo, item.labelEn);
@@ -90,31 +100,21 @@ export default function BottomNav() {
               aria-current={active ? "page" : undefined}
               aria-label={label}
               onClick={() => navigate(item.path)}
-              className="group relative isolate flex min-h-[56px] min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl px-1 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--unibus-focus)] focus-visible:ring-offset-1 active:bg-[var(--unibus-brand-soft)]"
+              className="group relative z-10 flex min-h-[56px] min-w-0 flex-col items-center justify-center gap-1 overflow-hidden rounded-2xl px-1 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-[var(--unibus-focus)] focus-visible:ring-offset-1 active:bg-[var(--unibus-brand-soft)]"
             >
-              {active ? (
-                <motion.span
-                  layoutId={reduceMotion ? undefined : "bottom-nav-active-pill"}
-                  className="absolute inset-0 -z-10 rounded-2xl border border-[var(--unibus-brand-border)] bg-[var(--unibus-brand-soft)] shadow-[var(--unibus-shadow-soft)]"
-                  transition={{ type: "spring", stiffness: 520, damping: 38, mass: 0.8 }}
-                />
-              ) : null}
-
-              <motion.span
-                className="relative grid h-6 place-items-center"
-                animate={active && !reduceMotion ? { y: -2, scale: 1.08 } : { y: 0, scale: 1 }}
-                transition={{ type: "spring", stiffness: 520, damping: 30, mass: 0.65 }}
+              <span
+                className={`relative grid h-6 place-items-center transition-transform duration-200 ease-[var(--unibus-ease-out)] motion-reduce:transform-none motion-reduce:transition-none ${
+                  active ? "-translate-y-0.5 scale-[1.08]" : "translate-y-0 scale-100"
+                }`}
               >
                 <NavIcon name={item.icon} active={active} />
                 {item.path === "/notice" && unreadNotices > 0 && !active ? (
-                  <motion.span
-                    initial={reduceMotion ? false : { scale: 0 }}
-                    animate={{ scale: 1 }}
+                  <span
                     aria-hidden="true"
-                    className="absolute -right-1 -top-0.5 size-2 rounded-full bg-[#ef4444] ring-2 ring-[var(--unibus-surface)]"
+                    className="unibus-nav-dot absolute -right-1 -top-0.5 size-2 rounded-full bg-[#ef4444] ring-2 ring-[var(--unibus-surface)]"
                   />
                 ) : null}
-              </motion.span>
+              </span>
 
               <span
                 className={`max-w-full truncate text-[10px] leading-4 transition-[color,font-weight] duration-200 ${

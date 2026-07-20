@@ -1,92 +1,48 @@
-import { Suspense, useEffect, useMemo, useRef } from "react";
-import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { Suspense, useEffect } from "react";
 import { useLocation, Outlet } from "react-router-dom";
 import BottomNav from "./BottomNav";
-import { RouteLoadingSkeleton } from "./SkeletonLoaders";
 
-const AUTH_ROUTE_INDEX: Record<string, number> = {
-  "/": 0,
-  "/onboarding": 1,
-  "/login": 2,
-  "/signup": 3,
-};
+const AUTH_ROUTES = new Set(["/", "/onboarding", "/login", "/signup"]);
+const TAB_ROUTES = new Set(["/home", "/campus-shuttle", "/shuttle", "/commuter-bus", "/notice", "/settings"]);
 
-const TAB_ROUTE_INDEX: Record<string, number> = {
-  "/home": 0,
-  "/campus-shuttle": 1,
-  "/shuttle": 1,
-  "/commuter-bus": 2,
-  "/notice": 3,
-  "/settings": 4,
-};
-
-const TAB_ROUTES = new Set(Object.keys(TAB_ROUTE_INDEX));
-const AUTH_ROUTES = new Set(Object.keys(AUTH_ROUTE_INDEX));
-
-type TransitionKind = "auth" | "tab" | "default";
-
-type RouteTransition = {
-  direction: number;
-  kind: TransitionKind;
-  reduced: boolean;
-};
-
-function getTransitionKind(pathname: string): TransitionKind {
-  if (TAB_ROUTES.has(pathname)) return "tab";
-  if (AUTH_ROUTES.has(pathname)) return "auth";
-  return "default";
+function getTransitionClass(pathname: string) {
+  if (TAB_ROUTES.has(pathname)) return "route-transition route-transition-tab";
+  if (AUTH_ROUTES.has(pathname)) return "route-transition route-transition-auth";
+  return "route-transition route-transition-default";
 }
 
-function getTransitionDirection(previousPathname: string, pathname: string) {
-  const previousTabIndex = TAB_ROUTE_INDEX[previousPathname];
-  const tabIndex = TAB_ROUTE_INDEX[pathname];
-
-  if (previousTabIndex !== undefined && tabIndex !== undefined) {
-    return Math.sign(tabIndex - previousTabIndex);
-  }
-
-  const previousAuthIndex = AUTH_ROUTE_INDEX[previousPathname];
-  const authIndex = AUTH_ROUTE_INDEX[pathname];
-
-  if (previousAuthIndex !== undefined && authIndex !== undefined) {
-    return Math.sign(authIndex - previousAuthIndex);
-  }
-
-  if (previousPathname === "/qr-scanner") return -1;
-  if (pathname === "/qr-scanner") return 1;
-  return previousPathname === pathname ? 0 : 1;
+function RouteLoadingFallback({ isAuthRoute }: { isAuthRoute: boolean }) {
+  return (
+    <div
+      aria-busy="true"
+      aria-live="polite"
+      className="size-full overflow-hidden bg-background text-foreground"
+      role="status"
+    >
+      <div aria-hidden="true" className="flex size-full flex-col bg-unibus-surface">
+        <div className="flex h-16 items-center justify-between border-b border-unibus-divider px-5">
+          <div className="size-9 animate-pulse rounded-full bg-[#e8edf5] motion-reduce:animate-none dark:bg-[#2c2c2e]" />
+          <div className="h-5 w-24 animate-pulse rounded-md bg-[#e8edf5] motion-reduce:animate-none dark:bg-[#2c2c2e]" />
+          <div className="size-9 animate-pulse rounded-full bg-[#e8edf5] motion-reduce:animate-none dark:bg-[#2c2c2e]" />
+        </div>
+        <div className={`space-y-4 p-5 ${isAuthRoute ? "pt-12" : "pb-24"}`}>
+          <div className="h-7 w-2/3 animate-pulse rounded-md bg-[#e8edf5] motion-reduce:animate-none dark:bg-[#2c2c2e]" />
+          <div className="h-4 w-5/6 animate-pulse rounded-md bg-[#e8edf5] motion-reduce:animate-none dark:bg-[#2c2c2e]" />
+          <div className="mt-7 h-32 w-full animate-pulse rounded-2xl bg-[var(--unibus-brand-soft)] motion-reduce:animate-none" />
+          <div className="h-16 w-full animate-pulse rounded-2xl bg-[#e8edf5] motion-reduce:animate-none dark:bg-[#2c2c2e]" />
+          <div className="h-16 w-full animate-pulse rounded-2xl bg-[#e8edf5] motion-reduce:animate-none dark:bg-[#2c2c2e]" />
+        </div>
+      </div>
+      <span className="sr-only">요청한 화면을 불러오는 중입니다.</span>
+    </div>
+  );
 }
-
-const routeVariants = {
-  initial: ({ direction, kind, reduced }: RouteTransition) => {
-    if (reduced) return { opacity: 1, x: 0, y: 0, scale: 1 };
-    if (kind === "tab") return { opacity: 0, x: direction * 8, y: 3, scale: 0.998 };
-    if (kind === "auth") return { opacity: 0, x: direction * 14, y: 0, scale: 1 };
-    return { opacity: 0, x: direction * 10, y: 4, scale: 0.998 };
-  },
-  animate: { opacity: 1, x: 0, y: 0, scale: 1 },
-  exit: ({ direction, kind, reduced }: RouteTransition) => {
-    if (reduced) return { opacity: 1, x: 0, y: 0, scale: 1 };
-    if (kind === "tab") return { opacity: 0, x: direction * -5, y: -2, scale: 0.998 };
-    if (kind === "auth") return { opacity: 0, x: direction * -10, y: 0, scale: 1 };
-    return { opacity: 0, x: direction * -7, y: -2, scale: 0.998 };
-  },
-};
 
 export function AnimatedMobileLayout() {
   const location = useLocation();
-  const reducedMotion = useReducedMotion();
-  const previousPathnameRef = useRef(location.pathname);
   const showBottomNav = TAB_ROUTES.has(location.pathname);
   const isSplash = location.pathname === "/";
-  const transition = useMemo<RouteTransition>(
-    () => ({
-      direction: getTransitionDirection(previousPathnameRef.current, location.pathname),
-      kind: getTransitionKind(location.pathname),
-      reduced: Boolean(reducedMotion),
-    }),
-    [location.pathname, reducedMotion],
-  );
+  const transitionClass = getTransitionClass(location.pathname);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -99,10 +55,6 @@ export function AnimatedMobileLayout() {
     };
   }, [isSplash]);
 
-  useEffect(() => {
-    previousPathnameRef.current = location.pathname;
-  }, [location.pathname]);
-
   return (
     <div
       className={`flex h-dvh w-full items-center justify-center overflow-hidden p-0 transition-colors duration-200 motion-reduce:transition-none md:h-screen md:bg-gradient-to-br md:from-blue-50 md:to-slate-100 md:p-4 md:dark:from-slate-950 md:dark:to-black ${
@@ -114,28 +66,11 @@ export function AnimatedMobileLayout() {
           isSplash ? "bg-[#1e3a8a]" : "bg-background"
         }`}
       >
-        <AnimatePresence initial={false} mode="wait" custom={transition}>
-          <motion.div
-            key={location.pathname}
-            animate="animate"
-            className="absolute inset-0 size-full"
-            custom={transition}
-            exit="exit"
-            initial="initial"
-            transition={
-              transition.reduced
-                ? { duration: 0 }
-                : transition.kind === "auth"
-                  ? { duration: 0.22, ease: [0.22, 1, 0.36, 1] }
-                  : { duration: 0.18, ease: [0.22, 1, 0.36, 1] }
-            }
-            variants={routeVariants}
-          >
-            <Suspense fallback={<RouteLoadingSkeleton pathname={location.pathname} />}>
-              <Outlet />
-            </Suspense>
-          </motion.div>
-        </AnimatePresence>
+        <div key={location.pathname} className={`absolute inset-0 size-full ${transitionClass}`}>
+          <Suspense fallback={<RouteLoadingFallback isAuthRoute={AUTH_ROUTES.has(location.pathname)} />}>
+            <Outlet />
+          </Suspense>
+        </div>
         {showBottomNav ? <BottomNav /> : null}
       </div>
     </div>

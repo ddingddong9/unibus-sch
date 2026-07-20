@@ -1,0 +1,9 @@
+export const loadOnboardingWrapper = () => import("./screens/OnboardingWrapper");
+export const loadLoginWrapper = () => import("./screens/LoginWrapper");
+export const loadSignUpWrapper = () => import("./screens/SignUpWrapper");
+export const loadHomeWrapper = () => import("./screens/HomeWrapper");
+export const loadCampusShuttleWrapper = () => import("./screens/CampusShuttleWrapper");
+export const loadCommuterBusWrapper = () => import("./screens/CommuterBusWrapper");
+export const loadQrScannerWrapper = () => import("./screens/QrScannerWrapper");
+export const loadNoticeWrapper = () => import("./screens/NoticeWrapper");
+export const loadSettingsWrapper = () => import("./screens/SettingsWrapper");

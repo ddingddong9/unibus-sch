@@ -6,16 +6,28 @@ import { AnimatedMobileLayout } from "./components/AnimatedMobileLayout";
 import { ProtectedOutlet } from "./components/ProtectedOutlet";
 import { AdminOutlet } from "./components/AdminOutlet";
 import { DriverOutlet } from "./components/DriverOutlet";
+import { RouteErrorFallback } from "./components/RouteErrorFallback";
+import {
+  loadCampusShuttleWrapper,
+  loadCommuterBusWrapper,
+  loadHomeWrapper,
+  loadLoginWrapper,
+  loadNoticeWrapper,
+  loadOnboardingWrapper,
+  loadQrScannerWrapper,
+  loadSettingsWrapper,
+  loadSignUpWrapper,
+} from "./routeModules";
 
-const OnboardingWrapper = lazy(() => import("./screens/OnboardingWrapper"));
-const LoginWrapper = lazy(() => import("./screens/LoginWrapper"));
-const SignUpWrapper = lazy(() => import("./screens/SignUpWrapper"));
-const HomeWrapper = lazy(() => import("./screens/HomeWrapper"));
-const CampusShuttleWrapper = lazy(() => import("./screens/CampusShuttleWrapper"));
-const CommuterBusWrapper = lazy(() => import("./screens/CommuterBusWrapper"));
-const QrScannerWrapper = lazy(() => import("./screens/QrScannerWrapper"));
-const NoticeWrapper = lazy(() => import("./screens/NoticeWrapper"));
-const SettingsWrapper = lazy(() => import("./screens/SettingsWrapper"));
+const OnboardingWrapper = lazy(loadOnboardingWrapper);
+const LoginWrapper = lazy(loadLoginWrapper);
+const SignUpWrapper = lazy(loadSignUpWrapper);
+const HomeWrapper = lazy(loadHomeWrapper);
+const CampusShuttleWrapper = lazy(loadCampusShuttleWrapper);
+const CommuterBusWrapper = lazy(loadCommuterBusWrapper);
+const QrScannerWrapper = lazy(loadQrScannerWrapper);
+const NoticeWrapper = lazy(loadNoticeWrapper);
+const SettingsWrapper = lazy(loadSettingsWrapper);
 const DriverHomeWrapper = lazy(() => import("./screens/driver/DriverHomeWrapper"));
 const DriverActiveWrapper = lazy(() => import("./screens/driver/DriverActiveWrapper"));
 const AdminLogin = lazy(() => import("./admin/AdminLogin"));
@@ -30,11 +42,12 @@ const Campus3DPage = lazy(() => import("./campus3d/Campus3DPage"));
 
 export const router = createBrowserRouter([
   // ── 독립 3D 캠퍼스 프로토타입 ──
-  { path: "/campus-3d", element: <Campus3DPage /> },
+  { path: "/campus-3d", element: <Campus3DPage />, errorElement: <RouteErrorFallback /> },
 
   // ── 모바일 앱 라우트 ──
   {
     element: <AnimatedMobileLayout />,
+    errorElement: <RouteErrorFallback />,
     children: [
       // 스플래시
       {
@@ -68,6 +81,7 @@ export const router = createBrowserRouter([
   // ── 기사 라우트 (별도 레이아웃, 모바일 전용) ──
   {
     element: <DriverOutlet />,
+    errorElement: <RouteErrorFallback />,
     children: [
       { path: "/driver",        element: <DriverHomeWrapper /> },
       { path: "/driver/active", element: <DriverActiveWrapper /> },
@@ -75,9 +89,10 @@ export const router = createBrowserRouter([
   },
 
   // ── 관리자 라우트 (별도 레이아웃, 애니메이션 없음) ──
-  { path: "/admin/login", Component: AdminLogin },
+  { path: "/admin/login", Component: AdminLogin, errorElement: <RouteErrorFallback /> },
   {
     element: <AdminOutlet />,
+    errorElement: <RouteErrorFallback />,
     children: [
       { path: "/admin/dashboard",     element: <AdminDashboard /> },
       { path: "/admin/notices",       element: <NoticeManagement /> },
