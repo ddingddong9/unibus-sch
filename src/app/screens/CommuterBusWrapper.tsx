@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { ExternalLink, Smartphone, X } from "lucide-react";
 import { useNavigate } from "react-router";
 import RouteMapModal from "../components/RouteMapModal";
 import { useLanguage } from "../contexts/LanguageContext";
@@ -16,15 +17,37 @@ interface RouteBusInfo {
 const getColor = (color?: string) => color || "#1e3a8a";
 
 function openPayco() {
+  const reservationUrl = String(import.meta.env.VITE_PAYCO_RESERVATION_URL || "").trim();
+  if (reservationUrl) {
+    window.location.assign(reservationUrl);
+    return;
+  }
+
   const ua = navigator.userAgent;
+  if (!/Android|iPhone|iPad/i.test(ua)) {
+    window.open("https://www.payco.com/", "_blank", "noopener,noreferrer");
+    return;
+  }
+
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  const cancelFallback = () => {
+    if (fallbackTimer) clearTimeout(fallbackTimer);
+    fallbackTimer = null;
+  };
+  const handleVisibility = () => {
+    if (document.hidden) cancelFallback();
+  };
+  document.addEventListener("visibilitychange", handleVisibility, { once: true });
+  window.addEventListener("pagehide", cancelFallback, { once: true });
   window.location.href = "payco://";
-  setTimeout(() => {
+  fallbackTimer = setTimeout(() => {
+    if (document.hidden) return;
     if (/iPhone|iPad/i.test(ua)) {
       window.location.href = "https://apps.apple.com/kr/app/payco/id924292361";
     } else {
       window.location.href = "https://play.google.com/store/apps/details?id=com.nhnent.payapp";
     }
-  }, 1500);
+  }, 1600);
 }
 
 export default function CommuterBusWrapper() {
@@ -37,6 +60,7 @@ export default function CommuterBusWrapper() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [routeModalId, setRouteModalId] = useState<string | null>(null);
+  const [paycoRoute, setPaycoRoute] = useState<any | null>(null);
   const [liveRouteBusMap, setLiveRouteBusMap] = useState<Record<string, RouteBusInfo>>({});
   const [simulationTick, setSimulationTick] = useState(() => Date.now());
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -462,7 +486,7 @@ export default function CommuterBusWrapper() {
                           </button>
                           <button
                             type="button"
-                            onClick={route.isActive ? openPayco : undefined}
+                            onClick={route.isActive ? () => setPaycoRoute(route) : undefined}
                             className={`h-[44px] flex-1 rounded-[8px] font-['Public_Sans'] text-[14px] font-bold text-white shadow-lg transition-all hover:shadow-xl active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#fa2828] focus-visible:ring-offset-2 motion-reduce:transform-none motion-reduce:transition-none ${
                               !route.isActive ? "opacity-50 cursor-not-allowed" : ""
                             }`}
@@ -534,6 +558,76 @@ export default function CommuterBusWrapper() {
           />
         );
       })()}
+
+      <AnimatePresence>
+        {paycoRoute ? (
+          <motion.div
+            className="fixed inset-0 z-[60] flex items-end justify-center"
+            initial={reduceMotion ? false : { opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+          >
+            <button
+              type="button"
+              aria-label={t("PAYCO 예약 안내 닫기", "Close PAYCO booking guide")}
+              onClick={() => setPaycoRoute(null)}
+              className="absolute inset-0 bg-black/50"
+            />
+            <motion.section
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="payco-dialog-title"
+              initial={reduceMotion ? false : { y: 36 }}
+              animate={{ y: 0 }}
+              exit={reduceMotion ? undefined : { y: 36 }}
+              transition={{ type: "spring", stiffness: 360, damping: 32 }}
+              className="relative w-full max-w-[430px] rounded-t-[24px] bg-white px-5 pb-[calc(env(safe-area-inset-bottom)+24px)] pt-5 shadow-2xl"
+            >
+              <div className="flex items-start justify-between gap-4">
+                <div className="flex min-w-0 items-center gap-3">
+                  <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-[#fa2828]/10 text-[#fa2828]">
+                    <Smartphone className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <h2 id="payco-dialog-title" className="text-[17px] font-bold text-[#0f172a]">
+                      {t("PAYCO에서 예약", "Book in PAYCO")}
+                    </h2>
+                    <p className="mt-1 truncate text-[12px] text-[#64748b]">{paycoRoute.name}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  aria-label={t("닫기", "Close")}
+                  onClick={() => setPaycoRoute(null)}
+                  className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-[#f1f5f9] text-[#64748b]"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+
+              <div className="my-5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] p-4">
+                <ol className="space-y-3 text-[13px] font-semibold text-[#334155]">
+                  <li className="flex gap-3"><span className="text-[#fa2828]">1</span><span>PAYCO 앱 하단의 전체 메뉴를 엽니다.</span></li>
+                  <li className="flex gap-3"><span className="text-[#fa2828]">2</span><span>라이프에서 캠퍼스를 선택합니다.</span></li>
+                  <li className="flex gap-3"><span className="text-[#fa2828]">3</span><span>통학버스 승차권에서 노선과 시간을 예약합니다.</span></li>
+                </ol>
+              </div>
+
+              <button
+                type="button"
+                onClick={openPayco}
+                className="flex h-13 w-full items-center justify-center gap-2 rounded-xl bg-[#fa2828] text-[15px] font-bold text-white shadow-lg shadow-red-100"
+              >
+                <ExternalLink className="h-4 w-4" />
+                {t("PAYCO 열기", "Open PAYCO")}
+              </button>
+              <p className="mt-3 text-center text-[11px] leading-4 text-[#94a3b8]">
+                {t("PAYCO가 설치되지 않았다면 앱 설치 화면으로 이동합니다.", "If PAYCO is not installed, the app store will open.")}
+              </p>
+            </motion.section>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </div>
   );
 }
