@@ -16,6 +16,22 @@ interface RouteBusInfo {
 
 const getColor = (color?: string) => color || "#1e3a8a";
 
+const REGION_DESTINATIONS: Record<string, { lat: number; lng: number }> = {
+  "서울": { lat: 37.497, lng: 127.047 },
+  "인천": { lat: 37.456, lng: 126.705 },
+};
+
+function getRouteDestination(route: any) {
+  const orderedStops = [...(route?.stops || [])]
+    .filter((stop: any) => Number.isFinite(Number(stop.lat)) && Number.isFinite(Number(stop.lng)))
+    .sort((left: any, right: any) => left.order - right.order);
+  const destinationStop = orderedStops.length > 0 ? orderedStops[orderedStops.length - 1] : null;
+  if (destinationStop) {
+    return { lat: Number(destinationStop.lat), lng: Number(destinationStop.lng) };
+  }
+  return REGION_DESTINATIONS[route?.region] || { lat: 36.769014, lng: 126.927978 };
+}
+
 function openPayco() {
   const reservationUrl = String(import.meta.env.VITE_PAYCO_RESERVATION_URL || "").trim();
   if (reservationUrl) {
@@ -88,10 +104,6 @@ export default function CommuterBusWrapper() {
       return;
     }
 
-    const DEST: Record<string, { lat: number; lng: number }> = {
-      "서울": { lat: 37.497, lng: 127.047 },
-      "인천": { lat: 37.456, lng: 126.705 },
-    };
     const haversineKm = (a: { lat: number; lng: number }, b: { lat: number; lng: number }) => {
       const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
       const dLat = toRad(b.lat - a.lat), dLng = toRad(b.lng - a.lng);
@@ -114,8 +126,8 @@ export default function CommuterBusWrapper() {
           if (!loc) return;
           const pos = { lat: loc.lat, lng: loc.lng };
           const routeObj = routes.find((r) => r.id === routeId);
-          const region = routeObj?.region ?? "";
-          const dest = DEST[region] ?? { lat: 37.5, lng: 127.0 };
+          if (!routeObj) return;
+          const dest = getRouteDestination(routeObj);
           const km = haversineKm(pos, dest);
           const etaMins = Math.round((km / 60) * 60);
           newRouteBusMap[routeId] = { position: pos, etaMins };
