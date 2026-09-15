@@ -1,6 +1,6 @@
-import { lazy, Suspense, useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { Box, Bus, ChevronDown, ChevronUp, Map as MapIcon, MapPin, Route as RouteIcon, Train } from "lucide-react";
+import { Bus, ChevronDown, ChevronUp, MapPin, Route as RouteIcon, Train } from "lucide-react";
 import { useLanguage } from "../contexts/LanguageContext";
 import NaverMapComponent from "../components/NaverMapComponent";
 import { api } from "../services/api";
@@ -9,9 +9,6 @@ import { estimateStopArrivals } from "../utils/shuttleEta";
 import { simulateCampusLoop, simulateStationShuttle } from "../utils/campusLoopSimulation";
 import { formatServiceTime, getNextShuttleService, getServiceRuleSummary } from "../utils/shuttleSchedule";
 import { getStationShuttleMap } from "../utils/stationShuttleMap";
-
-const loadShuttle3DMap = () => import("../components/Shuttle3DMap");
-const Shuttle3DMap = lazy(loadShuttle3DMap);
 
 const CAMPUS_STOPS = [
   { id: "rear-gate", nameKo: "후문", nameEn: "Rear Gate", lat: 36.772760, lng: 126.933816, order: 1 },
@@ -67,7 +64,6 @@ interface ShuttleStop {
 }
 
 type ShuttleMode = "campus" | "station";
-type MapMode = "2d" | "3d";
 
 function hasStationSignal(route: any) {
   if (route.shuttleVariant && route.shuttleVariant !== "campus_loop") return true;
@@ -142,7 +138,6 @@ export default function CampusShuttleWrapper() {
   const reduceMotion = useReducedMotion();
 
   const [mode, setMode] = useState<ShuttleMode>("campus");
-  const [mapMode, setMapMode] = useState<MapMode>("2d");
   const [allRoutes, setAllRoutes] = useState<any[]>([]);
   const [stationRouteId, setStationRouteId] = useState<string | null>(null);
   const [allBuses, setAllBuses] = useState<any[]>([]);
@@ -158,7 +153,6 @@ export default function CampusShuttleWrapper() {
   const [stationStops, setStationStops] = useState<ShuttleStop[]>([]);
   const [sheetExpanded, setSheetExpanded] = useState(false);
   const [selectedStopId, setSelectedStopId] = useState<string | null>(null);
-  const [isPreparing3d, setIsPreparing3d] = useState(false);
   const [dragY, setDragY] = useState(0);
   const [clockTick, setClockTick] = useState(() => Date.now());
   const [simulationTick, setSimulationTick] = useState(() => Date.now());
@@ -433,12 +427,6 @@ export default function CampusShuttleWrapper() {
     name: stop.nameKo,
     position: { lat: stop.lat, lng: stop.lng },
   })), [activeStops]);
-  const sceneStops = useMemo(() => mapStops.map((stop) => ({
-    ...stop,
-    departureLabel: usingCampusSimulation
-      ? campusSimulation.stopDepartures.get(stop.id)
-      : usingStationSimulation ? stationSimulation.stopDepartures.get(stop.id) : undefined,
-  })), [campusSimulation.stopDepartures, mapStops, stationSimulation.stopDepartures, usingCampusSimulation, usingStationSimulation]);
   const mapCenter = activeStops[0] ? { lat: activeStops[0].lat, lng: activeStops[0].lng } : CAMPUS_CENTER;
   const arrivalEstimates = useMemo(
     () => estimateStopArrivals(
@@ -485,34 +473,6 @@ export default function CampusShuttleWrapper() {
     setFocusLocation({ lat: bus.position.lat, lng: bus.position.lng, zoom: 18, key: Date.now() });
   }, [displayBuses]);
 
-  const prepare3DMap = useCallback(() => {
-    void loadShuttle3DMap().catch((error) => {
-      console.warn("3D 캠퍼스 미리 불러오기 실패:", error);
-    });
-  }, []);
-
-  const handleMapModeChange = useCallback(async (nextMode: MapMode) => {
-    if (nextMode === mapMode || isPreparing3d) return;
-
-    if (nextMode === "3d") {
-      setIsPreparing3d(true);
-      try {
-        await loadShuttle3DMap();
-      } catch (error) {
-        console.warn("3D 캠퍼스 불러오기 실패:", error);
-        return;
-      } finally {
-        setIsPreparing3d(false);
-      }
-    }
-
-    setMapMode(nextMode);
-    if (nextMode === "2d" && mode === "campus") {
-      setFitBoundsKey((key) => key + 1);
-    }
-    setSheetExpanded(false);
-  }, [isPreparing3d, mapMode, mode]);
-
   const handleDragStart = (e: React.PointerEvent) => {
     isDragging.current = true;
     didDragSheet.current = false;
@@ -536,68 +496,25 @@ export default function CampusShuttleWrapper() {
     currentDragY.current = 0;
     setDragY(0);
   };
-  const compact3d = mapMode === "3d" && !sheetExpanded;
-
   return (
     <div className="bg-[#f6f6f8] content-stretch flex flex-col items-center relative size-full">
       <div className="relative h-full w-full max-w-[430px] shrink-0 overflow-hidden bg-[#f6f6f8] shadow-[0px_25px_50px_-12px_rgba(0,0,0,0.25)]">
-        <div className="absolute inset-0 w-full h-full">
-          <AnimatePresence initial={false} mode="sync">
-            {mapMode === "2d" ? (
-              <motion.div
-                key="shuttle-map-2d"
-                className="absolute inset-0"
-                initial={{ opacity: 0, scale: reduceMotion ? 1 : 0.985 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: reduceMotion ? 1 : 1.018 }}
-                transition={{ duration: reduceMotion ? 0.12 : 0.4, ease: [0.22, 1, 0.36, 1] }}
-                style={{ transformOrigin: "50% 42%" }}
-              >
-                <NaverMapComponent
-                  center={mapCenter}
-                  zoom={16}
-                  buses={displayBuses}
-                  stops={mapStops}
-                  userLocation={userLocation}
-                  focusLocation={focusLocation}
-                  fitBoundsKey={fitBoundsKey}
-                  autoFitBounds
-                  fitBoundsOptions={CAMPUS_FIT_BOUNDS_OPTIONS}
-                  fitBoundsPoints={mode === "campus" ? CAMPUS_VIEWPORT_POINTS : undefined}
-                  routePath={routePath}
-                  onBusClick={handleBusClick}
-                  onLocateRequest={enableUserLocation}
-                />
-              </motion.div>
-            ) : (
-              <motion.div
-                key="shuttle-map-3d"
-                className="absolute inset-0"
-                initial={{ opacity: 0, scale: reduceMotion ? 1 : 1.018 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: reduceMotion ? 1 : 0.985 }}
-                transition={{ duration: reduceMotion ? 0.12 : 0.4, ease: [0.22, 1, 0.36, 1] }}
-                style={{ transformOrigin: "50% 42%" }}
-              >
-                <Suspense fallback={<div className="grid h-full place-items-center bg-[#e8edf1] text-sm font-bold text-[#1e3a8a]">3D 캠퍼스를 준비 중입니다</div>}>
-                  <Shuttle3DMap
-                    key={`${mode}-${selectedStationRoute?.id ?? "campus"}-${fitBoundsKey}`}
-                    sceneMode={mode}
-                    routePath={routePath}
-                    stops={sceneStops}
-                    buses={displayBuses}
-                    onSelectStop={(stopId) => {
-                      const stop = activeStops.find((item) => item.id === stopId);
-                      if (stop) {
-                        setSelectedStopId(stop.id);
-                        setFocusLocation({ lat: stop.lat, lng: stop.lng, zoom: 18, key: Date.now() });
-                      }
-                    }}
-                  />
-                </Suspense>
-              </motion.div>
-            )}
-          </AnimatePresence>
+        <div className="absolute inset-0 h-full w-full">
+          <NaverMapComponent
+            center={mapCenter}
+            zoom={16}
+            buses={displayBuses}
+            stops={mapStops}
+            userLocation={userLocation}
+            focusLocation={focusLocation}
+            fitBoundsKey={fitBoundsKey}
+            autoFitBounds
+            fitBoundsOptions={CAMPUS_FIT_BOUNDS_OPTIONS}
+            fitBoundsPoints={mode === "campus" ? CAMPUS_VIEWPORT_POINTS : undefined}
+            routePath={routePath}
+            onBusClick={handleBusClick}
+            onLocateRequest={enableUserLocation}
+          />
         </div>
 
         <div className="absolute left-0 right-0 top-0 z-20 pt-safe">
@@ -648,43 +565,10 @@ export default function CampusShuttleWrapper() {
           </div>
         </div>
 
-        <div className="absolute right-4 top-[calc(env(safe-area-inset-top)+88px)] z-20 flex overflow-hidden rounded-xl border border-white/90 bg-white/94 p-1 shadow-[0_8px_22px_rgba(15,23,42,0.14)] backdrop-blur-xl">
-          {([
-            { key: "2d", label: "2D 지도", icon: MapIcon },
-            { key: "3d", label: "3D 캠퍼스", icon: Box },
-          ] as const).map((item) => (
-            <motion.button
-              key={item.key}
-              type="button"
-              title={item.label}
-              aria-label={item.label}
-              aria-pressed={mapMode === item.key}
-              aria-busy={item.key === "3d" && isPreparing3d}
-              disabled={isPreparing3d}
-              onPointerEnter={item.key === "3d" ? prepare3DMap : undefined}
-              onPointerDown={item.key === "3d" ? prepare3DMap : undefined}
-              onFocus={item.key === "3d" ? prepare3DMap : undefined}
-              onClick={() => void handleMapModeChange(item.key)}
-              whileHover={reduceMotion ? undefined : { scale: 1.04 }}
-              whileTap={reduceMotion ? undefined : { scale: 0.94 }}
-              className={`relative isolate grid h-9 w-9 place-items-center overflow-hidden rounded-lg transition-colors disabled:cursor-wait focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-1 ${mapMode === item.key ? "text-white" : "text-[#64748b] hover:bg-[#f1f5f9]"}`}
-            >
-              {mapMode === item.key ? (
-                <motion.span
-                  layoutId="campus-map-mode-indicator"
-                  className="absolute inset-0 -z-10 rounded-lg bg-[#1e3a8a]"
-                  transition={reduceMotion ? { duration: 0 } : { type: "spring", stiffness: 450, damping: 34 }}
-                />
-              ) : null}
-              <item.icon className={`relative z-10 h-4 w-4 ${item.key === "3d" && isPreparing3d ? "animate-pulse motion-reduce:animate-none" : ""}`} aria-hidden="true" />
-            </motion.button>
-          ))}
-        </div>
-
         <div
           className="absolute bottom-0 left-0 right-0 z-20 flex flex-col items-start overflow-hidden rounded-t-[24px] bg-white shadow-[0px_-12px_40px_0px_rgba(0,0,0,0.12)]"
           style={{
-            height: sheetExpanded ? "68dvh" : compact3d ? "164px" : "320px",
+            height: sheetExpanded ? "68dvh" : "320px",
             transform: `translateY(${dragY}px)`,
             transition: reduceMotion
               ? "none"
@@ -713,34 +597,7 @@ export default function CampusShuttleWrapper() {
             <div className="h-1 w-10 shrink-0 rounded-full bg-[rgba(30,58,138,0.24)]" />
           </button>
 
-          {compact3d ? (
-            <motion.button
-              type="button"
-              aria-label="상세 안내 펼치기"
-              aria-expanded={false}
-              onClick={() => setSheetExpanded(true)}
-              whileHover={reduceMotion ? undefined : { y: -1 }}
-              whileTap={reduceMotion ? undefined : { scale: 0.985 }}
-              className="mx-4 flex h-12 w-[calc(100%-2rem)] shrink-0 items-center gap-3 rounded-lg border border-[rgba(30,58,138,0.16)] bg-white px-3 text-left shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1e3a8a] focus-visible:ring-offset-2"
-            >
-              <span className="grid size-8 shrink-0 place-items-center rounded-lg bg-[#1e3a8a] text-white">
-                {mode === "station" ? <MapPin className="size-4" /> : <Bus className="size-4" />}
-              </span>
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[12px] font-extrabold text-[#1e3a8a]">
-                  {mode === "station"
-                    ? `${selectedStationDirection === "to-station" ? "후문" : "신창역"} ${stationCountdown}`
-                    : "학내순환 운행 중"}
-                </span>
-                <span className="block truncate text-[10px] font-semibold text-[rgba(30,58,138,0.65)]">
-                  {mode === "station"
-                    ? `${selectedStationDirection === "to-station" ? "열차 출발" : "열차 도착"} ${selectedStationEventTime || "--:--"}`
-                    : campusLoopRoute ? getServiceRuleSummary(campusLoopRoute) : "10분 간격 출발"}
-                </span>
-              </span>
-              <ChevronUp className="size-4 shrink-0 text-[#1e3a8a]" />
-            </motion.button>
-          ) : <div className="relative min-h-0 w-full flex-1 overflow-auto overscroll-contain">
+          <div className="relative min-h-0 w-full flex-1 overflow-auto overscroll-contain">
             <div className="relative flex w-full flex-col items-start gap-3 px-[22px] pb-[104px]">
               <div className="content-stretch flex items-center justify-between relative shrink-0 w-full">
                 <div>
@@ -990,7 +847,7 @@ export default function CampusShuttleWrapper() {
               </AnimatePresence>
 
             </div>
-          </div>}
+          </div>
         </div>
 
       </div>
