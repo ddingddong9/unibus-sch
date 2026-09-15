@@ -35,15 +35,10 @@ const AdminDashboard = lazy(() => import("./admin/AdminDashboard"));
 const NoticeManagement = lazy(() => import("./admin/NoticeManagement"));
 const RouteManagement = lazy(() => import("./admin/RouteManagement"));
 const BusManagement = lazy(() => import("./admin/BusManagement"));
-const Campus3DManagement = lazy(() => import("./admin/Campus3DManagement"));
 const UserManagement = lazy(() => import("./admin/UserManagement"));
 const SupportManagement = lazy(() => import("./admin/SupportManagement"));
-const Campus3DPage = lazy(() => import("./campus3d/Campus3DPage"));
 
 export const router = createBrowserRouter([
-  // ── 독립 3D 캠퍼스 프로토타입 ──
-  { path: "/campus-3d", element: <Campus3DPage />, errorElement: <RouteErrorFallback /> },
-
   // ── 모바일 앱 라우트 ──
   {
     element: <AnimatedMobileLayout />,
@@ -98,7 +93,6 @@ export const router = createBrowserRouter([
       { path: "/admin/notices",       element: <NoticeManagement /> },
       { path: "/admin/routes",        element: <RouteManagement /> },
       { path: "/admin/buses",         element: <BusManagement /> },
-      { path: "/admin/campus-3d",     element: <Campus3DManagement /> },
       { path: "/admin/demo",          element: <Navigate to="/admin/dashboard" replace /> },
       { path: "/admin/notifications", element: <Navigate to="/admin/notices" replace /> },
       { path: "/admin/support",       element: <SupportManagement /> },

@@ -55,14 +55,7 @@ function figmaAssetsResolver(): Plugin {
 const produceSingleFile = process.env.SINGLE_FILE === 'true'
 
 function manualChunks(id: string) {
-  // Vite의 동적 import helper가 거대한 3D vendor 청크에 흡수되는 것을 막는다.
-  if (id.includes('vite/preload-helper')) {
-    return 'vite-preload-helper';
-  }
   if (!id.includes('node_modules')) return;
-  if (id.includes('/three/') || id.includes('/three-stdlib/') || id.includes('/@react-three/')) {
-    return 'campus-3d-vendor';
-  }
   if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/react-router') || id.includes('/scheduler/')) {
     return 'react-vendor';
   }
@@ -126,7 +119,6 @@ export default defineConfig({
           'registerSW.js',
           'assets/index-*.{js,css}',
           'assets/react-vendor-*.js',
-          'assets/vite-preload-helper-*.js',
         ],
         navigateFallbackDenylist: [/^\/api(?:\/|$)/, /^\/assets(?:\/|$)/, /\.[^/]+$/],
         // 인증/실시간 API 응답은 사용자별 헤더를 캐시 키로 구분하지 못하므로 저장하지 않는다.
