@@ -8,6 +8,8 @@ import { api } from "../services/api";
 import { parseDurationMinutes, simulateCommuterBus } from "../utils/commuterSimulation";
 
 interface RouteBusInfo {
+  id: string;
+  label: string;
   position: { lat: number; lng: number };
   etaMins: number;
   heading?: number;
@@ -77,7 +79,7 @@ export default function CommuterBusWrapper() {
   const [error, setError] = useState<string | null>(null);
   const [routeModalId, setRouteModalId] = useState<string | null>(null);
   const [paycoRoute, setPaycoRoute] = useState<any | null>(null);
-  const [liveRouteBusMap, setLiveRouteBusMap] = useState<Record<string, RouteBusInfo>>({});
+  const [liveRouteBuses, setLiveRouteBuses] = useState<Record<string, RouteBusInfo[]>>({});
   const [simulationTick, setSimulationTick] = useState(() => Date.now());
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -100,7 +102,7 @@ export default function CommuterBusWrapper() {
 
   useEffect(() => {
     if (routes.length === 0) {
-      setLiveRouteBusMap({});
+      setLiveRouteBuses({});
       return;
     }
 
@@ -118,7 +120,7 @@ export default function CommuterBusWrapper() {
         const commuterBuses = buses.filter((b: any) => b.type === "commuter" && b.status === "active");
         const locMap = new Map(locations.map((l: any) => [l.busId, l]));
 
-        const newRouteBusMap: Record<string, { position: { lat: number; lng: number }; etaMins: number }> = {};
+        const nextRouteBuses: Record<string, RouteBusInfo[]> = {};
         commuterBuses.forEach((b: any) => {
           const routeId = b.currentRoute?.id;
           if (!routeId) return;
@@ -130,10 +132,12 @@ export default function CommuterBusWrapper() {
           const dest = getRouteDestination(routeObj);
           const km = haversineKm(pos, dest);
           const etaMins = Math.round((km / 60) * 60);
-          newRouteBusMap[routeId] = { position: pos, etaMins };
+          const routeBuses = nextRouteBuses[routeId] || [];
+          routeBuses.push({ id: b.id, label: b.name, position: pos, etaMins, heading: loc.heading });
+          nextRouteBuses[routeId] = routeBuses;
         });
 
-        setLiveRouteBusMap(newRouteBusMap);
+        setLiveRouteBuses(nextRouteBuses);
       } catch {
         // 실패 시 조용히 무시
       }
@@ -157,7 +161,12 @@ export default function CommuterBusWrapper() {
   }, []);
 
   const routeBusMap = useMemo(() => {
-    const result: Record<string, RouteBusInfo> = { ...liveRouteBusMap };
+    const result: Record<string, RouteBusInfo> = {};
+    Object.entries(liveRouteBuses).forEach(([routeId, buses]) => {
+      if (buses.length > 0) {
+        result[routeId] = [...buses].sort((left, right) => left.etaMins - right.etaMins)[0];
+      }
+    });
     routes.forEach((route) => {
       if (result[route.id] || !route.isActive) return;
       const stopPath = (route.stops || [])
@@ -171,10 +180,19 @@ export default function CommuterBusWrapper() {
         ? stopPath
         : [[126.927978, 36.769014] as [number, number], fallbackDestination];
       const simulation = simulateCommuterBus(route.id, path, simulationTick, parseDurationMinutes(route.duration));
-      if (simulation) result[route.id] = simulation;
+      if (simulation) result[route.id] = {
+        ...simulation,
+        id: `commuter-simulation-${route.id}`,
+        label: `${route.name} 시연 버스`,
+      };
     });
     return result;
-  }, [liveRouteBusMap, routes, simulationTick]);
+  }, [liveRouteBuses, routes, simulationTick]);
+
+  const busesForRoute = (routeId: string) => {
+    const actualBuses = liveRouteBuses[routeId];
+    return actualBuses?.length ? actualBuses : routeBusMap[routeId] ? [routeBusMap[routeId]] : [];
+  };
 
   // 유니크 지역 목록 (region 필드 기반)
   const regions = ["to-school", "from-school", ...Array.from(new Set(routes.map((r) => r.region).filter(Boolean)))];
@@ -565,7 +583,7 @@ export default function CommuterBusWrapper() {
           <RouteMapModal
             route={modal}
             color={getColor(modal.color)}
-            bus={routeBusMap[modal.id]}
+            buses={busesForRoute(modal.id)}
             onClose={() => setRouteModalId(null)}
           />
         );

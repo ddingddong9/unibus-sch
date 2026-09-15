@@ -8,15 +8,17 @@ interface RouteMapModalProps {
   route: any;
   color: string;
   onClose: () => void;
-  bus?: {
+  buses?: Array<{
+    id: string;
+    label: string;
     position: { lat: number; lng: number };
     etaMins: number;
     heading?: number;
     isSimulation?: boolean;
-  };
+  }>;
 }
 
-export default function RouteMapModal({ route, color, onClose, bus }: RouteMapModalProps) {
+export default function RouteMapModal({ route, color, onClose, buses = [] }: RouteMapModalProps) {
   const { t } = useLanguage();
 
   const rawStops: any[] = route.stops || [];
@@ -28,10 +30,10 @@ export default function RouteMapModal({ route, color, onClose, bus }: RouteMapMo
   const [simulationTick, setSimulationTick] = useState(() => Date.now());
 
   useEffect(() => {
-    if (!bus?.isSimulation) return;
+    if (!buses.some((bus) => bus.isSimulation)) return;
     const timer = window.setInterval(() => setSimulationTick(Date.now()), 500);
     return () => window.clearInterval(timer);
-  }, [bus?.isSimulation]);
+  }, [buses]);
 
   useEffect(() => {
     setLoading(true);
@@ -68,11 +70,11 @@ export default function RouteMapModal({ route, color, onClose, bus }: RouteMapMo
     };
   }, [mapStops]);
 
-  const displayedBus = useMemo(() => {
-    if (!bus) return null;
+  const displayedBuses = useMemo(() => buses.map((bus) => {
     if (!bus.isSimulation || routePath.length < 2) return bus;
-    return simulateCommuterBus(route.id, routePath, simulationTick, parseDurationMinutes(route.duration)) ?? bus;
-  }, [bus, route.duration, route.id, routePath, simulationTick]);
+    const simulated = simulateCommuterBus(route.id, routePath, simulationTick, parseDurationMinutes(route.duration));
+    return simulated ? { ...bus, ...simulated } : bus;
+  }), [buses, route.duration, route.id, routePath, simulationTick]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
@@ -136,13 +138,13 @@ export default function RouteMapModal({ route, color, onClose, bus }: RouteMapMo
               zoom={12}
               stops={mapStops}
               routePath={routePath}
-              buses={displayedBus ? [{
-                id: `commuter-${route.id}`,
-                label: route.name,
-                position: displayedBus.position,
-                heading: displayedBus.heading,
-                etaLabel: `${displayedBus.etaMins}분`,
-              }] : []}
+              buses={displayedBuses.map((bus) => ({
+                id: bus.id,
+                label: bus.label,
+                position: bus.position,
+                heading: bus.heading,
+                etaLabel: `${bus.etaMins}분`,
+              }))}
               fitBoundsKey={1}
             />
           )}
