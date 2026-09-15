@@ -38,7 +38,7 @@ interface RouteMetric {
 
 const EARTH_METERS_PER_DEGREE = 111_320;
 const DEFAULT_INTERVAL_MINUTES = 10;
-const DEFAULT_LOOP_DURATION_MINUTES = 30;
+const DEMO_LOOP_DURATION_MINUTES = 4;
 const VEHICLE_COUNT = 3;
 const STATION_DWELL_MINUTES = 2;
 
@@ -178,25 +178,21 @@ export function simulateCampusLoop(
   if (!route || stops.length === 0) return { buses: [], stopDepartures: new Map() };
 
   const safeIntervalMinutes = Math.max(1, intervalMinutes);
-  const durationMinutes = Math.max(DEFAULT_LOOP_DURATION_MINUTES, safeIntervalMinutes * VEHICLE_COUNT);
+  const durationMinutes = DEMO_LOOP_DURATION_MINUTES;
   const intervalMs = safeIntervalMinutes * 60_000;
   const durationMs = durationMinutes * 60_000;
   const serviceStart = new Date(nowMs);
   serviceStart.setHours(6, 0, 0, 0);
   const anchor = serviceStart.getTime();
-  const latestDepartureIndex = Math.floor((nowMs - anchor) / intervalMs);
   const projectedStops = [...stops]
     .sort((left, right) => left.order - right.order)
     .map((stop) => ({ ...stop, progressMeters: projectToRoute(stop, route) }));
 
-  const buses = Array.from({ length: VEHICLE_COUNT }, (_, offset) => {
-    const departureIndex = latestDepartureIndex - offset;
-    const departureAt = anchor + departureIndex * intervalMs;
-    const elapsed = ((nowMs - departureAt) % durationMs + durationMs) % durationMs;
-    const progress = elapsed / durationMs;
+  const buses = Array.from({ length: VEHICLE_COUNT }, (_, slot) => {
+    const elapsed = ((nowMs - anchor) % durationMs + durationMs) % durationMs;
+    const progress = (elapsed / durationMs + slot / VEHICLE_COUNT) % 1;
     const distance = progress * route.totalMeters;
     const sample = sampleRoute(route, distance);
-    const slot = ((departureIndex % VEHICLE_COUNT) + VEHICLE_COUNT) % VEHICLE_COUNT;
     return {
       id: `campus-simulation-${slot + 1}`,
       label: `학내순환 시연 ${slot + 1}호`,

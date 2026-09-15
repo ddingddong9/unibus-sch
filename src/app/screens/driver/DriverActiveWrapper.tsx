@@ -102,7 +102,13 @@ export default function DriverActiveWrapper() {
         }
         if (cancelled) return;
         const updateDemoPosition = () => {
-          const simulated = simulateCommuterBus(bus.currentRoute?.id || bus.id, path, Date.now(), durationMinutes);
+          const simulated = simulateCommuterBus(
+            bus.currentRoute?.id || bus.id,
+            path,
+            Date.now(),
+            durationMinutes,
+            bus.type === "campus" ? 3 : 4,
+          );
           if (!simulated) return;
           const speed = bus.type === "campus" ? 7 : 17;
           const current = { ...simulated.position, speed, heading: simulated.heading };
