@@ -1,9 +1,17 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { useNavigate } from "react-router";
 import RouteMapModal from "../components/RouteMapModal";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
+import { parseDurationMinutes, simulateCommuterBus } from "../utils/commuterSimulation";
+
+interface RouteBusInfo {
+  position: { lat: number; lng: number };
+  etaMins: number;
+  heading?: number;
+  isSimulation?: boolean;
+}
 
 const getColor = (color?: string) => color || "#1e3a8a";
 
@@ -29,7 +37,8 @@ export default function CommuterBusWrapper() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [routeModalId, setRouteModalId] = useState<string | null>(null);
-  const [routeBusMap, setRouteBusMap] = useState<Record<string, { position: { lat: number; lng: number }; etaMins: number }>>({});
+  const [liveRouteBusMap, setLiveRouteBusMap] = useState<Record<string, RouteBusInfo>>({});
+  const [simulationTick, setSimulationTick] = useState(() => Date.now());
   const liveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -51,7 +60,7 @@ export default function CommuterBusWrapper() {
 
   useEffect(() => {
     if (routes.length === 0) {
-      setRouteBusMap({});
+      setLiveRouteBusMap({});
       return;
     }
 
@@ -88,7 +97,7 @@ export default function CommuterBusWrapper() {
           newRouteBusMap[routeId] = { position: pos, etaMins };
         });
 
-        setRouteBusMap(newRouteBusMap);
+        setLiveRouteBusMap(newRouteBusMap);
       } catch {
         // 실패 시 조용히 무시
       }
@@ -105,6 +114,31 @@ export default function CommuterBusWrapper() {
       if (liveIntervalRef.current) clearInterval(liveIntervalRef.current);
     };
   }, [routes]);
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setSimulationTick(Date.now()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const routeBusMap = useMemo(() => {
+    const result: Record<string, RouteBusInfo> = { ...liveRouteBusMap };
+    routes.forEach((route) => {
+      if (result[route.id] || !route.isActive) return;
+      const stopPath = (route.stops || [])
+        .filter((stop: any) => Number.isFinite(Number(stop.lng)) && Number.isFinite(Number(stop.lat)))
+        .sort((left: any, right: any) => left.order - right.order)
+        .map((stop: any) => [Number(stop.lng), Number(stop.lat)] as [number, number]);
+      const fallbackDestination: [number, number] = route.region === "인천"
+        ? [126.705, 37.456]
+        : [127.047, 37.497];
+      const path = stopPath.length >= 2
+        ? stopPath
+        : [[126.927978, 36.769014] as [number, number], fallbackDestination];
+      const simulation = simulateCommuterBus(route.id, path, simulationTick, parseDurationMinutes(route.duration));
+      if (simulation) result[route.id] = simulation;
+    });
+    return result;
+  }, [liveRouteBusMap, routes, simulationTick]);
 
   // 유니크 지역 목록 (region 필드 기반)
   const regions = ["to-school", "from-school", ...Array.from(new Set(routes.map((r) => r.region).filter(Boolean)))];
@@ -290,7 +324,7 @@ export default function CommuterBusWrapper() {
                           {liveInfo ? (
                             <span className="flex items-center gap-1 bg-[#22c55e]/10 text-[#16a34a] px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px]">
                               <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#22c55e] animate-pulse motion-reduce:animate-none" />
-                              {t("운행 중", "In Service")}
+                              {liveInfo.isSimulation ? t("시연 운행", "Demo Run") : t("운행 중", "In Service")}
                             </span>
                           ) : !route.isActive ? (
                             <span className="bg-red-50 text-red-400 px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px]">
@@ -495,6 +529,7 @@ export default function CommuterBusWrapper() {
           <RouteMapModal
             route={modal}
             color={getColor(modal.color)}
+            bus={routeBusMap[modal.id]}
             onClose={() => setRouteModalId(null)}
           />
         );
