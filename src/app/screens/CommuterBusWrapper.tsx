@@ -179,7 +179,7 @@ export default function CommuterBusWrapper() {
       const path = stopPath.length >= 2
         ? stopPath
         : [[126.927978, 36.769014] as [number, number], fallbackDestination];
-      const simulation = simulateCommuterBus(route.id, path, simulationTick, parseDurationMinutes(route.duration));
+      const simulation = simulateCommuterBus(route.id, path, simulationTick, parseDurationMinutes(route.duration), 4);
       if (simulation) result[route.id] = {
         ...simulation,
         id: `commuter-simulation-${route.id}`,

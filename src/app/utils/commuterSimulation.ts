@@ -27,6 +27,7 @@ export function simulateCommuterBus(
   path: [number, number][],
   nowMs: number,
   durationMinutes: number,
+  simulationCycleMinutes = durationMinutes,
 ): CommuterSimulationBus | null {
   if (path.length < 2) return null;
   const latitudeOrigin = path.reduce((sum, [, lat]) => sum + lat, 0) / path.length;
@@ -45,7 +46,7 @@ export function simulateCommuterBus(
   const totalMeters = cumulative[cumulative.length - 1];
   if (totalMeters <= 0) return null;
 
-  const tripMs = Math.max(10, durationMinutes) * 60_000;
+  const tripMs = Math.max(1, simulationCycleMinutes) * 60_000;
   const staggerMs = (hash(routeId) % 60) / 100 * tripMs;
   const elapsed = (nowMs + staggerMs) % tripMs;
   const progress = elapsed / tripMs;
@@ -63,7 +64,7 @@ export function simulateCommuterBus(
       lng: fromLng + (toLng - fromLng) * ratio,
     },
     heading: (Math.atan2(toLng - fromLng, toLat - fromLat) * 180 / Math.PI + 360) % 360,
-    etaMins: Math.max(1, Math.ceil((tripMs - elapsed) / 60_000)),
+    etaMins: Math.max(1, Math.ceil((1 - progress) * Math.max(10, durationMinutes))),
     isSimulation: true,
   };
 }

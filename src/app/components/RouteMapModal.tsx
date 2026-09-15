@@ -72,7 +72,7 @@ export default function RouteMapModal({ route, color, onClose, buses = [] }: Rou
 
   const displayedBuses = useMemo(() => buses.map((bus) => {
     if (!bus.isSimulation || routePath.length < 2) return bus;
-    const simulated = simulateCommuterBus(route.id, routePath, simulationTick, parseDurationMinutes(route.duration));
+    const simulated = simulateCommuterBus(route.id, routePath, simulationTick, parseDurationMinutes(route.duration), 4);
     return simulated ? { ...bus, ...simulated } : bus;
   }), [buses, route.duration, route.id, routePath, simulationTick]);
 
