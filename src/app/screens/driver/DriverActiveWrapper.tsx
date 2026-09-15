@@ -9,6 +9,7 @@ import {
   type DriverRoute,
   type DriverActiveTrip,
 } from "../../utils/driverRouteDisplay";
+import { parseDurationMinutes, simulateCommuterBus } from "../../utils/commuterSimulation";
 
 interface ActiveBus {
   id: string;
@@ -32,10 +33,12 @@ export default function DriverActiveWrapper() {
   const [progressUpdating, setProgressUpdating] = useState(false);
   const [progressError, setProgressError] = useState("");
   const [phaseUpdating, setPhaseUpdating] = useState(false);
+  const [demoGps, setDemoGps] = useState(false);
 
   const watchIdRef = useRef<number | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const demoGpsTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const latestCoordsRef = useRef<{ lat: number; lng: number; speed: number; heading: number } | null>(null);
   const prevLatLngRef = useRef<{ lat: number; lng: number } | null>(null);
   const nearStopRef = useRef<{ key: string; count: number; triggered: boolean } | null>(null);
@@ -72,38 +75,73 @@ export default function DriverActiveWrapper() {
     }
   }, [bus?.activeTrip?.startedAt]);
 
-  // GPS watchPosition 시작
+  // 실제 운행은 기기 GPS를 사용하고, 시연 모드에서는 배정 노선 위 좌표를 생성한다.
   useEffect(() => {
     if (!bus) return;
+    let cancelled = false;
 
-    if (!navigator.geolocation) {
-      setGpsStatus("error");
-      return;
-    }
-
-    watchIdRef.current = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude, speed } = pos.coords;
-        let heading = latestCoordsRef.current?.heading ?? 0;
-        const prev = prevLatLngRef.current;
-        if (prev) {
-          const toRad = (d: number) => (d * Math.PI) / 180;
-          const dLng = toRad(longitude - prev.lng);
-          const rlat1 = toRad(prev.lat);
-          const rlat2 = toRad(latitude);
-          const y = Math.sin(dLng) * Math.cos(rlat2);
-          const x = Math.cos(rlat1) * Math.sin(rlat2) - Math.sin(rlat1) * Math.cos(rlat2) * Math.cos(dLng);
-          heading = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+    if (demoGps) {
+      const routePoints = [...(bus.currentRoute?.stops || [])]
+        .filter((stop) => stop.lat != null && stop.lng != null)
+        .sort((left, right) => left.order - right.order)
+        .map((stop) => [Number(stop.lng), Number(stop.lat)] as [number, number]);
+      const fallbackPath: [number, number][] = [
+        [126.933816, 36.77276], [126.935383, 36.768228], [126.932505, 36.767905],
+        [126.931303, 36.768856], [126.927978, 36.769014], [126.933816, 36.77276],
+      ];
+      const durationMinutes = bus.type === "campus" ? 12 : parseDurationMinutes(bus.currentRoute?.duration ?? undefined);
+      const startDemoGps = async () => {
+        let path = routePoints.length >= 2 ? routePoints : fallbackPath;
+        if (bus.currentRoute?.id) {
+          try {
+            const result = await api.getRoutePath(bus.currentRoute.id);
+            if (result.path.length >= 2) path = result.path;
+          } catch {
+            // 저장된 정류장 좌표를 대체 경로로 사용한다.
+          }
         }
-        prevLatLngRef.current = { lat: latitude, lng: longitude };
-        const curr = { lat: latitude, lng: longitude, speed: speed || 0, heading };
-        latestCoordsRef.current = curr;
-        setCoords(curr);
-        setGpsStatus("active");
-      },
-      () => setGpsStatus("error"),
-      { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
-    );
+        if (cancelled) return;
+        const updateDemoPosition = () => {
+          const simulated = simulateCommuterBus(bus.currentRoute?.id || bus.id, path, Date.now(), durationMinutes);
+          if (!simulated) return;
+          const speed = bus.type === "campus" ? 7 : 17;
+          const current = { ...simulated.position, speed, heading: simulated.heading };
+          latestCoordsRef.current = current;
+          setCoords(current);
+          setGpsStatus("active");
+        };
+        updateDemoPosition();
+        demoGpsTimerRef.current = setInterval(updateDemoPosition, 1000);
+      };
+      void startDemoGps();
+    } else if (!navigator.geolocation) {
+      setGpsStatus("error");
+    } else {
+      setGpsStatus("acquiring");
+      watchIdRef.current = navigator.geolocation.watchPosition(
+        (pos) => {
+          const { latitude, longitude, speed } = pos.coords;
+          let heading = latestCoordsRef.current?.heading ?? 0;
+          const prev = prevLatLngRef.current;
+          if (prev) {
+            const toRad = (d: number) => (d * Math.PI) / 180;
+            const dLng = toRad(longitude - prev.lng);
+            const rlat1 = toRad(prev.lat);
+            const rlat2 = toRad(latitude);
+            const y = Math.sin(dLng) * Math.cos(rlat2);
+            const x = Math.cos(rlat1) * Math.sin(rlat2) - Math.sin(rlat1) * Math.cos(rlat2) * Math.cos(dLng);
+            heading = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
+          }
+          prevLatLngRef.current = { lat: latitude, lng: longitude };
+          const current = { lat: latitude, lng: longitude, speed: speed || 0, heading };
+          latestCoordsRef.current = current;
+          setCoords(current);
+          setGpsStatus("active");
+        },
+        () => setGpsStatus("error"),
+        { enableHighAccuracy: true, maximumAge: 3000, timeout: 10000 }
+      );
+    }
 
     // 5초마다 서버에 위치 전송
     intervalRef.current = setInterval(async () => {
@@ -121,11 +159,15 @@ export default function DriverActiveWrapper() {
     timerRef.current = setInterval(() => setElapsed((s) => s + 1), 1000);
 
     return () => {
+      cancelled = true;
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (demoGpsTimerRef.current) clearInterval(demoGpsTimerRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (timerRef.current) clearInterval(timerRef.current);
+      watchIdRef.current = null;
+      demoGpsTimerRef.current = null;
     };
-  }, [bus]);
+  }, [bus, demoGps]);
 
   const handleStop = async () => {
     setStopping(true);
@@ -135,6 +177,7 @@ export default function DriverActiveWrapper() {
       // 실패해도 화면은 이동
     } finally {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
+      if (demoGpsTimerRef.current) clearInterval(demoGpsTimerRef.current);
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (timerRef.current) clearInterval(timerRef.current);
       navigate("/driver", { replace: true });
@@ -368,17 +411,20 @@ export default function DriverActiveWrapper() {
         <div className="mx-5 mt-4 flex flex-col gap-3">
 
           <div className={`rounded-2xl p-5 border flex items-center gap-4
-            ${gpsStatus === "active" ? "bg-green-50 border-green-100"
+            ${demoGps ? "bg-blue-50 border-blue-100"
+              : gpsStatus === "active" ? "bg-green-50 border-green-100"
               : gpsStatus === "error" ? "bg-red-50 border-red-100"
               : "bg-amber-50 border-amber-100"}`}
           >
             <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0
-              ${gpsStatus === "active" ? "bg-green-100"
+              ${demoGps ? "bg-blue-100"
+                : gpsStatus === "active" ? "bg-green-100"
                 : gpsStatus === "error" ? "bg-red-100"
                 : "bg-amber-100"}`}
             >
               <svg className={`w-6 h-6
-                ${gpsStatus === "active" ? "text-green-600"
+                ${demoGps ? "text-blue-600"
+                  : gpsStatus === "active" ? "text-green-600"
                   : gpsStatus === "error" ? "text-red-500"
                   : "text-amber-500"}`}
                 fill="none" viewBox="0 0 24 24" stroke="currentColor"
@@ -389,11 +435,13 @@ export default function DriverActiveWrapper() {
             </div>
             <div className="flex-1">
               <p className={`font-bold text-sm
-                ${gpsStatus === "active" ? "text-green-700"
+                ${demoGps ? "text-blue-700"
+                  : gpsStatus === "active" ? "text-green-700"
                   : gpsStatus === "error" ? "text-red-600"
                   : "text-amber-600"}`}
               >
-                {gpsStatus === "active" ? "GPS 수신 중"
+                {demoGps ? "시연 위치 전송 중"
+                  : gpsStatus === "active" ? "GPS 수신 중"
                   : gpsStatus === "error" ? "GPS 오류"
                   : "GPS 신호 잡는 중..."}
               </p>
@@ -402,11 +450,28 @@ export default function DriverActiveWrapper() {
                   {coords.lat.toFixed(5)}, {coords.lng.toFixed(5)}
                 </p>
               )}
-              {gpsStatus === "error" && (
+              {gpsStatus === "error" && !demoGps && (
                 <p className="text-red-400 text-xs mt-0.5">위치 권한을 허용해 주세요</p>
               )}
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              latestCoordsRef.current = null;
+              prevLatLngRef.current = null;
+              setCoords(null);
+              setDemoGps((enabled) => !enabled);
+            }}
+            className={`h-12 w-full rounded-xl border text-sm font-black transition-colors ${
+              demoGps
+                ? "border-blue-200 bg-blue-50 text-blue-700"
+                : "border-[#cbd5e1] bg-white text-[#334155]"
+            }`}
+          >
+            {demoGps ? "실제 GPS로 전환" : "시연 위치 사용"}
+          </button>
 
           {/* 전송 횟수 */}
           <div className="bg-[#f8fafc] rounded-2xl p-4 border border-[#e2e8f0] flex items-center justify-between">
