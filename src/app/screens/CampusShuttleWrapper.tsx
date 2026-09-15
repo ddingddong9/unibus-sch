@@ -829,7 +829,8 @@ export default function CampusShuttleWrapper() {
                           }`}>
                             {stop.estimate?.state === "arriving"
                               ? "곧 도착"
-                              : stop.estimate?.state === "stale" ? "위치 지연" : "예상 시간"}
+                              : stop.estimate?.state === "delayed" ? "위치 지연"
+                              : stop.estimate?.state === "stale" ? "위치 확인 중" : "예상 시간"}
                           </div>
                           <div className={`font-['Public_Sans'] font-extrabold text-[16px] leading-[24px] ${
                             !stop.estimate?.minutes ? "text-[rgba(30,58,138,0.48)]" : "text-[#1e3a8a]"

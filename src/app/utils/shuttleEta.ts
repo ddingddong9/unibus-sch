@@ -18,7 +18,7 @@ export interface EtaStop extends RouteCoordinate {
   order: number;
 }
 
-export type ArrivalState = "arriving" | "scheduled" | "waiting" | "stale";
+export type ArrivalState = "arriving" | "scheduled" | "delayed" | "waiting" | "stale";
 
 export interface StopArrivalEstimate {
   busId: string | null;
@@ -48,6 +48,7 @@ interface RouteMetric {
 
 const EARTH_METERS_PER_DEGREE = 111_320;
 const LOCATION_STALE_MS = 45_000;
+const LOCATION_EXPIRED_MS = 120_000;
 const MAX_ROUTE_SNAP_METERS = 220;
 
 function toMetric(point: RouteCoordinate, latitudeOrigin: number, longitudeOrigin: number): MetricPoint {
@@ -110,10 +111,14 @@ function projectToRoute(point: RouteCoordinate, route: RouteMetric): RouteProjec
   };
 }
 
-function isFresh(timestamp?: string | null, nowMs = Date.now()) {
-  if (!timestamp) return false;
+function locationFreshness(timestamp?: string | null, nowMs = Date.now()) {
+  if (!timestamp) return "expired" as const;
   const updatedAt = new Date(timestamp).getTime();
-  return Number.isFinite(updatedAt) && nowMs - updatedAt <= LOCATION_STALE_MS;
+  if (!Number.isFinite(updatedAt)) return "expired" as const;
+  const age = Math.max(0, nowMs - updatedAt);
+  if (age <= LOCATION_STALE_MS) return "fresh" as const;
+  if (age <= LOCATION_EXPIRED_MS) return "delayed" as const;
+  return "expired" as const;
 }
 
 function isClosedRoute(path: [number, number][], route: RouteMetric) {
@@ -147,7 +152,7 @@ export function estimateStopArrivals(
   const loop = options.loop ?? isClosedRoute(path, route);
   const projectedBuses = buses.map((bus) => ({
     bus,
-    fresh: isFresh(bus.timestamp, options.nowMs),
+    freshness: locationFreshness(bus.timestamp, options.nowMs),
     projection: projectToRoute(bus.position, route),
   }));
 
@@ -156,12 +161,12 @@ export function estimateStopArrivals(
     let best: StopArrivalEstimate | null = null;
     let hasStaleBus = false;
 
-    projectedBuses.forEach(({ bus, fresh, projection }) => {
-      if (!fresh) {
+    projectedBuses.forEach(({ bus, freshness, projection }) => {
+      if (projection.distanceFromRouteMeters > MAX_ROUTE_SNAP_METERS) return;
+      if (freshness === "expired") {
         hasStaleBus = true;
         return;
       }
-      if (projection.distanceFromRouteMeters > MAX_ROUTE_SNAP_METERS) return;
 
       let remainingMeters = stopProjection.progressMeters - projection.progressMeters;
       if (loop && remainingMeters < -15) remainingMeters += route.totalMeters;
@@ -181,7 +186,9 @@ export function estimateStopArrivals(
         busLabel: bus.label,
         minutes,
         distanceMeters: Math.round(remainingMeters),
-        state: remainingMeters <= 140 || minutes <= 2 ? "arriving" : "scheduled",
+        state: freshness === "delayed"
+          ? "delayed"
+          : remainingMeters <= 140 || minutes <= 2 ? "arriving" : "scheduled",
       };
 
       if (!best || (estimate.distanceMeters ?? Infinity) < (best.distanceMeters ?? Infinity)) best = estimate;
