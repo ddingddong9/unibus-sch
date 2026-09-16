@@ -15,6 +15,7 @@ interface ManagedBus {
   currentRoute?: { id: string; name: string } | null;
   activeTrip?: { id: string } | null;
   lastLocationAt?: string | null;
+  automatic?: boolean;
 }
 
 interface EndpointState {
@@ -64,7 +65,41 @@ export default function AdminDashboard() {
     return () => window.clearInterval(interval);
   }, [loadOperations]);
 
-  const runningBuses = buses.filter((bus) => bus.isRunning);
+  const operationalBuses = useMemo(() => {
+    const actualRunning = buses.filter((bus) => bus.isRunning);
+    const campusRoute = routes.find((route) => route.isActive && route.type === "campus" && route.name === "학내순환")
+      ?? routes.find((route) => route.isActive && route.type === "campus");
+    const campusRouteIds = new Set(routes.filter((route) => route.type === "campus").map((route) => route.id));
+    const actualCampusCount = actualRunning.filter((bus) =>
+      (bus.currentRoute?.id && campusRouteIds.has(bus.currentRoute.id)) || bus.name.includes("학내순환"),
+    ).length;
+    const actualRouteIds = new Set(actualRunning.map((bus) => bus.currentRoute?.id).filter(Boolean));
+    const campusBuses: ManagedBus[] = Array.from({ length: Math.max(0, 3 - actualCampusCount) }, (_, index) => ({
+      id: `automatic-campus-${actualCampusCount + index + 1}`,
+      name: `학내순환 ${actualCampusCount + index + 1}호`,
+      status: "active",
+      isRunning: true,
+      currentDriverName: "자동 운행",
+      currentRoute: campusRoute ? { id: campusRoute.id, name: campusRoute.name } : { id: "campus-loop", name: "학내순환" },
+      lastLocationAt: lastCheckedAt?.toISOString() ?? new Date().toISOString(),
+      automatic: true,
+    }));
+    const commuterBuses: ManagedBus[] = routes
+      .filter((route) => route.isActive && route.type === "commuter" && !actualRouteIds.has(route.id))
+      .map((route) => ({
+        id: `automatic-commuter-${route.id}`,
+        name: `${route.name} 운행 버스`,
+        status: "active",
+        isRunning: true,
+        currentDriverName: "자동 운행",
+        currentRoute: { id: route.id, name: route.name },
+        lastLocationAt: lastCheckedAt?.toISOString() ?? new Date().toISOString(),
+        automatic: true,
+      }));
+    return [...actualRunning, ...campusBuses, ...commuterBuses];
+  }, [buses, routes, lastCheckedAt]);
+
+  const runningBuses = operationalBuses.filter((bus) => bus.isRunning);
   const openReports = reports.filter((report) => report.status !== "resolved");
   const issues = useMemo(() => {
     const now = lastCheckedAt?.getTime() ?? Date.now();
@@ -81,7 +116,7 @@ export default function AdminDashboard() {
 
   const criticalCount = issues.filter((issue) => issue.severity === "critical").length;
   const stats = [
-    { label: "현재 운행", value: runningBuses.length, sub: `전체 ${buses.length}대`, icon: Bus, color: "bg-[#1e3b8a]" },
+    { label: "현재 운행", value: runningBuses.length, sub: `전체 ${operationalBuses.length}대`, icon: Bus, color: "bg-[#1e3b8a]" },
     { label: "즉시 확인", value: criticalCount, sub: `주의 포함 ${issues.length}건`, icon: AlertTriangle, color: criticalCount ? "bg-red-500" : "bg-green-500" },
     { label: "미해결 문의", value: openReports.length, sub: `신규 ${reports.filter((report) => report.status === "open").length}건`, icon: CircleHelp, color: "bg-amber-500" },
     { label: "활성 노선", value: routes.filter((route) => route.isActive).length, sub: `전체 ${routes.length}개`, icon: Route, color: "bg-cyan-600" },
@@ -104,7 +139,7 @@ export default function AdminDashboard() {
         </div>
 
         <div className="mb-6 grid grid-cols-2 gap-3 xl:grid-cols-4">
-          {stats.map((stat) => <div key={stat.label} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs text-[#64748b]">{stat.label}</p><p className="mt-2 text-3xl font-bold text-[#0f172a]">{stat.value}</p><p className="mt-1 text-xs text-[#94a3b8]">{stat.sub}</p></div><span className={`grid h-10 w-10 place-items-center rounded-xl ${stat.color}`}><stat.icon className="h-5 w-5 text-white" /></span></div></div>)}
+          {stats.map((stat) => <div key={stat.label} className="rounded-xl border border-gray-100 bg-white p-4 shadow-sm sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs text-[#64748b]">{stat.label}</p><p className="mt-2 text-3xl font-bold text-[#0f172a]">{loading && !lastCheckedAt ? "—" : stat.value}</p><p className="mt-1 text-xs text-[#94a3b8]">{loading && !lastCheckedAt ? "불러오는 중" : stat.sub}</p></div><span className={`grid h-10 w-10 place-items-center rounded-xl ${stat.color}`}><stat.icon className="h-5 w-5 text-white" /></span></div></div>)}
         </div>
 
         <div className="mb-6 grid gap-6 xl:grid-cols-[1.35fr_1fr]">
@@ -124,8 +159,8 @@ export default function AdminDashboard() {
         </div>
 
         <section className="mb-6 overflow-hidden rounded-xl border border-gray-100 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4"><div><h2 className="flex items-center gap-2 text-lg font-bold text-[#0f172a]"><Activity className="h-5 w-5 text-green-600" />실시간 운행</h2><p className="mt-1 text-xs text-[#94a3b8]">운행 여부는 차량 활성 상태가 아닌 실제 운행 기록 기준입니다.</p></div></div>
-          <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="bg-slate-50 text-left text-xs text-[#64748b]"><tr><th className="px-5 py-3">버스</th><th className="px-5 py-3">노선</th><th className="px-5 py-3">기사</th><th className="px-5 py-3">GPS</th><th className="px-5 py-3">상태</th></tr></thead><tbody>{buses.map((bus) => <tr key={bus.id} className="border-t border-gray-100"><td className="px-5 py-4 font-bold text-[#0f172a]">{bus.name}</td><td className="px-5 py-4 text-[#475569]">{bus.currentRoute?.name || "미지정"}</td><td className="px-5 py-4 text-[#475569]">{bus.currentDriverName || "-"}</td><td className="px-5 py-4"><span className={bus.isRunning && (!bus.lastLocationAt || Date.now() - new Date(bus.lastLocationAt).getTime() > 15000) ? "text-red-600" : "text-[#475569]"}>{timeAgo(bus.lastLocationAt)}</span></td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${bus.isRunning ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>{bus.isRunning ? "운행 중" : "대기"}</span></td></tr>)}</tbody></table></div>
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-4"><div><h2 className="flex items-center gap-2 text-lg font-bold text-[#0f172a]"><Activity className="h-5 w-5 text-green-600" />실시간 운행</h2><p className="mt-1 text-xs text-[#94a3b8]">사용자 화면과 동일한 운행 상태를 표시합니다.</p></div></div>
+          <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead className="bg-slate-50 text-left text-xs text-[#64748b]"><tr><th className="px-5 py-3">버스</th><th className="px-5 py-3">노선</th><th className="px-5 py-3">기사</th><th className="px-5 py-3">GPS</th><th className="px-5 py-3">상태</th></tr></thead><tbody>{operationalBuses.map((bus) => <tr key={bus.id} className="border-t border-gray-100"><td className="px-5 py-4 font-bold text-[#0f172a]">{bus.name}</td><td className="px-5 py-4 text-[#475569]">{bus.currentRoute?.name || "미지정"}</td><td className="px-5 py-4 text-[#475569]">{bus.currentDriverName || "-"}</td><td className="px-5 py-4"><span className={bus.isRunning && (!bus.lastLocationAt || Date.now() - new Date(bus.lastLocationAt).getTime() > 15000) ? "text-red-600" : "text-[#475569]"}>{bus.automatic ? "위치 갱신 중" : timeAgo(bus.lastLocationAt)}</span></td><td className="px-5 py-4"><span className={`rounded-full px-2.5 py-1 text-xs font-bold ${bus.isRunning ? "bg-green-100 text-green-700" : "bg-slate-100 text-slate-500"}`}>{bus.isRunning ? "운행 중" : "대기"}</span></td></tr>)}</tbody></table></div>
         </section>
 
         <div className="grid gap-4 lg:grid-cols-[1fr_1.5fr]">

@@ -17,6 +17,7 @@ interface NaverMapProps {
   autoFitBounds?: boolean;
   fitBoundsOptions?: { top: number; right: number; bottom: number; left: number; maxZoom?: number; zoomOffset?: number };
   fitBoundsPoints?: Array<{ lat: number; lng: number }>;
+  numberedStops?: boolean;
   routePath?: [number, number][]; // [[lng, lat], ...] from Naver Directions API
   onBusClick?: (busId: string) => void;
   onLocateRequest?: () => void;
@@ -77,6 +78,13 @@ const STOP_MARKER_CONTENT = (name: string, _type: 'start' | 'end' | 'middle' = '
   </div>
 `;
 
+const NUMBERED_STOP_MARKER_CONTENT = (index: number) => `
+  <div style="width:30px;height:38px;display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 3px 6px rgba(15,23,42,0.25));">
+    <div style="width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#1e3a8a;color:white;border:2px solid white;font:800 11px sans-serif;box-sizing:border-box;">${index + 1}</div>
+    <div style="width:2px;height:9px;background:#1e3a8a;"></div>
+  </div>
+`;
+
 const USER_MARKER_CONTENT = () => `
   <div style="position:relative;width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
     <div style="position:absolute;width:28px;height:28px;border-radius:50%;background:rgba(30,58,138,0.18);"></div>
@@ -102,6 +110,7 @@ export default function NaverMapComponent({
   autoFitBounds = false,
   fitBoundsOptions = DEFAULT_FIT_BOUNDS_OPTIONS,
   fitBoundsPoints = EMPTY_FIT_BOUNDS_POINTS,
+  numberedStops = false,
   routePath = [],
   onBusClick,
   onLocateRequest,
@@ -381,22 +390,25 @@ export default function NaverMapComponent({
     stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
     stopMarkersRef.current = [];
 
-    stopsRef.current.forEach(stop => {
+    stopsRef.current.forEach((stop, index) => {
       try {
+        const markerContent = numberedStops
+          ? NUMBERED_STOP_MARKER_CONTENT(index)
+          : STOP_MARKER_CONTENT(stop.name, stop.type ?? 'middle');
         const marker = new maps.Marker({
           position: new maps.LatLng(stop.position.lat, stop.position.lng),
           map: mapInstance.current,
           icon: {
-            content: STOP_MARKER_CONTENT(stop.name, stop.type ?? 'middle'),
-            size: new maps.Size(128, 58),
-            anchor: new maps.Point(64, 43),
+            content: markerContent,
+            size: numberedStops ? new maps.Size(30, 38) : new maps.Size(128, 58),
+            anchor: numberedStops ? new maps.Point(15, 38) : new maps.Point(64, 43),
           },
           zIndex: 10,
         });
         stopMarkersRef.current.push(marker);
       } catch (e) { console.error("정류장 마커 오류:", e); }
     });
-  }, []);
+  }, [numberedStops]);
 
   const updateUserMarker = useCallback((loc: { lat: number; lng: number } | null) => {
     const maps = getNaverMaps();
