@@ -563,20 +563,6 @@ export default function CampusShuttleWrapper() {
               ))}
             </div>
           </div>
-          <AnimatePresence initial={false}>
-            {usingSimulation ? (
-              <motion.div
-                role="status"
-                initial={reduceMotion ? false : { opacity: 0, y: -6 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -6 }}
-                className="mx-4 mt-2 flex items-center justify-center gap-2 rounded-lg border border-amber-200 bg-amber-50/95 px-3 py-2 text-[11px] font-bold text-amber-800 shadow-sm backdrop-blur"
-              >
-                <span className="h-2 w-2 rounded-full bg-amber-500" />
-                학술제 시연 데이터 · 실제 운행 시작 시 자동 전환
-              </motion.div>
-            ) : null}
-          </AnimatePresence>
         </div>
 
         <div

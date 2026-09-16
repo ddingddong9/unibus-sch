@@ -179,7 +179,6 @@ export default function HomeWrapper() {
     [campusStops, clockTick, routePath],
   );
   const displayBuses = activeBuses.length > 0 ? activeBuses : simulation.buses;
-  const usingSimulation = activeBuses.length === 0 && simulation.buses.length > 0;
   const targetStop = nearestStop ?? campusStops[0];
   const arrivalEstimates = useMemo(
     () => estimateStopArrivals(
@@ -280,16 +279,14 @@ export default function HomeWrapper() {
                         <div className="content-stretch flex items-end justify-between pt-[12px] relative shrink-0 w-full">
                           <div className="content-stretch flex flex-col items-start relative shrink-0">
                             <div className="flex flex-col font-['Public_Sans'] font-normal justify-center leading-[0] text-[14px] text-white opacity-80">
-                              <p className="leading-[20px]">
-                                {usingSimulation ? t("학술제 시연", "Festival Demo") : t("운행 현황", "Service Status")}
-                              </p>
+                              <p className="leading-[20px]">{t("운행 현황", "Service Status")}</p>
                             </div>
                             <div className="flex items-center gap-2 mt-1">
                               {isRefreshing && routePath.length === 0 ? (
                                 <span className="font-['Public_Sans'] font-bold text-[16px] text-white/70">{t("확인 중...", "Checking...")}</span>
                               ) : busActive ? (
                                 <>
-                                  <div className={`w-2 h-2 rounded-full animate-pulse ${usingSimulation ? "bg-amber-300" : "bg-[#22c55e]"}`} />
+                                  <div className="w-2 h-2 rounded-full bg-[#22c55e] animate-pulse" />
                                   <div className="flex items-baseline gap-1">
                                     <span className="font-['Public_Sans'] font-black text-[20px] text-white leading-[28px]">
                                       {nextArrival ? `${nextArrival}분` : t("운행 중", "In Service")}
