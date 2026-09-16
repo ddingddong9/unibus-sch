@@ -15,6 +15,7 @@ export interface CampusLoopSimulationBus {
   timestamp: string;
   etaLabel: string;
   isSimulation: true;
+  routeAnimationMode: 'loop' | 'ping-pong';
 }
 
 export interface CampusLoopSimulationResult {
@@ -202,6 +203,7 @@ export function simulateCampusLoop(
       timestamp: new Date(nowMs).toISOString(),
       etaLabel: nextStopEta(distance, projectedStops, route, durationMinutes),
       isSimulation: true as const,
+      routeAnimationMode: 'loop' as const,
     };
   }).sort((left, right) => left.id.localeCompare(right.id));
 
@@ -264,6 +266,7 @@ export function simulateStationShuttle(
     timestamp: new Date(nowMs).toISOString(),
     etaLabel: nextOpenRouteStopEta(distance, direction, projectedStops, route, tripDurationMinutes),
     isSimulation: true,
+    routeAnimationMode: 'ping-pong',
   }];
 
   const stopDepartures = new Map<string, string>();
