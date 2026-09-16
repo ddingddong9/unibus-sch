@@ -6,9 +6,11 @@ interface NaverMapProps {
   buses?: Array<{
     id: string;
     position: { lat: number; lng: number };
-    heading?: number; // [변경] heading 추가
+    heading?: number;
     label: string;
     etaLabel?: string;
+    isSimulation?: boolean;
+    routeAnimationMode?: 'loop' | 'ping-pong';
   }>;
   stops?: Array<{ id: string; name: string; position: { lat: number; lng: number }; type?: 'start' | 'end' | 'middle' }>;
   userLocation?: { lat: number; lng: number } | null;
@@ -84,12 +86,93 @@ const USER_MARKER_CONTENT = () => `
   </div>
 `;
 
-// [변경] RAF 보간 상수
-const INTERP_MS = 520; // 500ms demo updates with a tiny overlap for continuous motion
+const DEFAULT_REALTIME_INTERP_MS = 1_000;
+const MIN_REALTIME_INTERP_MS = 250;
+const MAX_REALTIME_INTERP_MS = 5_500;
+// 시뮬레이션 마커는 실제 GPS 갱신과 무관하게 이 시간 동안 노선을 한 바퀴 돈다.
+// 영상에서도 이동이 명확히 보이되 지도 사용 중에는 지나치게 빠르지 않은 속도다.
+const SIMULATION_LOOP_MS = 120_000;
+const STATION_SHUTTLE_CYCLE_MS = 100_000;
+const HEADING_ICON_UPDATE_MS = 180;
 
-// [변경] cubic ease-in-out (요청 스펙과 동일)
-const easeInOut = (t: number) =>
-  t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+interface RouteSample {
+  position: { lat: number; lng: number };
+  heading: number;
+}
+
+interface RouteAnimationMetric {
+  path: [number, number][];
+  cumulative: number[];
+  total: number;
+  signature: string;
+}
+
+const distanceBetweenRoutePoints = (from: [number, number], to: [number, number]) => {
+  const averageLatitude = ((from[1] + to[1]) / 2) * Math.PI / 180;
+  const x = (to[0] - from[0]) * Math.cos(averageLatitude);
+  const y = to[1] - from[1];
+  return Math.hypot(x, y);
+};
+
+const createRouteAnimationMetric = (
+  routePath: [number, number][],
+  closeRoute: boolean,
+): RouteAnimationMetric | null => {
+  if (routePath.length < 2) return null;
+  const path = [...routePath];
+  const first = path[0];
+  const last = path[path.length - 1];
+  if (closeRoute && distanceBetweenRoutePoints(first, last) > 0.00008) path.push(first);
+
+  const cumulative = [0];
+  for (let index = 1; index < path.length; index += 1) {
+    cumulative.push(cumulative[index - 1] + distanceBetweenRoutePoints(path[index - 1], path[index]));
+  }
+  const total = cumulative[cumulative.length - 1];
+  if (!Number.isFinite(total) || total <= 0) return null;
+  return {
+    path,
+    cumulative,
+    total,
+    signature: `${closeRoute ? 'loop' : 'open'}:${path.length}:${path[0].join(',')}:${path[path.length - 1].join(',')}`,
+  };
+};
+
+const sampleRouteAnimation = (
+  metric: RouteAnimationMetric,
+  distance: number,
+  loop: boolean,
+): RouteSample => {
+  const normalized = loop
+    ? ((distance % metric.total) + metric.total) % metric.total
+    : Math.max(0, Math.min(metric.total, distance));
+  let index = metric.cumulative.findIndex((value) => value >= normalized);
+  if (index <= 0) index = 1;
+  const segmentStart = metric.cumulative[index - 1];
+  const segmentLength = metric.cumulative[index] - segmentStart || 1;
+  const ratio = (normalized - segmentStart) / segmentLength;
+  const [fromLng, fromLat] = metric.path[index - 1];
+  const [toLng, toLat] = metric.path[index];
+  return {
+    position: {
+      lat: fromLat + (toLat - fromLat) * ratio,
+      lng: fromLng + (toLng - fromLng) * ratio,
+    },
+    heading: (Math.atan2(toLng - fromLng, toLat - fromLat) * 180 / Math.PI + 360) % 360,
+  };
+};
+
+const stableBusPhase = (busId: string) => {
+  const numericSlot = Number(busId.match(/(\d+)$/)?.[1]);
+  if (Number.isFinite(numericSlot) && numericSlot > 0) {
+    return ((numericSlot - 1) % 3) / 3;
+  }
+  let hash = 0;
+  for (let index = 0; index < busId.length; index += 1) {
+    hash = (hash * 31 + busId.charCodeAt(index)) >>> 0;
+  }
+  return (hash % 10_000) / 10_000;
+};
 
 export default function NaverMapComponent({
   center = { lat: 36.7694, lng: 126.9322 },
@@ -115,6 +198,8 @@ export default function NaverMapComponent({
   const polylineRef = useRef<any>(null);
   const scriptLoadedRef = useRef<boolean>(false);
   const fitBoundsFrameRef = useRef<number | null>(null);
+  const routeAnimationMetricRef = useRef<RouteAnimationMetric | null>(null);
+  const routeAnimationSourceSignatureRef = useRef('');
 
   const busesRef = useRef(buses);
   busesRef.current = buses;
@@ -197,27 +282,98 @@ export default function NaverMapComponent({
     return { x: cx, y: cy, t, dist: (px - cx) ** 2 + (py - cy) ** 2 };
   }, []);
 
-  // ── [변경] RAF 기반 마커 보간 ──
-  const animateMarker = useCallback((
+  const updateBusMarkerIcon = useCallback((
     marker: any,
-    fromLat: number, fromLng: number, fromHeading: number,
-    toLat: number, toLng: number, toHeading: number,
-    label: string, etaLabel?: string,
+    label: string,
+    heading: number,
+    etaLabel?: string,
+    force = false,
   ) => {
     const nextEtaLabel = etaLabel ?? '';
-    const headingDelta = ((toHeading - fromHeading) % 360 + 540) % 360 - 180;
+    const previousHeading = marker.__heading ?? heading;
+    const headingDelta = ((heading - previousHeading) % 360 + 540) % 360 - 180;
     const labelChanged = marker.__label !== label || marker.__etaLabel !== nextEtaLabel;
-    if (Math.abs(headingDelta) > 5 || labelChanged) {
-      try {
-        marker.setIcon({
-          content: BUS_MARKER_CONTENT(label, Math.round(toHeading), nextEtaLabel),
-          size: new window.naver.maps.Size(104, 78),
-          anchor: new window.naver.maps.Point(52, 78),
-        });
-      } catch (_) {}
-    }
+    if (!force && Math.abs(headingDelta) <= 5 && !labelChanged) return;
+    try {
+      marker.setIcon({
+        content: BUS_MARKER_CONTENT(label, Math.round(heading), nextEtaLabel),
+        size: new window.naver.maps.Size(104, 78),
+        anchor: new window.naver.maps.Point(52, 78),
+      });
+    } catch (_) {}
     marker.__label = label;
     marker.__etaLabel = nextEtaLabel;
+    marker.__heading = heading;
+  }, []);
+
+  const startSimulatedMarkerAnimation = useCallback((
+    marker: any,
+    bus: NonNullable<NaverMapProps['buses']>[number],
+  ) => {
+    let metric = routeAnimationMetricRef.current;
+    const currentRoute = routePathRef.current;
+    const animationMode = bus.routeAnimationMode ?? 'loop';
+    const loop = animationMode === 'loop';
+    const sourceSignature = currentRoute.length > 1
+      ? `${animationMode}:${currentRoute.length}:${currentRoute[0].join(',')}:${currentRoute[currentRoute.length - 1].join(',')}`
+      : '';
+    if (!metric || routeAnimationSourceSignatureRef.current !== sourceSignature) {
+      metric = createRouteAnimationMetric(currentRoute, loop);
+      routeAnimationMetricRef.current = metric;
+      routeAnimationSourceSignatureRef.current = sourceSignature;
+    }
+    if (!metric) return false;
+
+    updateBusMarkerIcon(marker, bus.label, marker.__heading ?? bus.heading ?? 0, bus.etaLabel);
+    marker.__isSimulation = true;
+
+    if (marker.__simRafId && marker.__simRouteSignature === metric.signature) {
+      return true;
+    }
+    if (marker.__animRafId) {
+      cancelAnimationFrame(marker.__animRafId);
+      marker.__animRafId = null;
+    }
+    if (marker.__simRafId) cancelAnimationFrame(marker.__simRafId);
+
+    marker.__simRouteSignature = metric.signature;
+    marker.__lastHeadingIconAt = 0;
+    const phaseOffset = stableBusPhase(bus.id);
+    const cycleDuration = loop ? SIMULATION_LOOP_MS : STATION_SHUTTLE_CYCLE_MS;
+
+    const tick = (now: number) => {
+      const cycleProgress = ((Date.now() / cycleDuration) + phaseOffset) % 1;
+      const forward = loop || cycleProgress < 0.5;
+      const routeProgress = loop
+        ? cycleProgress
+        : forward ? cycleProgress * 2 : (1 - cycleProgress) * 2;
+      const sample = sampleRouteAnimation(metric!, routeProgress * metric!.total, loop);
+      const heading = forward ? sample.heading : (sample.heading + 180) % 360;
+      try {
+        marker.setPosition(new window.naver.maps.LatLng(sample.position.lat, sample.position.lng));
+      } catch (_) {}
+
+      if (now - marker.__lastHeadingIconAt >= HEADING_ICON_UPDATE_MS) {
+        updateBusMarkerIcon(marker, marker.__label ?? bus.label, heading, marker.__etaLabel, false);
+        marker.__lastHeadingIconAt = now;
+      }
+      marker.__simRafId = requestAnimationFrame(tick);
+    };
+
+    // 첫 페인트 전에 올바른 노선 위치로 옮겨 새로고침 시 날아오는 현상을 막는다.
+    tick(performance.now());
+    return true;
+  }, [updateBusMarkerIcon]);
+
+  // 실제 GPS 마커는 최근 수신 간격만큼 선형 보간해 정지-출발 느낌을 줄인다.
+  const animateMarker = useCallback((
+    marker: any,
+    fromLat: number, fromLng: number,
+    toLat: number, toLng: number, toHeading: number,
+    label: string, etaLabel: string | undefined,
+    durationMs: number,
+  ) => {
+    updateBusMarkerIcon(marker, label, toHeading, etaLabel);
 
     // 위치가 같더라도 예상 도착 정보는 위에서 갱신한다.
     if (fromLat === toLat && fromLng === toLng) return;
@@ -284,8 +440,8 @@ export default function NaverMapComponent({
     // [변경] requestAnimationFrame 루프
     const tick = (now: number) => {
       const elapsed = now - startTime;
-      const rawT = Math.min(elapsed / INTERP_MS, 1);
-      const t = easeInOut(rawT);
+      const rawT = Math.min(elapsed / durationMs, 1);
+      const t = rawT;
 
       const segIdx = Math.min(Math.floor(t * segCount), segCount - 1);
       const segT = t * segCount - segIdx;
@@ -307,7 +463,7 @@ export default function NaverMapComponent({
     };
 
     marker.__animRafId = requestAnimationFrame(tick);
-  }, [snapToSegment]);
+  }, [snapToSegment, updateBusMarkerIcon]);
 
   const updateBusMarkers = useCallback(() => {
     const maps = getNaverMaps();
@@ -322,17 +478,36 @@ export default function NaverMapComponent({
     currentBuses.forEach(bus => {
       const existing = existingMap.get(bus.id);
       if (existing) {
+        if (bus.isSimulation && startSimulatedMarkerAnimation(existing, bus)) {
+          existingMap.delete(bus.id);
+          newMarkers.push(existing);
+          return;
+        }
+
+        if (existing.__simRafId) {
+          cancelAnimationFrame(existing.__simRafId);
+          existing.__simRafId = null;
+          existing.__simRouteSignature = null;
+        }
+        existing.__isSimulation = false;
         // [변경] in-flight 이어받기: 현재 마커 위치를 새 출발점으로 사용
         const pos = existing.getPosition();
         const fromLat = pos.lat();
         const fromLng = pos.lng();
-        const fromHeading: number = existing.__heading ?? 0;
+        const now = performance.now();
+        const lastTargetAt = existing.__lastTargetAt ?? (now - DEFAULT_REALTIME_INTERP_MS);
+        const durationMs = Math.max(
+          MIN_REALTIME_INTERP_MS,
+          Math.min(MAX_REALTIME_INTERP_MS, (now - lastTargetAt) * 1.05),
+        );
+        existing.__lastTargetAt = now;
 
         animateMarker(
           existing,
-          fromLat, fromLng, fromHeading,
+          fromLat, fromLng,
           bus.position.lat, bus.position.lng, bus.heading ?? 0,
           bus.label, bus.etaLabel,
+          durationMs,
         );
         existing.__heading = bus.heading ?? 0;
         existingMap.delete(bus.id);
@@ -355,10 +530,14 @@ export default function NaverMapComponent({
           marker.__etaLabel = bus.etaLabel ?? '';
           marker.__heading = bus.heading ?? 0;
           marker.__routeIdx = 0;
-          marker.__animRafId = null; // [변경] RAF ID 초기화
+          marker.__animRafId = null;
+          marker.__simRafId = null;
+          marker.__simRouteSignature = null;
+          marker.__lastTargetAt = performance.now();
           maps.Event.addListener(marker, 'click', () => {
             onBusClickRef.current?.(bus.id);
           });
+          if (bus.isSimulation) startSimulatedMarkerAnimation(marker, bus);
           newMarkers.push(marker);
         } catch (e) { console.error("버스 마커 오류:", e); }
       }
@@ -370,10 +549,14 @@ export default function NaverMapComponent({
         cancelAnimationFrame(m.__animRafId);
         m.__animRafId = null;
       }
+      if (m.__simRafId) {
+        cancelAnimationFrame(m.__simRafId);
+        m.__simRafId = null;
+      }
       try { m.setMap(null); } catch (_) {}
     });
     busMarkersRef.current = newMarkers;
-  }, [animateMarker]);
+  }, [animateMarker, startSimulatedMarkerAnimation]);
 
   const updateStopMarkers = useCallback(() => {
     const maps = getNaverMaps();
@@ -534,6 +717,10 @@ export default function NaverMapComponent({
           cancelAnimationFrame(m.__animRafId);
           m.__animRafId = null;
         }
+        if (m.__simRafId) {
+          cancelAnimationFrame(m.__simRafId);
+          m.__simRafId = null;
+        }
         try { m.setMap(null); } catch (_) {}
       });
       stopMarkersRef.current.forEach(m => { try { m.setMap(null); } catch (_) {} });
@@ -556,11 +743,14 @@ export default function NaverMapComponent({
   }, [stops, updateStopMarkers, requestFitMapToContent]);
   useEffect(() => { updateUserMarker(userLocation ?? null); }, [userLocation, updateUserMarker]);
   useEffect(() => {
+    routeAnimationMetricRef.current = null;
+    routeAnimationSourceSignatureRef.current = '';
     updatePolyline(routePath);
     // 경로 로드 후 정류장 마커를 경로 위에 스냅해서 다시 그림
     updateStopMarkers();
+    updateBusMarkers();
     if (autoFitBoundsRef.current) requestFitMapToContent();
-  }, [routePath, updatePolyline, updateStopMarkers, requestFitMapToContent]);
+  }, [routePath, updatePolyline, updateStopMarkers, updateBusMarkers, requestFitMapToContent]);
 
   useEffect(() => {
     if (autoFitBoundsRef.current) requestFitMapToContent();

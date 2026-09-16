@@ -198,7 +198,8 @@ export default function CampusShuttleWrapper() {
   useEffect(() => {
     if (!pageVisible) return;
     setSimulationTick(Date.now());
-    const timer = window.setInterval(() => setSimulationTick(Date.now()), 500);
+    // 지도 마커 자체가 RAF로 연속 이동하므로 여기서는 ETA/목록 정보만 갱신한다.
+    const timer = window.setInterval(() => setSimulationTick(Date.now()), 1_000);
     return () => window.clearInterval(timer);
   }, [pageVisible]);
 
@@ -412,15 +413,18 @@ export default function CampusShuttleWrapper() {
       : { buses: [], stopDepartures: new Map<string, string>() },
     [mode, routePath, simulationTick, stationStops],
   );
-  const usingCampusSimulation = mode === "campus" && visibleBuses.length === 0;
-  const usingStationSimulation = mode === "station" && visibleBuses.length === 0;
+  // 실제 GPS 좌표 연결 전까지 지도 표시는 노선 기반 연속 애니메이션을 사용한다.
+  // 서버 좌표는 계속 받아 두되 마커 렌더링에는 사용하지 않는다.
+  const usingCampusSimulation = mode === "campus" && routePath.length > 1;
+  const usingStationSimulation = mode === "station" && routePath.length > 1;
   const usingSimulation = usingCampusSimulation || usingStationSimulation;
   const effectiveBuses = useMemo<BusMarker[]>(
     () => {
-      if (visibleBuses.length > 0) return visibleBuses;
-      return mode === "campus" ? campusSimulation.buses : stationSimulation.buses;
+      if (usingCampusSimulation) return campusSimulation.buses;
+      if (usingStationSimulation) return stationSimulation.buses;
+      return visibleBuses;
     },
-    [campusSimulation.buses, mode, stationSimulation.buses, visibleBuses],
+    [campusSimulation.buses, stationSimulation.buses, usingCampusSimulation, usingStationSimulation, visibleBuses],
   );
   const mapStops = useMemo(() => activeStops.map((stop) => ({
     id: stop.id,
