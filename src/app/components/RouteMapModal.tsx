@@ -77,11 +77,11 @@ export default function RouteMapModal({ route, color, onClose, buses = [] }: Rou
   }), [buses, route.duration, route.id, routePath, simulationTick]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center">
+    <div className="fixed inset-0 z-[70] flex items-end justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
       <div
         className="relative bg-white rounded-t-[24px] w-full max-w-[430px] flex flex-col shadow-2xl"
-        style={{ height: "90vh" }}
+        style={{ height: "min(90dvh, 760px)" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
@@ -146,6 +146,7 @@ export default function RouteMapModal({ route, color, onClose, buses = [] }: Rou
                 etaLabel: `${bus.etaMins}분`,
               }))}
               fitBoundsKey={1}
+              numberedStops
             />
           )}
 
@@ -158,7 +159,7 @@ export default function RouteMapModal({ route, color, onClose, buses = [] }: Rou
               {t("정류장 순서", "Stop Order")}
             </p>
           </div>
-          <div className="overflow-y-auto px-[20px] pb-[20px]" style={{ maxHeight: "calc(30vh - 40px)" }}>
+          <div className="overflow-y-auto px-[20px] pb-[calc(20px+env(safe-area-inset-bottom))]" style={{ maxHeight: "calc(30dvh - 40px)" }}>
             {rawStops.length > 0 ? (
               <div>
                 {rawStops.map((stop: any, index: number) => {
