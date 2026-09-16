@@ -195,7 +195,7 @@ export function simulateCampusLoop(
     const sample = sampleRoute(route, distance);
     return {
       id: `campus-simulation-${slot + 1}`,
-      label: `학내순환 시연 ${slot + 1}호`,
+      label: `학내순환 ${slot + 1}호`,
       position: sample.position,
       heading: sample.heading,
       speed: route.totalMeters / (durationMs / 1000),
@@ -257,7 +257,7 @@ export function simulateStationShuttle(
   const sample = sampleRoute(route, distance, false);
   const buses: CampusLoopSimulationBus[] = [{
     id: "station-simulation-1",
-    label: "신창역 셔틀 시연",
+    label: "신창역 셔틀",
     position: sample.position,
     heading: direction === 1 ? sample.heading : (sample.heading + 180) % 360,
     speed: moving ? route.totalMeters / (tripMs / 1000) : 0,

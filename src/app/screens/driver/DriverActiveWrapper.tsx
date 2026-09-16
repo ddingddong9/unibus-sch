@@ -75,7 +75,7 @@ export default function DriverActiveWrapper() {
     }
   }, [bus?.activeTrip?.startedAt]);
 
-  // 실제 운행은 기기 GPS를 사용하고, 시연 모드에서는 배정 노선 위 좌표를 생성한다.
+  // 기본은 기기 GPS를 사용하고, 자동 경로 모드에서는 배정 노선 위 좌표를 생성한다.
   useEffect(() => {
     if (!bus) return;
     let cancelled = false;
@@ -446,7 +446,7 @@ export default function DriverActiveWrapper() {
                   : gpsStatus === "error" ? "text-red-600"
                   : "text-amber-600"}`}
               >
-                {demoGps ? "시연 위치 전송 중"
+                {demoGps ? "자동 경로 전송 중"
                   : gpsStatus === "active" ? "GPS 수신 중"
                   : gpsStatus === "error" ? "GPS 오류"
                   : "GPS 신호 잡는 중..."}
@@ -476,7 +476,7 @@ export default function DriverActiveWrapper() {
                 : "border-[#cbd5e1] bg-white text-[#334155]"
             }`}
           >
-            {demoGps ? "실제 GPS로 전환" : "시연 위치 사용"}
+            {demoGps ? "실제 GPS로 전환" : "자동 경로 사용"}
           </button>
 
           {/* 전송 횟수 */}

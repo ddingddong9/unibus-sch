@@ -183,7 +183,7 @@ export default function CommuterBusWrapper() {
       if (simulation) result[route.id] = {
         ...simulation,
         id: `commuter-simulation-${route.id}`,
-        label: `${route.name} 시연 버스`,
+        label: `${route.name} 운행 버스`,
       };
     });
     return result;
@@ -378,7 +378,7 @@ export default function CommuterBusWrapper() {
                           {liveInfo ? (
                             <span className="flex items-center gap-1 bg-[#22c55e]/10 text-[#16a34a] px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px]">
                               <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#22c55e] animate-pulse motion-reduce:animate-none" />
-                              {liveInfo.isSimulation ? t("시연 운행", "Demo Run") : t("운행 중", "In Service")}
+                              {t("운행 중", "In Service")}
                             </span>
                           ) : !route.isActive ? (
                             <span className="bg-red-50 text-red-400 px-2 py-1 rounded-[4px] font-['Public_Sans'] font-bold text-[10px]">
