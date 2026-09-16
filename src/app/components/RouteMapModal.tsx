@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import NaverMapComponent from "./NaverMapComponent";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
@@ -76,7 +77,7 @@ export default function RouteMapModal({ route, color, onClose, buses = [] }: Rou
     return simulated ? { ...bus, ...simulated } : bus;
   }), [buses, route.duration, route.id, routePath, simulationTick]);
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[70] flex items-end justify-center">
       <div className="absolute inset-0 bg-black/50 backdrop-blur-[2px]" onClick={onClose} />
       <div
@@ -146,6 +147,7 @@ export default function RouteMapModal({ route, color, onClose, buses = [] }: Rou
                 etaLabel: `${bus.etaMins}분`,
               }))}
               fitBoundsKey={1}
+              autoFitBounds
               numberedStops
             />
           )}
@@ -207,6 +209,7 @@ export default function RouteMapModal({ route, color, onClose, buses = [] }: Rou
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
