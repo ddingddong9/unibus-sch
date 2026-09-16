@@ -100,7 +100,7 @@ const MAX_REALTIME_INTERP_MS = 5_500;
 // 시뮬레이션 마커는 실제 GPS 갱신과 무관하게 이 시간 동안 노선을 한 바퀴 돈다.
 // 영상에서도 이동이 명확히 보이되 지도 사용 중에는 지나치게 빠르지 않은 속도다.
 const SIMULATION_LOOP_MS = 120_000;
-const STATION_SHUTTLE_CYCLE_MS = 100_000;
+const OPEN_ROUTE_CYCLE_MS = 100_000;
 const HEADING_ICON_UPDATE_MS = 180;
 
 interface RouteSample {
@@ -348,7 +348,7 @@ export default function NaverMapComponent({
     marker.__simRouteSignature = metric.signature;
     marker.__lastHeadingIconAt = 0;
     const phaseOffset = stableBusPhase(bus.id);
-    const cycleDuration = loop ? SIMULATION_LOOP_MS : STATION_SHUTTLE_CYCLE_MS;
+    const cycleDuration = loop ? SIMULATION_LOOP_MS : OPEN_ROUTE_CYCLE_MS;
 
     const tick = (now: number) => {
       const cycleProgress = ((Date.now() / cycleDuration) + phaseOffset) % 1;
