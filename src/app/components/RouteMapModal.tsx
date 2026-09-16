@@ -2,7 +2,6 @@ import { useMemo, useState, useEffect } from "react";
 import NaverMapComponent from "./NaverMapComponent";
 import { useLanguage } from "../contexts/LanguageContext";
 import { api } from "../services/api";
-import { parseDurationMinutes, simulateCommuterBus } from "../utils/commuterSimulation";
 
 interface RouteMapModalProps {
   route: any;
@@ -25,13 +24,6 @@ export default function RouteMapModal({ route, color, onClose, bus }: RouteMapMo
   const [routePath, setRoutePath] = useState<[number, number][]>([]);
   const [loading, setLoading] = useState(true);
   const [noLocation, setNoLocation] = useState(false);
-  const [simulationTick, setSimulationTick] = useState(() => Date.now());
-
-  useEffect(() => {
-    if (!bus?.isSimulation) return;
-    const timer = window.setInterval(() => setSimulationTick(Date.now()), 500);
-    return () => window.clearInterval(timer);
-  }, [bus?.isSimulation]);
 
   useEffect(() => {
     setLoading(true);
@@ -67,12 +59,6 @@ export default function RouteMapModal({ route, color, onClose, bus }: RouteMapMo
       lng: mapStops.reduce((s, m) => s + m.position.lng, 0) / mapStops.length,
     };
   }, [mapStops]);
-
-  const displayedBus = useMemo(() => {
-    if (!bus) return null;
-    if (!bus.isSimulation || routePath.length < 2) return bus;
-    return simulateCommuterBus(route.id, routePath, simulationTick, parseDurationMinutes(route.duration)) ?? bus;
-  }, [bus, route.duration, route.id, routePath, simulationTick]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center">
@@ -136,12 +122,14 @@ export default function RouteMapModal({ route, color, onClose, bus }: RouteMapMo
               zoom={12}
               stops={mapStops}
               routePath={routePath}
-              buses={displayedBus ? [{
+              buses={bus ? [{
                 id: `commuter-${route.id}`,
                 label: route.name,
-                position: displayedBus.position,
-                heading: displayedBus.heading,
-                etaLabel: `${displayedBus.etaMins}분`,
+                position: bus.position,
+                heading: bus.heading,
+                etaLabel: `${bus.etaMins}분`,
+                isSimulation: routePath.length > 1,
+                routeAnimationMode: 'ping-pong',
               }] : []}
               fitBoundsKey={1}
             />
