@@ -44,6 +44,11 @@ supabase/functions/.env.local
 dist/
 build/
 
+# Spring Boot / Gradle
+.gradle/
+backend/build/
+backend/out/
+
 # Temporary files
 *.tmp
 *.temp
