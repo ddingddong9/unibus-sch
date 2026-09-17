@@ -51,3 +51,5 @@ app:
   naver:
     client-id: ${NAVER_CLIENT_ID:}
     secret-key: ${NAVER_SECRET_KEY:}
+  kakao:
+    user-info-url: ${KAKAO_USER_INFO_URL:https://kapi.kakao.com/v2/user/me}

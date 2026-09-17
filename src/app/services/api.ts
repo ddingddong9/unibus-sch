@@ -41,6 +41,10 @@ const configuredPublicApiBaseUrl = import.meta.env.VITE_PUBLIC_API_BASE_URL?.tri
 const PUBLIC_API_BASE_URL = configuredPublicApiBaseUrl
   ? configuredPublicApiBaseUrl.replace(/\/+$/, '')
   : EDGE_API_BASE_URL;
+const configuredAuthApiBaseUrl = import.meta.env.VITE_AUTH_API_BASE_URL?.trim();
+const AUTH_API_BASE_URL = configuredAuthApiBaseUrl
+  ? configuredAuthApiBaseUrl.replace(/\/+$/, '')
+  : PUBLIC_API_BASE_URL;
 const isDev = import.meta.env.DEV;
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -69,13 +73,14 @@ class ApiClient {
     endpoint: string,
     options: RequestInit = {},
     baseUrl = EDGE_API_BASE_URL,
-    includeAuth = true,
+    includeSupabaseAuthorization = true,
+    includeSessionToken = true,
   ): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
 
-    if (includeAuth) {
+    if (includeSupabaseAuthorization) {
       headers['Authorization'] = `Bearer ${publicAnonKey}`;
     }
 
@@ -84,7 +89,7 @@ class ApiClient {
       headers[key] = value;
     });
 
-    if (includeAuth && this.token) {
+    if (includeSessionToken && this.token) {
       headers['X-Auth-Token'] = this.token;
     }
 
@@ -171,13 +176,17 @@ class ApiClient {
   }
 
   private publicRequest<T>(endpoint: string): Promise<T> {
-    return this.request<T>(endpoint, {}, PUBLIC_API_BASE_URL, false);
+    return this.request<T>(endpoint, {}, PUBLIC_API_BASE_URL, false, false);
+  }
+
+  private authRequest<T>(endpoint: string, options: RequestInit, includeSessionToken = false): Promise<T> {
+    return this.request<T>(endpoint, options, AUTH_API_BASE_URL, false, includeSessionToken);
   }
 
   // ============ AUTH ENDPOINTS ============
 
   async signup(data: SignupRequest): Promise<{ user: User }> {
-    const response = await this.request<ApiResponse<{ user: User }>>('/auth/signup', {
+    const response = await this.authRequest<ApiResponse<{ user: User }>>('/auth/signup', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -189,7 +198,7 @@ class ApiClient {
   }
 
   async login(email: string, password: string): Promise<{ token: string; user: User }> {
-    const data = await this.request<ApiResponse>('/auth/login', {
+    const data = await this.authRequest<ApiResponse>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
     });
@@ -202,7 +211,7 @@ class ApiClient {
   }
 
   async kakaoLogin(kakaoId: string, accessToken: string, email?: string, name?: string, profileImage?: string): Promise<{ token: string; user: User }> {
-    const data = await this.request<ApiResponse>('/auth/kakao', {
+    const data = await this.authRequest<ApiResponse>('/auth/kakao', {
       method: 'POST',
       body: JSON.stringify({ kakaoId, accessToken, email, name, profileImage }),
     });
@@ -216,9 +225,9 @@ class ApiClient {
 
   async logout(): Promise<void> {
     try {
-      await this.request('/auth/logout', {
+      await this.authRequest('/auth/logout', {
         method: 'POST',
-      });
+      }, true);
     } finally {
       this.setToken(null);
       localStorage.removeItem('user');

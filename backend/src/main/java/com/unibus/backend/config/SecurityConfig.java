@@ -6,6 +6,8 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 
 @Configuration
@@ -34,8 +36,20 @@ public class SecurityConfig {
                     "/buses/*",
                     "/buses/locations/latest"
                 ).permitAll()
+                .requestMatchers(
+                    HttpMethod.POST,
+                    "/auth/signup",
+                    "/auth/login",
+                    "/auth/kakao",
+                    "/auth/logout"
+                ).permitAll()
                 .anyRequest().denyAll()
             )
             .build();
+    }
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder(BCryptPasswordEncoder.BCryptVersion.$2B, 10);
     }
 }
