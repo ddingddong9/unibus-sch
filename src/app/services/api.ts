@@ -36,7 +36,11 @@ type RouteMutationPayload = Omit<Partial<BusRoute>, 'stops'> & {
 };
 
 const SUPABASE_URL = supabaseUrl;
-const API_BASE_URL = `${SUPABASE_URL}/functions/v1/make-server`;
+const EDGE_API_BASE_URL = `${SUPABASE_URL}/functions/v1/make-server`;
+const configuredPublicApiBaseUrl = import.meta.env.VITE_PUBLIC_API_BASE_URL?.trim();
+const PUBLIC_API_BASE_URL = configuredPublicApiBaseUrl
+  ? configuredPublicApiBaseUrl.replace(/\/+$/, '')
+  : EDGE_API_BASE_URL;
 const isDev = import.meta.env.DEV;
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -63,23 +67,28 @@ class ApiClient {
 
   private async request<T>(
     endpoint: string,
-    options: RequestInit = {}
+    options: RequestInit = {},
+    baseUrl = EDGE_API_BASE_URL,
+    includeAuth = true,
   ): Promise<T> {
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
-      'Authorization': `Bearer ${publicAnonKey}`,
     };
+
+    if (includeAuth) {
+      headers['Authorization'] = `Bearer ${publicAnonKey}`;
+    }
 
     const optionHeaders = new Headers(options.headers);
     optionHeaders.forEach((value, key) => {
       headers[key] = value;
     });
 
-    if (this.token) {
+    if (includeAuth && this.token) {
       headers['X-Auth-Token'] = this.token;
     }
 
-    const url = `${API_BASE_URL}${endpoint}`;
+    const url = `${baseUrl}${endpoint}`;
     if (isDev) console.log(`[API] ${options.method || 'GET'} ${url}`);
 
     const requestController = new AbortController();
@@ -161,6 +170,10 @@ class ApiClient {
     }
   }
 
+  private publicRequest<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint, {}, PUBLIC_API_BASE_URL, false);
+  }
+
   // ============ AUTH ENDPOINTS ============
 
   async signup(data: SignupRequest): Promise<{ user: User }> {
@@ -215,7 +228,7 @@ class ApiClient {
   // ============ NOTICE ENDPOINTS ============
 
   async getNotices(): Promise<Notice[]> {
-    const response = await this.request<ApiResponse<Notice[]>>('/notices');
+    const response = await this.publicRequest<ApiResponse<Notice[]>>('/notices');
     
     if (response.success && response.data) {
       return response.data;
@@ -224,7 +237,7 @@ class ApiClient {
   }
 
   async getNotice(id: string): Promise<Notice> {
-    const response = await this.request<ApiResponse<Notice>>(`/notices/${id}`);
+    const response = await this.publicRequest<ApiResponse<Notice>>(`/notices/${id}`);
     
     if (response.success && response.data) {
       return response.data;
@@ -278,7 +291,7 @@ class ApiClient {
       headers['X-Auth-Token'] = this.token;
     }
 
-    const res = await fetch(`${API_BASE_URL}/notices/images`, {
+    const res = await fetch(`${EDGE_API_BASE_URL}/notices/images`, {
       method: 'POST',
       headers,
       body: form,
@@ -347,7 +360,7 @@ class ApiClient {
   // ============ ROUTE ENDPOINTS ============
 
   async getRoutes(): Promise<BusRoute[]> {
-    const response = await this.request<ApiResponse<BusRoute[]>>('/routes');
+    const response = await this.publicRequest<ApiResponse<BusRoute[]>>('/routes');
     if (response.success && response.data) {
       return response.data;
     }
@@ -355,7 +368,7 @@ class ApiClient {
   }
 
   async getRoute(id: string): Promise<BusRoute> {
-    const response = await this.request<ApiResponse<BusRoute>>(`/routes/${id}`);
+    const response = await this.publicRequest<ApiResponse<BusRoute>>(`/routes/${id}`);
     if (response.success && response.data) {
       return response.data;
     }
@@ -363,7 +376,7 @@ class ApiClient {
   }
 
   async getRoutePath(id: string): Promise<{ stops: Array<{ id: string; name: string; order: number; lat: number | null; lng: number | null }>; shapePoints?: Array<{ id: string; name?: string | null; afterStopOrder: number; order: number; lat: number; lng: number }>; path: [number, number][] }> {
-    const response = await this.request<ApiResponse<any>>(`/routes/${id}/path`);
+    const response = await this.publicRequest<ApiResponse<any>>(`/routes/${id}/path`);
     if (response.success && response.data) {
       return response.data;
     }
@@ -421,7 +434,7 @@ class ApiClient {
   // ============ BUS ENDPOINTS ============
 
   async getBuses(): Promise<any[]> {
-    const response = await this.request<ApiResponse<any[]>>('/buses');
+    const response = await this.publicRequest<ApiResponse<any[]>>('/buses');
     if (response.success && response.data) {
       return response.data;
     }
@@ -429,7 +442,7 @@ class ApiClient {
   }
 
   async getBus(id: string): Promise<any> {
-    const response = await this.request<ApiResponse<any>>(`/buses/${id}`);
+    const response = await this.publicRequest<ApiResponse<any>>(`/buses/${id}`);
     if (response.success && response.data) {
       return response.data;
     }
@@ -468,11 +481,19 @@ class ApiClient {
   }
 
   async getBusLocations(): Promise<Array<{ busId: string; lat: number; lng: number; speed: number; heading: number; timestamp: string }>> {
-    const response = await this.request<ApiResponse<any[]>>('/buses/locations/latest');
+    const response = await this.publicRequest<ApiResponse<any[]>>('/buses/locations/latest');
     if (response.success && response.data) {
       return response.data;
     }
     throw new Error(response.error || 'Failed to fetch bus locations');
+  }
+
+  async getManagedBuses(): Promise<any[]> {
+    const response = await this.request<ApiResponse<any[]>>('/buses');
+    if (response.success && response.data) {
+      return response.data;
+    }
+    throw new Error(response.error || 'Failed to fetch buses');
   }
 
   async updateBusLocation(busId: string, location: { lat: number; lng: number; speed?: number; heading?: number }): Promise<void> {

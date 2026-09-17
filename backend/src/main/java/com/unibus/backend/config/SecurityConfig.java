@@ -2,6 +2,7 @@ package com.unibus.backend.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -17,7 +18,22 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/health", "/actuator/health", "/actuator/health/**").permitAll()
+                .requestMatchers(
+                    "/health",
+                    "/actuator/health",
+                    "/actuator/health/**"
+                ).permitAll()
+                .requestMatchers(
+                    HttpMethod.GET,
+                    "/notices",
+                    "/notices/*",
+                    "/routes",
+                    "/routes/*",
+                    "/routes/*/path",
+                    "/buses",
+                    "/buses/*",
+                    "/buses/locations/latest"
+                ).permitAll()
                 .anyRequest().denyAll()
             )
             .build();

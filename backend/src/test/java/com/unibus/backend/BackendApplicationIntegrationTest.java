@@ -15,13 +15,15 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.postgresql.PostgreSQLContainer;
+import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 class BackendApplicationIntegrationTest {
 
     @Container
-    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer("postgres:15-alpine");
+    static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
+            DockerImageName.parse("postgres:15-alpine"));
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
@@ -56,7 +58,7 @@ class BackendApplicationIntegrationTest {
 
     @Test
     void deniesRoutesThatHaveNotBeenMigratedYet() throws Exception {
-        HttpResponse<String> response = send("/notices", null);
+        HttpResponse<String> response = send("/users", null);
 
         assertThat(response.statusCode()).isEqualTo(403);
     }

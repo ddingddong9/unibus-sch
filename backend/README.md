@@ -1,6 +1,6 @@
 # UniBus Spring Boot backend
 
-This directory is the isolated replacement for `supabase/functions/make-server`. Phase 1 only establishes the runtime, database safety settings, health checks, tests, and Docker packaging. No production API route has been migrated yet.
+This directory is the isolated replacement for `supabase/functions/make-server`. Phase 1 established the runtime and test environment. Phase 2 migrates the public notice, route, and bus read APIs while authenticated and mutation APIs remain on the Edge Function.
 
 ## Requirements
 
@@ -28,6 +28,14 @@ export SUPABASE_DB_PASSWORD='postgres'
 ```
 
 `GET http://localhost:8080/health` is the compatibility health endpoint. `GET /actuator/health` is used by Docker and infrastructure health checks.
+
+Point the frontend's public reads at Spring while keeping all other requests on Supabase Edge Functions:
+
+```bash
+VITE_PUBLIC_API_BASE_URL=http://localhost:8080 npm run dev
+```
+
+The migrated endpoints are documented in [`docs/public-api-contract.md`](docs/public-api-contract.md).
 
 ## Test and build
 
@@ -61,10 +69,11 @@ docker compose up --build
 
 Production credentials must be supplied as runtime environment variables. Do not bake them into the image or commit an `.env` file.
 
-## Phase 1 safety boundaries
+## Migration safety boundaries
 
-- Only `/health` and Actuator health endpoints are public.
-- Every not-yet-migrated route is denied by Spring Security.
+- Only health and the documented public GET endpoints are public.
+- Every not-yet-migrated route and every mutation method is denied by Spring Security.
 - The datasource is required and Hibernate cannot mutate the schema.
 - Request bodies with a declared size above 6 MiB are rejected, matching the Edge Function boundary.
 - Existing Supabase Realtime and Storage clients remain unchanged.
+- Notice detail view-count increments and route path coordinate/cache updates preserve existing Edge behavior. Contract tests exercise those writes only in an isolated PostgreSQL container.

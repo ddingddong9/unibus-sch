@@ -22,8 +22,6 @@ spring:
   sql:
     init:
       mode: never
-  jackson:
-    default-property-inclusion: non_null
   lifecycle:
     timeout-per-shutdown-phase: 20s
   servlet:
@@ -50,3 +48,6 @@ management:
 app:
   cors:
     allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
+  naver:
+    client-id: ${NAVER_CLIENT_ID:}
+    secret-key: ${NAVER_SECRET_KEY:}
