@@ -45,6 +45,10 @@ const configuredAuthApiBaseUrl = import.meta.env.VITE_AUTH_API_BASE_URL?.trim();
 const AUTH_API_BASE_URL = configuredAuthApiBaseUrl
   ? configuredAuthApiBaseUrl.replace(/\/+$/, '')
   : PUBLIC_API_BASE_URL;
+const configuredAdminApiBaseUrl = import.meta.env.VITE_ADMIN_API_BASE_URL?.trim();
+const ADMIN_API_BASE_URL = configuredAdminApiBaseUrl
+  ? configuredAdminApiBaseUrl.replace(/\/+$/, '')
+  : AUTH_API_BASE_URL;
 const isDev = import.meta.env.DEV;
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -183,6 +187,10 @@ class ApiClient {
     return this.request<T>(endpoint, options, AUTH_API_BASE_URL, false, includeSessionToken);
   }
 
+  private adminRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    return this.request<T>(endpoint, options, ADMIN_API_BASE_URL, false, true);
+  }
+
   // ============ AUTH ENDPOINTS ============
 
   async signup(data: SignupRequest): Promise<{ user: User }> {
@@ -255,7 +263,7 @@ class ApiClient {
   }
 
   async createNotice(notice: Partial<Notice>): Promise<Notice> {
-    const response = await this.request<ApiResponse<Notice>>('/notices', {
+    const response = await this.adminRequest<ApiResponse<Notice>>('/notices', {
       method: 'POST',
       body: JSON.stringify(notice),
     });
@@ -267,7 +275,7 @@ class ApiClient {
   }
 
   async updateNotice(id: string, updates: Partial<Notice>): Promise<Notice> {
-    const response = await this.request<ApiResponse<Notice>>(`/notices/${id}`, {
+    const response = await this.adminRequest<ApiResponse<Notice>>(`/notices/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
@@ -279,7 +287,7 @@ class ApiClient {
   }
 
   async deleteNotice(id: string): Promise<void> {
-    const response = await this.request<ApiResponse>(`/notices/${id}`, {
+    const response = await this.adminRequest<ApiResponse>(`/notices/${id}`, {
       method: 'DELETE',
     });
     
@@ -292,15 +300,13 @@ class ApiClient {
     const form = new FormData();
     form.append('file', file);
 
-    const headers: Record<string, string> = {
-      'Authorization': `Bearer ${publicAnonKey}`,
-    };
+    const headers: Record<string, string> = {};
 
     if (this.token) {
       headers['X-Auth-Token'] = this.token;
     }
 
-    const res = await fetch(`${EDGE_API_BASE_URL}/notices/images`, {
+    const res = await fetch(`${ADMIN_API_BASE_URL}/notices/images`, {
       method: 'POST',
       headers,
       body: form,
@@ -343,7 +349,7 @@ class ApiClient {
   }
 
   async sendNotification(data: { title: string; message: string; target: string }): Promise<{ notice: Notice; push: { attempted: number; sent: number; failed: number } }> {
-    const response = await this.request<ApiResponse<{ notice: Notice; push: { attempted: number; sent: number; failed: number } }>>('/notifications/send', {
+    const response = await this.adminRequest<ApiResponse<{ notice: Notice; push: { attempted: number; sent: number; failed: number } }>>('/notifications/send', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -352,7 +358,7 @@ class ApiClient {
   }
 
   async sendNoticePush(noticeId: string, target: NotificationDelivery['target']): Promise<{ attempted: number; sent: number; failed: number }> {
-    const response = await this.request<ApiResponse<{ attempted: number; sent: number; failed: number }>>('/notifications/send-existing', {
+    const response = await this.adminRequest<ApiResponse<{ attempted: number; sent: number; failed: number }>>('/notifications/send-existing', {
       method: 'POST',
       body: JSON.stringify({ noticeId, target }),
     });
@@ -361,7 +367,7 @@ class ApiClient {
   }
 
   async getNotificationHistory(): Promise<NotificationDelivery[]> {
-    const response = await this.request<ApiResponse<NotificationDelivery[]>>('/notifications/history');
+    const response = await this.adminRequest<ApiResponse<NotificationDelivery[]>>('/notifications/history');
     if (response.success && response.data) return response.data;
     throw new Error(response.error || 'Failed to fetch notification history');
   }
@@ -399,7 +405,7 @@ class ApiClient {
       shapePoints: Array<{ id?: string; name?: string | null; afterStopOrder: number; order: number; lat: number; lng: number }>;
     }
   ): Promise<{ path: [number, number][] }> {
-    const response = await this.request<ApiResponse<{ path: [number, number][] }>>(`/routes/${id}/path/preview`, {
+    const response = await this.adminRequest<ApiResponse<{ path: [number, number][] }>>(`/routes/${id}/path/preview`, {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -410,7 +416,7 @@ class ApiClient {
   }
 
   async createRoute(route: RouteMutationPayload): Promise<BusRoute> {
-    const response = await this.request<ApiResponse<BusRoute>>('/routes', {
+    const response = await this.adminRequest<ApiResponse<BusRoute>>('/routes', {
       method: 'POST',
       body: JSON.stringify(route),
     });
@@ -421,7 +427,7 @@ class ApiClient {
   }
 
   async updateRoute(id: string, updates: RouteMutationPayload): Promise<BusRoute> {
-    const response = await this.request<ApiResponse<BusRoute>>(`/routes/${id}`, {
+    const response = await this.adminRequest<ApiResponse<BusRoute>>(`/routes/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
@@ -432,7 +438,7 @@ class ApiClient {
   }
 
   async deleteRoute(id: string): Promise<void> {
-    const response = await this.request<ApiResponse>(`/routes/${id}`, {
+    const response = await this.adminRequest<ApiResponse>(`/routes/${id}`, {
       method: 'DELETE',
     });
     if (!response.success) {
@@ -459,7 +465,7 @@ class ApiClient {
   }
 
   async createBus(bus: { name: string; type: string; capacity?: number; licensePlate?: string; routeId?: string }): Promise<any> {
-    const response = await this.request<ApiResponse<any>>('/buses', {
+    const response = await this.adminRequest<ApiResponse<any>>('/buses', {
       method: 'POST',
       body: JSON.stringify(bus),
     });
@@ -470,7 +476,7 @@ class ApiClient {
   }
 
   async updateBus(id: string, updates: Partial<{ name: string; type: string; capacity: number; licensePlate: string; status: string; currentRouteId: string | null; assignedDriverId: string | null; isRunning: boolean }>): Promise<any> {
-    const response = await this.request<ApiResponse<any>>(`/buses/${id}`, {
+    const response = await this.adminRequest<ApiResponse<any>>(`/buses/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
@@ -481,7 +487,7 @@ class ApiClient {
   }
 
   async deleteBus(id: string): Promise<void> {
-    const response = await this.request<ApiResponse>(`/buses/${id}`, {
+    const response = await this.adminRequest<ApiResponse>(`/buses/${id}`, {
       method: 'DELETE',
     });
     if (!response.success) {
@@ -498,7 +504,7 @@ class ApiClient {
   }
 
   async getManagedBuses(): Promise<any[]> {
-    const response = await this.request<ApiResponse<any[]>>('/buses');
+    const response = await this.adminRequest<ApiResponse<any[]>>('/buses');
     if (response.success && response.data) {
       return response.data;
     }
@@ -516,7 +522,7 @@ class ApiClient {
   }
 
   async forceStopBus(busId: string, reason = '관리자 강제 종료'): Promise<void> {
-    const response = await this.request<ApiResponse>(`/buses/${busId}/force-stop`, {
+    const response = await this.adminRequest<ApiResponse>(`/buses/${busId}/force-stop`, {
       method: 'POST',
       body: JSON.stringify({ reason }),
     });
@@ -536,13 +542,13 @@ class ApiClient {
 
   async getReports(status?: ReportStatus): Promise<UserReport[]> {
     const query = status ? `?status=${encodeURIComponent(status)}` : '';
-    const response = await this.request<ApiResponse<UserReport[]>>(`/reports${query}`);
+    const response = await this.adminRequest<ApiResponse<UserReport[]>>(`/reports${query}`);
     if (response.success && response.data) return response.data;
     throw new Error(response.error || 'Failed to fetch reports');
   }
 
   async updateReport(id: string, updates: Partial<{ status: ReportStatus; adminNote: string }>): Promise<UserReport> {
-    const response = await this.request<ApiResponse<UserReport>>(`/reports/${id}`, {
+    const response = await this.adminRequest<ApiResponse<UserReport>>(`/reports/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
@@ -553,13 +559,13 @@ class ApiClient {
   // ============ USER MANAGEMENT ENDPOINTS (Admin) ============
 
   async getUsers(): Promise<any[]> {
-    const response = await this.request<ApiResponse<any[]>>('/users');
+    const response = await this.adminRequest<ApiResponse<any[]>>('/users');
     if (response.success && response.data) return response.data;
     throw new Error(response.error || 'Failed to fetch users');
   }
 
   async updateUser(userId: string, updates: Partial<{ name: string }>): Promise<any> {
-    const response = await this.request<ApiResponse<any>>(`/users/${userId}`, {
+    const response = await this.adminRequest<ApiResponse<any>>(`/users/${userId}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
@@ -568,7 +574,7 @@ class ApiClient {
   }
 
   async updateUserRole(userId: string, role: 'user' | 'admin' | 'driver'): Promise<void> {
-    const response = await this.request<ApiResponse>(`/users/${userId}/role`, {
+    const response = await this.adminRequest<ApiResponse>(`/users/${userId}/role`, {
       method: 'PUT',
       body: JSON.stringify({ role }),
     });

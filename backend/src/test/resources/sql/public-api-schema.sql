@@ -73,10 +73,15 @@ CREATE TABLE buses (
     id VARCHAR(20) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(20) NOT NULL,
+    license_plate VARCHAR(30),
+    current_driver_id UUID REFERENCES users(id),
+    assigned_driver_id UUID REFERENCES users(id),
     capacity INTEGER,
     status VARCHAR(20),
     is_running BOOLEAN,
-    current_route_id UUID REFERENCES routes(id)
+    current_route_id UUID REFERENCES routes(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 CREATE TABLE bus_trips (

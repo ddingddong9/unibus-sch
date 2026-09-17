@@ -23,6 +23,10 @@ dependencies {
     implementation("org.springframework.boot:spring-boot-starter-security")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("nl.martijndwars:web-push:5.1.2")
+    implementation("org.bouncycastle:bcprov-jdk18on:1.86")
+    implementation("org.apache.httpcomponents:httpclient:4.5.14")
+    implementation("org.bitbucket.b_c:jose4j:0.9.6")
     runtimeOnly("org.postgresql:postgresql")
 
     annotationProcessor("org.springframework.boot:spring-boot-configuration-processor:4.1.1")

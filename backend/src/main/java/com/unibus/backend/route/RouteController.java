@@ -9,9 +9,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import com.unibus.backend.common.api.ApiRequestException;
+import tools.jackson.databind.JsonNode;
 
 @RestController
 @RequestMapping("/routes")
@@ -19,9 +25,61 @@ public class RouteController {
 
     private static final Logger log = LoggerFactory.getLogger(RouteController.class);
     private final RouteService routeService;
+    private final RouteAdminService routeAdminService;
 
-    public RouteController(RouteService routeService) {
+    public RouteController(RouteService routeService, RouteAdminService routeAdminService) {
         this.routeService = routeService;
+        this.routeAdminService = routeAdminService;
+    }
+
+    @PostMapping
+    ResponseEntity<?> create(@RequestBody(required = false) JsonNode body) {
+        try {
+            return ResponseEntity.ok(ApiResponse.success(routeAdminService.create(body)));
+        } catch (ApiRequestException error) {
+            return ResponseEntity.status(error.status()).body(ApiResponse.error(error.getMessage()));
+        } catch (RuntimeException error) {
+            log.error("Failed to create route", error);
+            return ResponseEntity.internalServerError().body(ApiResponse.error("Failed to create route"));
+        }
+    }
+
+    @PutMapping("/{id}")
+    ResponseEntity<?> update(@PathVariable String id, @RequestBody(required = false) JsonNode body) {
+        try {
+            return ResponseEntity.ok(ApiResponse.success(routeAdminService.update(id, body)));
+        } catch (ApiRequestException error) {
+            return ResponseEntity.status(error.status()).body(ApiResponse.error(error.getMessage()));
+        } catch (RuntimeException error) {
+            log.error("Failed to update route", error);
+            return ResponseEntity.internalServerError().body(ApiResponse.error("Failed to update route"));
+        }
+    }
+
+    @DeleteMapping("/{id}")
+    ResponseEntity<?> delete(@PathVariable String id) {
+        try {
+            routeAdminService.delete(id);
+            return ResponseEntity.ok(new DeleteResponse(true, "Route deleted successfully"));
+        } catch (ApiRequestException error) {
+            return ResponseEntity.status(error.status()).body(ApiResponse.error(error.getMessage()));
+        } catch (RuntimeException error) {
+            log.error("Failed to delete route", error);
+            return ResponseEntity.internalServerError().body(ApiResponse.error("Failed to delete route"));
+        }
+    }
+
+    @PostMapping("/{id}/path/preview")
+    ResponseEntity<?> preview(@PathVariable String id, @RequestBody(required = false) JsonNode body) {
+        try {
+            return ResponseEntity.ok(ApiResponse.success(routeAdminService.preview(body)));
+        } catch (RuntimeException error) {
+            log.error("Failed to preview route path", error);
+            return ResponseEntity.internalServerError().body(ApiResponse.error("Failed to preview route path"));
+        }
+    }
+
+    private record DeleteResponse(boolean success, String message) {
     }
 
     @GetMapping

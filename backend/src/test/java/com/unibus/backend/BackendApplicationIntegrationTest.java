@@ -57,10 +57,11 @@ class BackendApplicationIntegrationTest {
     }
 
     @Test
-    void deniesRoutesThatHaveNotBeenMigratedYet() throws Exception {
+    void protectsMigratedAdminRoutes() throws Exception {
         HttpResponse<String> response = send("/users", null);
 
-        assertThat(response.statusCode()).isEqualTo(403);
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(response.body()).isEqualTo("{\"error\":\"Unauthorized: No token provided\"}");
     }
 
     private HttpResponse<String> send(String path, String origin) throws Exception {

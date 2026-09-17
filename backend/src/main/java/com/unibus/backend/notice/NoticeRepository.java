@@ -7,8 +7,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Map;
 
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -23,9 +26,11 @@ class NoticeRepository {
         """;
 
     private final JdbcTemplate jdbcTemplate;
+    private final NamedParameterJdbcTemplate namedJdbcTemplate;
 
     NoticeRepository(JdbcTemplate jdbcTemplate) {
         this.jdbcTemplate = jdbcTemplate;
+        this.namedJdbcTemplate = new NamedParameterJdbcTemplate(jdbcTemplate);
     }
 
     List<NoticeResponse> findAll() {
@@ -45,6 +50,45 @@ class NoticeRepository {
 
     void incrementViewCount(UUID id, int nextViewCount) {
         jdbcTemplate.update("UPDATE notices SET view_count = ? WHERE id = ?", nextViewCount, id);
+    }
+
+    NoticeResponse insert(
+        UUID authorId,
+        String title,
+        String content,
+        String category,
+        String priority,
+        boolean pinned,
+        List<String> imageUrls,
+        String contentBelow
+    ) {
+        UUID id = jdbcTemplate.queryForObject("""
+            INSERT INTO notices (
+                title, content, category, priority, author_id, is_pinned, image_urls, content_below
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING id
+            """, UUID.class, title, content, category, priority, authorId, pinned,
+            imageUrls.toArray(String[]::new), contentBelow);
+        return findById(id).orElseThrow();
+    }
+
+    Optional<NoticeResponse> update(UUID id, Map<String, Object> updates) {
+        if (updates.isEmpty()) {
+            return findById(id);
+        }
+        String assignments = String.join(", ", updates.keySet().stream()
+            .map(column -> column + " = :" + column)
+            .toList());
+        MapSqlParameterSource parameters = new MapSqlParameterSource(updates).addValue("id", id);
+        namedJdbcTemplate.update(
+            "UPDATE notices SET " + assignments + ", updated_at = NOW() WHERE id = :id",
+            parameters
+        );
+        return findById(id);
+    }
+
+    boolean delete(UUID id) {
+        return jdbcTemplate.update("DELETE FROM notices WHERE id = ?", id) > 0;
     }
 
     private NoticeResponse mapNotice(java.sql.ResultSet resultSet) throws SQLException {

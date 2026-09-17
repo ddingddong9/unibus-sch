@@ -21,6 +21,14 @@ final class BusResponses {
     ) {
     }
 
+    record ManagedListItem(
+        String id, String name, String type, Integer capacity, String status, Boolean isRunning,
+        CurrentRoute currentRoute, ActiveTrip activeTrip, Location location, OffsetDateTime lastLocationAt,
+        String licensePlate, String currentDriverId, String currentDriverName,
+        String assignedDriverId, String assignedDriverName, OffsetDateTime createdAt, OffsetDateTime updatedAt
+    ) {
+    }
+
     record Detail(
         String id,
         String name,
@@ -30,6 +38,14 @@ final class BusResponses {
         Boolean isRunning,
         CurrentRoute currentRoute,
         Location location
+    ) {
+    }
+
+    record ManagedDetail(
+        String id, String name, String type, Integer capacity, String status, Boolean isRunning,
+        CurrentRoute currentRoute, Location location, String licensePlate, String currentDriverId,
+        String currentDriverName, String assignedDriverId, String assignedDriverName,
+        OffsetDateTime createdAt, OffsetDateTime updatedAt
     ) {
     }
 

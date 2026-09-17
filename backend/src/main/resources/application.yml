@@ -53,3 +53,11 @@ app:
     secret-key: ${NAVER_SECRET_KEY:}
   kakao:
     user-info-url: ${KAKAO_USER_INFO_URL:https://kapi.kakao.com/v2/user/me}
+  supabase:
+    api-url: ${SUPABASE_API_URL:}
+    service-role-key: ${SUPABASE_SERVICE_ROLE_KEY:}
+  push:
+    vapid-public-key: ${VAPID_PUBLIC_KEY:}
+    vapid-private-key: ${VAPID_PRIVATE_KEY:}
+    vapid-subject: ${VAPID_SUBJECT:mailto:admin@sch.ac.kr}
+    allowed-hosts: ${PUSH_ALLOWED_HOSTS:}

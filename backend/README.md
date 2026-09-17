@@ -1,6 +1,6 @@
 # UniBus Spring Boot backend
 
-This directory is the isolated replacement for `supabase/functions/make-server`. Phase 1 established the runtime and test environment. Phase 2 migrated the public notice, route, and bus read APIs. Phase 3 migrates signup, local login, Kakao login, logout, and the shared session-token implementation. Authenticated business APIs and mutations remain on the Edge Function.
+This directory is the isolated replacement for `supabase/functions/make-server`. Phase 1 established the runtime and test environment. Phase 2 migrated the public notice, route, and bus read APIs. Phase 3 migrated authentication and shared sessions. Phase 4 migrates administrator-only notice, route, bus, user, report, and notification APIs. Driver and ordinary-user business APIs remain on the Edge Function.
 
 ## Requirements
 
@@ -34,11 +34,13 @@ Point the frontend's public reads at Spring while keeping all other requests on 
 ```bash
 VITE_PUBLIC_API_BASE_URL=http://localhost:8080 \
 VITE_AUTH_API_BASE_URL=http://localhost:8080 \
+VITE_ADMIN_API_BASE_URL=http://localhost:8080 \
 npm run dev
 ```
 
 The migrated endpoints are documented in [`docs/public-api-contract.md`](docs/public-api-contract.md)
 and [`docs/auth-api-contract.md`](docs/auth-api-contract.md).
+Administrator endpoints are documented in [`docs/admin-api-contract.md`](docs/admin-api-contract.md).
 
 ## Test and build
 
@@ -81,3 +83,5 @@ Production credentials must be supplied as runtime environment variables. Do not
 - Existing Supabase Realtime and Storage clients remain unchanged.
 - Notice detail view-count increments and route path coordinate/cache updates preserve existing Edge behavior. Contract tests exercise those writes only in an isolated PostgreSQL container.
 - Passwords remain bcrypt `$2b$` cost 10. Session tokens remain compatible in both directions: clients receive a 32-byte base64url token while PostgreSQL stores its `sha256:` digest. Legacy plaintext session rows are upgraded when Spring validates them.
+- Notice image uploads continue to use Supabase Storage through its REST API. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
+- Web Push uses the existing VAPID keys and validates subscription endpoint hosts before making outbound requests.

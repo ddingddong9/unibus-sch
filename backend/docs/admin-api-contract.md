@@ -1,0 +1,32 @@
+# Administrator API migration contract
+
+This contract was derived from every Edge Function route guarded by `requireAdmin`.
+Spring continues to use the existing `X-Auth-Token` session rows and preserves the
+Edge permission errors:
+
+| Condition | Status | JSON |
+| --- | --- | --- |
+| Header absent | `401` | `{ "error": "Unauthorized: No token provided" }` |
+| Token invalid | `401` | `{ "error": "Unauthorized: Invalid token" }` |
+| Token expired | `401` | `{ "error": "Unauthorized: Token expired" }` |
+| User is not an administrator | `403` | `{ "error": "Forbidden: Admin access required" }` |
+
+Migrated endpoints:
+
+- Notices: `POST /notices`, `POST /notices/images`, `PUT /notices/{id}`, `DELETE /notices/{id}`
+- Routes: `POST /routes`, `POST /routes/{id}/path/preview`, `PUT /routes/{id}`, `DELETE /routes/{id}`
+- Buses: `POST /buses`, `PUT /buses/{id}`, `POST /buses/{id}/force-stop`, `DELETE /buses/{id}`
+- Managed bus reads: `GET /buses`, `GET /buses/{id}` include private fields only for a valid admin token
+- Users: `GET /users`, `PUT /users/{id}`, `PUT /users/{id}/role`
+- Reports: `GET /reports`, `PUT /reports/{id}`
+- Notifications: `POST /notifications/send`, `POST /notifications/send-existing`, `GET /notifications/history`
+
+`POST /buses/{id}/location`, report creation, and push subscription management remain
+on the Edge Function because they are driver/user APIs rather than administrator-only APIs.
+
+Runtime configuration:
+
+- `VITE_ADMIN_API_BASE_URL` selects the Spring administrator API origin.
+- `SUPABASE_API_URL` and `SUPABASE_SERVICE_ROLE_KEY` are server-only values used for notice-image Storage uploads.
+- Existing `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`, and `PUSH_ALLOWED_HOSTS` values are reused for Web Push.
+- The service-role key and VAPID private key must never use a `VITE_` prefix.

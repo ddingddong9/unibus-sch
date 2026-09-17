@@ -16,9 +16,14 @@ class BusRepository {
 
     private static final String SELECT_BUS = """
         SELECT b.id, b.name, b.type, b.capacity, b.status, b.is_running,
+               b.license_plate, b.current_driver_id, current_driver.name AS current_driver_name,
+               b.assigned_driver_id, assigned_driver.name AS assigned_driver_name,
+               b.created_at, b.updated_at,
                r.id AS route_id, r.name AS route_name, r.color AS route_color
         FROM buses b
         LEFT JOIN routes r ON r.id = b.current_route_id
+        LEFT JOIN users current_driver ON current_driver.id = b.current_driver_id
+        LEFT JOIN users assigned_driver ON assigned_driver.id = b.assigned_driver_id
         """;
 
     private final JdbcTemplate jdbcTemplate;
@@ -28,10 +33,7 @@ class BusRepository {
     }
 
     List<BusResponses.ListItem> findAll() {
-        List<BaseBus> buses = jdbcTemplate.query(
-            SELECT_BUS + " ORDER BY b.id",
-            (resultSet, rowNumber) -> mapBaseBus(resultSet)
-        );
+        List<BaseBus> buses = baseBuses();
         if (buses.isEmpty()) {
             return List.of();
         }
@@ -69,6 +71,22 @@ class BusRepository {
         }).toList();
     }
 
+    List<BusResponses.ManagedListItem> findAllManaged() {
+        List<BaseBus> buses = baseBuses();
+        Map<String, BusResponses.ActiveTrip> trips = activeTrips();
+        Map<String, BusResponses.Location> locations = latestLocationsByBus();
+        return buses.stream().map(bus -> {
+            BusResponses.Location location = locations.get(bus.id());
+            return new BusResponses.ManagedListItem(
+                bus.id(), bus.name(), bus.type(), bus.capacity(), bus.status(), bus.isRunning(),
+                bus.currentRoute(), trips.get(bus.id()), location,
+                location == null ? null : location.timestamp(), bus.licensePlate(),
+                bus.currentDriverId(), bus.currentDriverName(), bus.assignedDriverId(),
+                bus.assignedDriverName(), bus.createdAt(), bus.updatedAt()
+            );
+        }).toList();
+    }
+
     Optional<BusResponses.Detail> findById(String id) {
         return jdbcTemplate.query(
             SELECT_BUS + " WHERE b.id = ?",
@@ -77,6 +95,18 @@ class BusRepository {
         ).stream().findFirst().map(bus -> new BusResponses.Detail(
             bus.id(), bus.name(), bus.type(), bus.capacity(), bus.status(), bus.isRunning(),
             bus.currentRoute(), findLatestHistoricalLocation(bus.id()).orElse(null)
+        ));
+    }
+
+    Optional<BusResponses.ManagedDetail> findManagedById(String id) {
+        return jdbcTemplate.query(
+            SELECT_BUS + " WHERE b.id = ?",
+            (resultSet, rowNumber) -> mapBaseBus(resultSet), id
+        ).stream().findFirst().map(bus -> new BusResponses.ManagedDetail(
+            bus.id(), bus.name(), bus.type(), bus.capacity(), bus.status(), bus.isRunning(),
+            bus.currentRoute(), findLatestHistoricalLocation(bus.id()).orElse(null), bus.licensePlate(),
+            bus.currentDriverId(), bus.currentDriverName(), bus.assignedDriverId(),
+            bus.assignedDriverName(), bus.createdAt(), bus.updatedAt()
         ));
     }
 
@@ -117,8 +147,35 @@ class BusRepository {
                 routeId,
                 resultSet.getString("route_name"),
                 resultSet.getString("route_color")
-            )
+            ),
+            resultSet.getString("license_plate"), resultSet.getString("current_driver_id"),
+            resultSet.getString("current_driver_name"), resultSet.getString("assigned_driver_id"),
+            resultSet.getString("assigned_driver_name"),
+            resultSet.getObject("created_at", OffsetDateTime.class),
+            resultSet.getObject("updated_at", OffsetDateTime.class)
         );
+    }
+
+    private List<BaseBus> baseBuses() {
+        return jdbcTemplate.query(SELECT_BUS + " ORDER BY b.id", (rs, row) -> mapBaseBus(rs));
+    }
+
+    private Map<String, BusResponses.ActiveTrip> activeTrips() {
+        return jdbcTemplate.query("""
+            SELECT id, bus_id, route_id, service_phase, planned_departure_at, current_stop_order
+            FROM bus_trips WHERE status = 'active'
+            """, (rs, row) -> Map.entry(rs.getString("bus_id"), new BusResponses.ActiveTrip(
+                rs.getString("id"), rs.getString("route_id"), rs.getString("service_phase"),
+                rs.getObject("planned_departure_at", OffsetDateTime.class),
+                rs.getObject("current_stop_order", Integer.class)
+            ))).stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    private Map<String, BusResponses.Location> latestLocationsByBus() {
+        return jdbcTemplate.query("""
+            SELECT bus_id, latitude, longitude, speed, heading, timestamp FROM bus_latest_state
+            """, (rs, row) -> Map.entry(rs.getString("bus_id"), mapLocation(rs)))
+            .stream().collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private BusResponses.Location mapLocation(ResultSet resultSet) throws SQLException {
@@ -151,7 +208,14 @@ class BusRepository {
         Integer capacity,
         String status,
         Boolean isRunning,
-        BusResponses.CurrentRoute currentRoute
+        BusResponses.CurrentRoute currentRoute,
+        String licensePlate,
+        String currentDriverId,
+        String currentDriverName,
+        String assignedDriverId,
+        String assignedDriverName,
+        OffsetDateTime createdAt,
+        OffsetDateTime updatedAt
     ) {
     }
 }

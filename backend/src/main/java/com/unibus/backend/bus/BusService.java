@@ -21,8 +21,18 @@ class BusService {
     }
 
     @Transactional(readOnly = true)
+    List<BusResponses.ManagedListItem> findAllManaged() {
+        return busRepository.findAllManaged();
+    }
+
+    @Transactional(readOnly = true)
     Optional<BusResponses.Detail> findById(String id) {
         return busRepository.findById(id);
+    }
+
+    @Transactional(readOnly = true)
+    Optional<BusResponses.ManagedDetail> findManagedById(String id) {
+        return busRepository.findManagedById(id);
     }
 
     @Transactional(readOnly = true)
