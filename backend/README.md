@@ -1,6 +1,6 @@
 # UniBus Spring Boot backend
 
-This directory is the isolated replacement for `supabase/functions/make-server`. Phase 1 established the runtime and test environment. Phase 2 migrated the public notice, route, and bus read APIs. Phase 3 migrated authentication and shared sessions. Phase 4 migrates administrator-only notice, route, bus, user, report, and notification APIs. Driver and ordinary-user business APIs remain on the Edge Function.
+This directory is the isolated replacement for `supabase/functions/make-server`. Phase 1 established the runtime and test environment. Phase 2 migrated the public notice, route, and bus read APIs. Phase 3 migrated authentication and shared sessions. Phase 4 migrated administrator-only notice, route, bus, user, report, and notification APIs. Phase 5 migrated driver operations, including trip state, GPS updates, re-entry restoration, and stop handling. Ordinary-user business APIs remain on the Edge Function.
 
 ## Requirements
 
@@ -35,12 +35,14 @@ Point the frontend's public reads at Spring while keeping all other requests on 
 VITE_PUBLIC_API_BASE_URL=http://localhost:8080 \
 VITE_AUTH_API_BASE_URL=http://localhost:8080 \
 VITE_ADMIN_API_BASE_URL=http://localhost:8080 \
+VITE_DRIVER_API_BASE_URL=http://localhost:8080 \
 npm run dev
 ```
 
 The migrated endpoints are documented in [`docs/public-api-contract.md`](docs/public-api-contract.md)
 and [`docs/auth-api-contract.md`](docs/auth-api-contract.md).
 Administrator endpoints are documented in [`docs/admin-api-contract.md`](docs/admin-api-contract.md).
+Driver endpoints are documented in [`docs/driver-api-contract.md`](docs/driver-api-contract.md).
 
 ## Test and build
 
@@ -85,3 +87,5 @@ Production credentials must be supplied as runtime environment variables. Do not
 - Passwords remain bcrypt `$2b$` cost 10. Session tokens remain compatible in both directions: clients receive a 32-byte base64url token while PostgreSQL stores its `sha256:` digest. Legacy plaintext session rows are upgraded when Spring validates them.
 - Notice image uploads continue to use Supabase Storage through its REST API. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
 - Web Push uses the existing VAPID keys and validates subscription endpoint hosts before making outbound requests.
+- Driver starts are serialized by driver and bus row locks. The database's active-trip uniqueness constraints remain the final guard against two drivers claiming one bus or one driver retaining multiple active trips.
+- GPS writes continue through the existing `record_bus_location` function, preserving latest-state upserts and 30-second history sampling for Supabase Realtime consumers.

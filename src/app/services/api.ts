@@ -49,6 +49,10 @@ const configuredAdminApiBaseUrl = import.meta.env.VITE_ADMIN_API_BASE_URL?.trim(
 const ADMIN_API_BASE_URL = configuredAdminApiBaseUrl
   ? configuredAdminApiBaseUrl.replace(/\/+$/, '')
   : AUTH_API_BASE_URL;
+const configuredDriverApiBaseUrl = import.meta.env.VITE_DRIVER_API_BASE_URL?.trim();
+const DRIVER_API_BASE_URL = configuredDriverApiBaseUrl
+  ? configuredDriverApiBaseUrl.replace(/\/+$/, '')
+  : AUTH_API_BASE_URL;
 const isDev = import.meta.env.DEV;
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -189,6 +193,10 @@ class ApiClient {
 
   private adminRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
     return this.request<T>(endpoint, options, ADMIN_API_BASE_URL, false, true);
+  }
+
+  private driverRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    return this.request<T>(endpoint, options, DRIVER_API_BASE_URL, false, true);
   }
 
   // ============ AUTH ENDPOINTS ============
@@ -584,13 +592,13 @@ class ApiClient {
   // ============ DRIVER ENDPOINTS ============
 
   async getDriverBuses(): Promise<any[]> {
-    const response = await this.request<ApiResponse<any[]>>('/driver/buses');
+    const response = await this.driverRequest<ApiResponse<any[]>>('/driver/buses');
     if (response.success && response.data) return response.data;
     throw new Error(response.error || 'Failed to fetch buses');
   }
 
   async driverStart(busId: string): Promise<any> {
-    const response = await this.request<ApiResponse<any>>('/driver/start', {
+    const response = await this.driverRequest<ApiResponse<any>>('/driver/start', {
       method: 'POST',
       body: JSON.stringify({ busId }),
     });
@@ -599,7 +607,7 @@ class ApiClient {
   }
 
   async driverSendLocation(lat: number, lng: number, speed: number, heading: number): Promise<void> {
-    const response = await this.request<ApiResponse>('/driver/location', {
+    const response = await this.driverRequest<ApiResponse>('/driver/location', {
       method: 'POST',
       body: JSON.stringify({ lat, lng, speed, heading }),
     });
@@ -607,14 +615,14 @@ class ApiClient {
   }
 
   async driverStop(): Promise<void> {
-    const response = await this.request<ApiResponse>('/driver/stop', {
+    const response = await this.driverRequest<ApiResponse>('/driver/stop', {
       method: 'POST',
     });
     if (!response.success) throw new Error(response.error || 'Failed to stop driving');
   }
 
   async driverUpdateProgress(stopOrder: number): Promise<any> {
-    const response = await this.request<ApiResponse<any>>('/driver/progress', {
+    const response = await this.driverRequest<ApiResponse<any>>('/driver/progress', {
       method: 'PUT',
       body: JSON.stringify({ stopOrder }),
     });
@@ -623,7 +631,7 @@ class ApiClient {
   }
 
   async driverAdvancePhase(): Promise<any> {
-    const response = await this.request<ApiResponse<any>>('/driver/phase', {
+    const response = await this.driverRequest<ApiResponse<any>>('/driver/phase', {
       method: 'PUT',
     });
     if (response.success && response.data) return response.data;
@@ -631,7 +639,7 @@ class ApiClient {
   }
 
   async getDriverStatus(): Promise<{ activeBus: any | null }> {
-    const response = await this.request<ApiResponse<{ activeBus: any | null }>>('/driver/status');
+    const response = await this.driverRequest<ApiResponse<{ activeBus: any | null }>>('/driver/status');
     if (response.success && response.data) return response.data;
     return { activeBus: null };
   }

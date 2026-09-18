@@ -21,8 +21,10 @@ Migrated endpoints:
 - Reports: `GET /reports`, `PUT /reports/{id}`
 - Notifications: `POST /notifications/send`, `POST /notifications/send-existing`, `GET /notifications/history`
 
-`POST /buses/{id}/location`, report creation, and push subscription management remain
-on the Edge Function because they are driver/user APIs rather than administrator-only APIs.
+The legacy `POST /buses/{id}/location` endpoint, report creation, and push subscription
+management remain on the Edge Function. The driver application now sends GPS through the
+migrated `POST /driver/location` endpoint; the legacy bus-location route is retained only for
+clients that have not moved to the driver contract.
 
 Runtime configuration:
 
