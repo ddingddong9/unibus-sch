@@ -335,24 +335,26 @@ class ApiClient {
   // ============ NOTIFICATION ENDPOINTS ============
 
   async getVapidPublicKey(): Promise<string> {
-    const response = await this.request<ApiResponse<{ publicKey: string }>>('/notifications/vapid-public-key');
+    const response = await this.request<ApiResponse<{ publicKey: string }>>(
+      '/notifications/vapid-public-key', {}, AUTH_API_BASE_URL, false, false,
+    );
     if (response.success && response.data?.publicKey) return response.data.publicKey;
     throw new Error(response.error || 'Failed to fetch push public key');
   }
 
   async subscribePush(subscription: PushSubscriptionJSON): Promise<void> {
-    const response = await this.request<ApiResponse>('/notifications/subscribe', {
+    const response = await this.authRequest<ApiResponse>('/notifications/subscribe', {
       method: 'POST',
       body: JSON.stringify({ subscription }),
-    });
+    }, true);
     if (!response.success) throw new Error(response.error || 'Failed to subscribe push');
   }
 
   async unsubscribePush(endpoint: string): Promise<void> {
-    const response = await this.request<ApiResponse>('/notifications/unsubscribe', {
+    const response = await this.authRequest<ApiResponse>('/notifications/unsubscribe', {
       method: 'POST',
       body: JSON.stringify({ endpoint }),
-    });
+    }, true);
     if (!response.success) throw new Error(response.error || 'Failed to unsubscribe push');
   }
 

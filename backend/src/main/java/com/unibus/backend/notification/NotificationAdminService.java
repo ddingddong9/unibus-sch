@@ -1,6 +1,5 @@
 package com.unibus.backend.notification;
 
-import java.net.URI;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -8,7 +7,6 @@ import java.util.Set;
 import java.util.UUID;
 
 import com.unibus.backend.common.api.ApiRequestException;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,26 +18,21 @@ import tools.jackson.databind.ObjectMapper;
 class NotificationAdminService {
 
     private static final Set<String> TARGETS = Set.of("all", "campus", "commuter", "system");
-    private static final Set<String> STANDARD_HOSTS = Set.of(
-        "fcm.googleapis.com", "updates.push.services.mozilla.com", "web.push.apple.com",
-        "webpush.push.apple.com"
-    );
     private final NotificationAdminRepository repository;
     private final WebPushSender pushSender;
     private final ObjectMapper objectMapper;
-    private final Set<String> configuredHosts;
+    private final PushEndpointPolicy endpointPolicy;
 
     NotificationAdminService(
         NotificationAdminRepository repository,
         WebPushSender pushSender,
         ObjectMapper objectMapper,
-        @Value("${app.push.allowed-hosts:}") String allowedHosts
+        PushEndpointPolicy endpointPolicy
     ) {
         this.repository = repository;
         this.pushSender = pushSender;
         this.objectMapper = objectMapper;
-        this.configuredHosts = java.util.Arrays.stream(allowedHosts.split(","))
-            .map(String::trim).filter(value -> !value.isEmpty()).collect(java.util.stream.Collectors.toSet());
+        this.endpointPolicy = endpointPolicy;
     }
 
     @Transactional
@@ -117,7 +110,7 @@ class NotificationAdminService {
             throw new IllegalStateException(error);
         }
         for (NotificationAdminRepository.Subscription subscription : subscriptions) {
-            if (!allowedEndpoint(subscription.endpoint())) {
+            if (!endpointPolicy.allows(subscription.endpoint())) {
                 failed++;
                 repository.markSubscription(subscription.id(), false, "Blocked invalid push endpoint");
                 continue;
@@ -136,19 +129,6 @@ class NotificationAdminService {
             }
         }
         return new NotificationAdminRepository.PushResult(subscriptions.size(), sent, failed);
-    }
-
-    private boolean allowedEndpoint(String value) {
-        if (value == null || value.length() > 2_048) return false;
-        try {
-            URI uri = URI.create(value);
-            String host = uri.getHost().toLowerCase();
-            return "https".equals(uri.getScheme()) && uri.getPort() < 0
-                && (STANDARD_HOSTS.contains(host) || configuredHosts.contains(host)
-                    || host.endsWith(".notify.windows.com") || host.endsWith(".push.apple.com"));
-        } catch (RuntimeException error) {
-            return false;
-        }
     }
 
     private Map<String, Object> formatNotice(NotificationAdminRepository.Notice notice, String authorName) {

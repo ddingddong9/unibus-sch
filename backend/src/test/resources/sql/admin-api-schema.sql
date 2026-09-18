@@ -163,11 +163,14 @@ CREATE TABLE user_reports (
 CREATE TABLE push_subscriptions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID REFERENCES users(id),
-    endpoint TEXT,
+    endpoint TEXT UNIQUE,
     p256dh TEXT,
     auth TEXT,
+    user_agent TEXT,
     enabled BOOLEAN DEFAULT TRUE,
-    last_error TEXT
+    last_error TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 CREATE TABLE notification_deliveries (

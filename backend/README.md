@@ -1,6 +1,6 @@
 # UniBus Spring Boot backend
 
-This directory is the isolated replacement for `supabase/functions/make-server`. Phase 1 established the runtime and test environment. Phase 2 migrated the public notice, route, and bus read APIs. Phase 3 migrated authentication and shared sessions. Phase 4 migrated administrator-only notice, route, bus, user, report, and notification APIs. Phase 5 migrated driver operations, including trip state, GPS updates, re-entry restoration, and stop handling. Ordinary-user business APIs remain on the Edge Function.
+This directory is the isolated replacement for `supabase/functions/make-server`. Phase 1 established the runtime and test environment. Phase 2 migrated the public notice, route, and bus read APIs. Phase 3 migrated authentication and shared sessions. Phase 4 migrated administrator-only notice, route, bus, user, report, and notification APIs. Phase 5 migrated driver operations, including trip state, GPS updates, re-entry restoration, and stop handling. Phase 6 connects those Spring writes to Supabase Realtime and Storage and moves browser Web Push subscription management to Spring. Ordinary-user business APIs remain on the Edge Function.
 
 ## Requirements
 
@@ -43,6 +43,8 @@ The migrated endpoints are documented in [`docs/public-api-contract.md`](docs/pu
 and [`docs/auth-api-contract.md`](docs/auth-api-contract.md).
 Administrator endpoints are documented in [`docs/admin-api-contract.md`](docs/admin-api-contract.md).
 Driver endpoints are documented in [`docs/driver-api-contract.md`](docs/driver-api-contract.md).
+Realtime, Storage, and Web Push boundaries are documented in
+[`docs/integration-flow.md`](docs/integration-flow.md).
 
 ## Test and build
 
@@ -82,10 +84,12 @@ Production credentials must be supplied as runtime environment variables. Do not
 - Every not-yet-migrated route and every mutation method is denied by Spring Security.
 - The datasource is required and Hibernate cannot mutate the schema.
 - Request bodies with a declared size above 6 MiB are rejected, matching the Edge Function boundary.
-- Existing Supabase Realtime and Storage clients remain unchanged.
+- Supabase remains the Realtime and Storage provider; neither service is reimplemented in Spring.
+- Browser Realtime remains connected directly to Supabase. Spring publishes indirectly by committing to the existing `notices` and `bus_latest_state` tables in the `supabase_realtime` publication.
 - Notice detail view-count increments and route path coordinate/cache updates preserve existing Edge behavior. Contract tests exercise those writes only in an isolated PostgreSQL container.
 - Passwords remain bcrypt `$2b$` cost 10. Session tokens remain compatible in both directions: clients receive a 32-byte base64url token while PostgreSQL stores its `sha256:` digest. Legacy plaintext session rows are upgraded when Spring validates them.
 - Notice image uploads continue to use Supabase Storage through its REST API. Keep `SUPABASE_SERVICE_ROLE_KEY` server-only.
 - Web Push uses the existing VAPID keys and validates subscription endpoint hosts before making outbound requests.
+- The frontend fetches the VAPID public key and manages subscriptions through Spring. There is no hard-coded fallback key, so a public/private VAPID mismatch fails visibly instead of creating an unusable subscription.
 - Driver starts are serialized by driver and bus row locks. The database's active-trip uniqueness constraints remain the final guard against two drivers claiming one bus or one driver retaining multiple active trips.
 - GPS writes continue through the existing `record_bus_location` function, preserving latest-state upserts and 30-second history sampling for Supabase Realtime consumers.

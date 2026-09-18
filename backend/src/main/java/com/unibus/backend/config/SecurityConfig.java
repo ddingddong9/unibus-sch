@@ -2,6 +2,7 @@ package com.unibus.backend.config;
 
 import com.unibus.backend.auth.AdminAuthenticationFilter;
 import com.unibus.backend.auth.DriverAuthenticationFilter;
+import com.unibus.backend.auth.UserAuthenticationFilter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -21,7 +22,8 @@ public class SecurityConfig {
     SecurityFilterChain apiSecurity(
         HttpSecurity http,
         AdminAuthenticationFilter adminAuthenticationFilter,
-        DriverAuthenticationFilter driverAuthenticationFilter
+        DriverAuthenticationFilter driverAuthenticationFilter,
+        UserAuthenticationFilter userAuthenticationFilter
     ) throws Exception {
         return http
             .cors(Customizer.withDefaults())
@@ -55,6 +57,7 @@ public class SecurityConfig {
                     "/notifications/**", "/driver/**").permitAll()
                 .anyRequest().denyAll()
             )
+            .addFilterBefore(userAuthenticationFilter, AnonymousAuthenticationFilter.class)
             .addFilterBefore(driverAuthenticationFilter, AnonymousAuthenticationFilter.class)
             .addFilterBefore(adminAuthenticationFilter, AnonymousAuthenticationFilter.class)
             .build();
@@ -74,6 +77,15 @@ public class SecurityConfig {
         DriverAuthenticationFilter filter
     ) {
         FilterRegistrationBean<DriverAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
+        registration.setEnabled(false);
+        return registration;
+    }
+
+    @Bean
+    FilterRegistrationBean<UserAuthenticationFilter> disableUserFilterServletRegistration(
+        UserAuthenticationFilter filter
+    ) {
+        FilterRegistrationBean<UserAuthenticationFilter> registration = new FilterRegistrationBean<>(filter);
         registration.setEnabled(false);
         return registration;
     }

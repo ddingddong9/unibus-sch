@@ -9,6 +9,7 @@
     "build:single": "cross-env SINGLE_FILE=true vite build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "verify:integrations": "node scripts/verify-supabase-integrations.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

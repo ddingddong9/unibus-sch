@@ -21,8 +21,14 @@ Migrated endpoints:
 - Reports: `GET /reports`, `PUT /reports/{id}`
 - Notifications: `POST /notifications/send`, `POST /notifications/send-existing`, `GET /notifications/history`
 
-The legacy `POST /buses/{id}/location` endpoint, report creation, and push subscription
-management remain on the Edge Function. The driver application now sends GPS through the
+Web Push subscription management is also migrated, but is not administrator-only:
+
+- `GET /notifications/vapid-public-key` is public.
+- `POST /notifications/subscribe` and `POST /notifications/unsubscribe` accept any valid
+  `X-Auth-Token` session and return the same `401` token errors as the Edge Function.
+
+The legacy `POST /buses/{id}/location` endpoint and report creation remain on the Edge Function.
+The driver application now sends GPS through the
 migrated `POST /driver/location` endpoint; the legacy bus-location route is retained only for
 clients that have not moved to the driver contract.
 

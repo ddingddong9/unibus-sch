@@ -2,11 +2,19 @@ package com.unibus.backend.admin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicReference;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,6 +38,9 @@ class AdminApiIntegrationTest {
     private static final String ADMIN_TOKEN = "admin-session-token";
     private static final String USER_TOKEN = "user-session-token";
     private static final String EXPIRED_TOKEN = "expired-admin-token";
+    private static final String TEST_SERVICE_ROLE_KEY = "isolated-test-service-role";
+    private static final AtomicReference<StorageRequest> STORAGE_REQUEST = new AtomicReference<>();
+    private static final HttpServer STORAGE_SERVER = startStorageServer();
 
     @Container
     static final PostgreSQLContainer POSTGRES = new PostgreSQLContainer(
@@ -40,6 +51,15 @@ class AdminApiIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
+        registry.add("app.supabase.api-url", () -> "http://127.0.0.1:" + STORAGE_SERVER.getAddress().getPort());
+        registry.add("app.supabase.service-role-key", () -> TEST_SERVICE_ROLE_KEY);
+        registry.add("app.push.vapid-public-key", () -> "test-public-vapid-key");
+        registry.add("app.push.allowed-hosts", () -> "push.example.test");
+    }
+
+    @AfterAll
+    static void stopStorageServer() {
+        STORAGE_SERVER.stop(0);
     }
 
     @LocalServerPort
@@ -198,6 +218,41 @@ class AdminApiIntegrationTest {
     }
 
     @Test
+    void migratesPushSubscriptionLifecycleWithSessionCompatibility() throws Exception {
+        ApiResult publicKey = request("GET", "/notifications/vapid-public-key", null, null);
+        assertThat(publicKey.status()).isEqualTo(200);
+        assertThat(publicKey.json().path("data").path("publicKey").stringValue())
+            .isEqualTo("test-public-vapid-key");
+
+        assertError(request("POST", "/notifications/subscribe", "{}", null), 401,
+            "{\"error\":\"Unauthorized: No token provided\"}");
+        assertError(request("POST", "/notifications/subscribe", "{}", EXPIRED_TOKEN), 401,
+            "{\"error\":\"Unauthorized: Token expired\"}");
+        assertApiError(request("POST", "/notifications/subscribe", "{}", USER_TOKEN), 400,
+            "Invalid push subscription");
+
+        String subscription = """
+            {"subscription":{"endpoint":"https://push.example.test/subscription/one",
+             "keys":{"p256dh":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+                     "auth":"BBBBBBBBBBBBBBBB"}}}
+            """;
+        ApiResult subscribed = request("POST", "/notifications/subscribe", subscription, USER_TOKEN);
+        assertThat(subscribed.status()).isEqualTo(200);
+        assertThat(subscribed.json().path("data").path("id").isString()).isTrue();
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT enabled FROM push_subscriptions", Boolean.class)).isTrue();
+
+        assertApiError(request("POST", "/notifications/subscribe", subscription, ADMIN_TOKEN), 409,
+            "This push subscription belongs to another account");
+        ApiResult unsubscribed = request("POST", "/notifications/unsubscribe", """
+            {"endpoint":"https://push.example.test/subscription/one"}
+            """, USER_TOKEN);
+        assertThat(unsubscribed.status()).isEqualTo(200);
+        assertThat(jdbcTemplate.queryForObject(
+            "SELECT enabled FROM push_subscriptions", Boolean.class)).isFalse();
+    }
+
+    @Test
     void rejectsMismatchedImageSignatureBeforeStorageCall() throws Exception {
         String boundary = "----unibus-test-boundary";
         String multipart = "--" + boundary + "\r\n"
@@ -213,6 +268,36 @@ class AdminApiIntegrationTest {
         assertThat(response.statusCode()).isEqualTo(400);
         assertThat(objectMapper.readTree(response.body()).path("error").stringValue())
             .isEqualTo("파일 형식과 실제 이미지 내용이 일치하지 않습니다");
+    }
+
+    @Test
+    void uploadsValidatedImageThroughSupabaseStorageHttpBoundary() throws Exception {
+        STORAGE_REQUEST.set(null);
+        String boundary = "----unibus-storage-boundary";
+        byte[] png = new byte[] {
+            (byte) 0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+            0x00, 0x00, 0x00, 0x00
+        };
+        byte[] multipart = multipart(boundary, "pixel.png", "image/png", png);
+        HttpRequest upload = HttpRequest.newBuilder(uri("/notices/images"))
+            .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+            .header("X-Auth-Token", ADMIN_TOKEN)
+            .POST(HttpRequest.BodyPublishers.ofByteArray(multipart))
+            .build();
+        HttpResponse<String> response = client.send(upload, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode json = objectMapper.readTree(response.body());
+        assertThat(json.path("data").path("url").stringValue())
+            .startsWith("http://127.0.0.1:" + STORAGE_SERVER.getAddress().getPort()
+                + "/storage/v1/object/public/notice-images/");
+        StorageRequest captured = STORAGE_REQUEST.get();
+        assertThat(captured).isNotNull();
+        assertThat(captured.path()).startsWith("/storage/v1/object/notice-images/");
+        assertThat(captured.authorization()).isEqualTo("Bearer " + TEST_SERVICE_ROLE_KEY);
+        assertThat(captured.apiKey()).isEqualTo(TEST_SERVICE_ROLE_KEY);
+        assertThat(captured.contentType()).isEqualTo("image/png");
+        assertThat(captured.body()).containsExactly(png);
     }
 
     private ApiResult request(String method, String path, String body, String token) throws Exception {
@@ -247,6 +332,56 @@ class AdminApiIntegrationTest {
         catch (Exception error) { throw new AssertionError(error); }
     }
 
+    private static HttpServer startStorageServer() {
+        try {
+            HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+            server.createContext("/storage/v1/object/notice-images/", AdminApiIntegrationTest::captureStorage);
+            server.start();
+            return server;
+        } catch (IOException error) {
+            throw new ExceptionInInitializerError(error);
+        }
+    }
+
+    private static void captureStorage(HttpExchange exchange) throws IOException {
+        STORAGE_REQUEST.set(new StorageRequest(
+            exchange.getRequestURI().getPath(),
+            exchange.getRequestHeaders().getFirst("Authorization"),
+            exchange.getRequestHeaders().getFirst("apikey"),
+            exchange.getRequestHeaders().getFirst("Content-Type"),
+            exchange.getRequestBody().readAllBytes()
+        ));
+        byte[] response = "{\"Key\":\"notice-images/test.png\"}".getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json");
+        exchange.sendResponseHeaders(200, response.length);
+        exchange.getResponseBody().write(response);
+        exchange.close();
+    }
+
+    private static byte[] multipart(
+        String boundary,
+        String filename,
+        String contentType,
+        byte[] content
+    ) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        output.write(("--" + boundary + "\r\n"
+            + "Content-Disposition: form-data; name=\"file\"; filename=\"" + filename + "\"\r\n"
+            + "Content-Type: " + contentType + "\r\n\r\n").getBytes(StandardCharsets.UTF_8));
+        output.write(content);
+        output.write(("\r\n--" + boundary + "--\r\n").getBytes(StandardCharsets.UTF_8));
+        return output.toByteArray();
+    }
+
     private record ApiResult(int status, JsonNode json, String body) {
+    }
+
+    private record StorageRequest(
+        String path,
+        String authorization,
+        String apiKey,
+        String contentType,
+        byte[] body
+    ) {
     }
 }
