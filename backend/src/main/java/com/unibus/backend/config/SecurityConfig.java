@@ -55,7 +55,9 @@ public class SecurityConfig {
                 ).permitAll()
                 .requestMatchers("/notices/**", "/routes/**", "/buses/**", "/users/**", "/reports/**",
                     "/notifications/**", "/driver/**").permitAll()
-                .anyRequest().denyAll()
+                // Unknown API paths must reach the compatibility 404 handler instead of
+                // being converted to Spring Security's empty 403 response.
+                .anyRequest().permitAll()
             )
             .addFilterBefore(userAuthenticationFilter, AnonymousAuthenticationFilter.class)
             .addFilterBefore(driverAuthenticationFilter, AnonymousAuthenticationFilter.class)

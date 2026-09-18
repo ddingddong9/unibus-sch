@@ -5,10 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
-    "build:single": "cross-env SINGLE_FILE=true vite build",
+    "build": "node scripts/validate-env.mjs && vite build",
+    "build:single": "node scripts/validate-env.mjs && cross-env SINGLE_FILE=true vite build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
+    "test:env": "node --test scripts/validate-env.test.mjs",
+    "verify:env": "node scripts/validate-env.mjs",
+    "verify:parity": "node scripts/verify-edge-spring-parity.mjs",
     "verify:integrations": "node scripts/verify-supabase-integrations.mjs",
     "preview": "vite preview"
   },

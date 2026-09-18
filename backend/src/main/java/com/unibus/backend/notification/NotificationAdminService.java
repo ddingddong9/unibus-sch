@@ -104,7 +104,7 @@ class NotificationAdminService {
         try {
             payload = objectMapper.writeValueAsString(Map.of(
                 "title", notice.title(), "body", notice.content(), "url", "/notice",
-                "noticeId", notice.id().toString(), "createdAt", notice.createdAt().toString()
+                "noticeId", notice.id().toString(), "createdAt", notice.createdAt()
             ));
         } catch (JacksonException error) {
             throw new IllegalStateException(error);

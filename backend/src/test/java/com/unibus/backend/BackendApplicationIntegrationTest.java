@@ -18,7 +18,10 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "app.schema.validation.enabled=false"
+)
 class BackendApplicationIntegrationTest {
 
     @Container
@@ -30,7 +33,10 @@ class BackendApplicationIntegrationTest {
         registry.add("spring.datasource.url", POSTGRES::getJdbcUrl);
         registry.add("spring.datasource.username", POSTGRES::getUsername);
         registry.add("spring.datasource.password", POSTGRES::getPassword);
-        registry.add("app.cors.allowed-origin-patterns", () -> "http://localhost:*");
+        registry.add("app.cors.allowed-origins", () ->
+            "http://localhost:5173,https://unibus-sch.vercel.app");
+        registry.add("app.cors.allowed-origin-patterns", () ->
+            "https://unibus-sch-git-*-ddingddong9s-projects.vercel.app");
     }
 
     @LocalServerPort
@@ -57,6 +63,44 @@ class BackendApplicationIntegrationTest {
     }
 
     @Test
+    void allowsProductionAndScopedPreviewOriginsButRejectsUnknownOrigins() throws Exception {
+        HttpResponse<String> production = preflight("https://unibus-sch.vercel.app");
+        assertThat(production.statusCode()).isEqualTo(200);
+        assertThat(production.headers().firstValue("access-control-allow-origin"))
+            .contains("https://unibus-sch.vercel.app");
+
+        String previewOrigin =
+            "https://unibus-sch-git-feature-ddingddong9s-projects.vercel.app";
+        HttpResponse<String> preview = preflight(previewOrigin);
+        assertThat(preview.statusCode()).isEqualTo(200);
+        assertThat(preview.headers().firstValue("access-control-allow-origin"))
+            .contains(previewOrigin);
+
+        HttpResponse<String> unknown = preflight("https://attacker.example");
+        assertThat(unknown.statusCode()).isEqualTo(403);
+        assertThat(unknown.headers().firstValue("access-control-allow-origin")).isEmpty();
+    }
+
+    @Test
+    void matchesEdgeNotFoundAndAuthenticatedCacheHeaders() throws Exception {
+        HttpResponse<String> missing = send("/does-not-exist", null);
+        assertThat(missing.statusCode()).isEqualTo(404);
+        assertThat(missing.body()).isEqualTo("{\"error\":\"Not Found\"}");
+
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/health"))
+            .header("X-Auth-Token", "test-token")
+            .GET()
+            .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+        assertThat(response.headers().firstValue("cache-control"))
+            .contains("private, no-store");
+        assertThat(response.headers().allValues("vary"))
+            .anySatisfy(value -> assertThat(value).containsIgnoringCase("X-Auth-Token"));
+        assertThat(response.headers().firstValue("x-content-type-options")).contains("nosniff");
+    }
+
+    @Test
     void protectsMigratedAdminRoutes() throws Exception {
         HttpResponse<String> response = send("/users", null);
 
@@ -72,5 +116,15 @@ class BackendApplicationIntegrationTest {
             request.header("Origin", origin);
         }
         return httpClient.send(request.build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> preflight(String origin) throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/notices"))
+            .header("Origin", origin)
+            .header("Access-Control-Request-Method", "GET")
+            .method("OPTIONS", HttpRequest.BodyPublishers.noBody())
+            .build();
+        return httpClient.send(request, HttpResponse.BodyHandlers.ofString());
     }
 }

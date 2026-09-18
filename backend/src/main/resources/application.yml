@@ -47,7 +47,11 @@ management:
 
 app:
   cors:
-    allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*}
+    allowed-origins: ${APP_CORS_ALLOWED_ORIGINS:http://localhost:5173,http://127.0.0.1:5173,https://unibus-sch.vercel.app,https://unibus-sch-two.vercel.app}
+    allowed-origin-patterns: ${APP_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:*,http://127.0.0.1:*,https://unibus-sch-git-*-ddingddong9s-projects.vercel.app,https://unibus-sch-*-ddingddong9s-projects.vercel.app,https://unibus-*-ddingddong9s-projects.vercel.app}
+  schema:
+    validation:
+      enabled: ${APP_SCHEMA_VALIDATION_ENABLED:true}
   naver:
     client-id: ${NAVER_CLIENT_ID:}
     secret-key: ${NAVER_SECRET_KEY:}

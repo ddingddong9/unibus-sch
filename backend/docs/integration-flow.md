@@ -23,6 +23,21 @@ Admin UI -> Spring POST /notices/images -> Supabase Storage notice-images
 `notice-images` bucket with Spring's 5 MiB and image MIME restrictions. Apply this migration
 through the normal Supabase migration process before routing production traffic to Spring.
 
+Spring never creates or alters the Supabase schema. At startup it performs a read-only
+`information_schema` and routine check for the tables, columns, and PostgreSQL functions used by
+the migrated endpoints. A missing object stops startup with the required migration name instead
+of allowing the first live request to fail. `APP_SCHEMA_VALIDATION_ENABLED=false` is reserved for
+focused tests and must not be used as a deployment workaround.
+
+## CORS boundary
+
+- `APP_CORS_ALLOWED_ORIGINS` contains exact local and production frontend origins.
+- `APP_CORS_ALLOWED_ORIGIN_PATTERNS` contains only scoped preview-host patterns.
+- Origins never contain a path or trailing slash.
+- Unknown origins fail the preflight request; wildcard `*` is not used with authenticated APIs.
+- The Supabase Edge `ALLOWED_ORIGINS` secret remains separate while the three non-migrated
+  endpoints continue to run on Edge.
+
 ## Web Push boundary
 
 - `GET /notifications/vapid-public-key` is public and returns Spring's configured public key.
@@ -49,3 +64,12 @@ The Gradle `WebPushSenderIntegrationTest` separately generates real P-256 subscr
 keys, sends an encrypted request to a local HTTP push endpoint, and checks its transport headers
 and ciphertext. Neither verification writes to the production Supabase project or contacts a
 real browser push provider.
+
+`npm run verify:parity` compares representative Edge and Spring status codes and JSON values,
+including route-path fields, timestamp strings, authentication errors, unknown paths, cache
+headers, and CORS. It refuses non-loopback Edge and Spring URLs. Run it only against an isolated
+Supabase stack after both HTTP implementations are started.
+
+`npm run build` first validates every required frontend URL and public Supabase value. Set
+`UNIBUS_DEPLOYMENT_ENV=production` (Vercel also supplies `VERCEL_ENV=production`) in a real
+production build so loopback URLs are rejected before Vite generates a deployable bundle.

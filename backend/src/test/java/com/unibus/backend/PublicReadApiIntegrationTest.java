@@ -23,7 +23,10 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "app.schema.validation.enabled=false"
+)
 @Sql("/sql/public-api-schema.sql")
 class PublicReadApiIntegrationTest {
 
@@ -88,6 +91,8 @@ class PublicReadApiIntegrationTest {
         assertThat(campusRoute.path("stops").size()).isEqualTo(2);
         assertThat(campusRoute.path("shapePoints").path(0).path("name").isNull()).isTrue();
         assertThat(campusRoute.path("stops").path(1).path("arrivalTime").isNull()).isTrue();
+        assertThat(campusRoute.path("createdAt").stringValue())
+            .isEqualTo("2026-07-03T01:02:03+00:00");
 
         ApiResult path = get("/routes/" + ROUTE_ID + "/path");
         assertThat(path.status()).isEqualTo(200);
@@ -95,6 +100,7 @@ class PublicReadApiIntegrationTest {
         assertThat(path.json().path("data").path("path").size()).isEqualTo(3);
         assertThat(path.json().path("data").path("path").path(0).path(0).asDouble())
             .isEqualTo(126.93);
+        assertThat(path.json().path("data").path("stops").path(0).has("arrivalTime")).isFalse();
 
         ApiResult noStops = get("/routes/" + EMPTY_ROUTE_ID + "/path");
         assertThat(noStops.status()).isEqualTo(404);

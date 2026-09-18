@@ -29,7 +29,10 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "app.schema.validation.enabled=false"
+)
 @Sql("/sql/driver-api-schema.sql")
 class DriverApiIntegrationTest {
 

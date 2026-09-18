@@ -74,7 +74,9 @@ class RouteService {
             .toList();
 
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("stops", stops);
+        // Edge's route-path endpoint deliberately returns only marker fields;
+        // arrivalTime belongs to route detail responses and must not appear here as null.
+        data.put("stops", stops.stream().map(PathStop::from).toList());
         data.put("shapePoints", shapePoints);
 
         if (validStops.isEmpty()) {
@@ -149,6 +151,12 @@ class RouteService {
 
     private boolean hasMissingCoordinates(RouteResponse.Stop stop) {
         return stop.lat() == null || stop.lng() == null;
+    }
+
+    private record PathStop(String id, String name, Integer order, Double lat, Double lng) {
+        private static PathStop from(RouteResponse.Stop stop) {
+            return new PathStop(stop.id(), stop.name(), stop.order(), stop.lat(), stop.lng());
+        }
     }
 
     private UUID parseUuid(String value) {

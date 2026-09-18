@@ -30,7 +30,10 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 @Testcontainers
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+    webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+    properties = "app.schema.validation.enabled=false"
+)
 @Sql("/sql/auth-api-schema.sql")
 class AuthApiIntegrationTest {
 
@@ -193,6 +196,24 @@ class AuthApiIntegrationTest {
             "SELECT COUNT(*) FROM auth_tokens WHERE token = 'legacy-plaintext-session-token'",
             Integer.class
         )).isZero();
+    }
+
+    @Test
+    void preservesCompatibilityHeadersWhenAuthenticationCommitsEarly() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+            .uri(URI.create("http://127.0.0.1:" + port + "/notifications/subscribe"))
+            .header("X-Auth-Token", "invalid-token")
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString("{}"))
+            .build();
+        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(401);
+        assertThat(response.headers().firstValue("cache-control"))
+            .contains("private, no-store");
+        assertThat(response.headers().allValues("vary"))
+            .anySatisfy(value -> assertThat(value).containsIgnoringCase("X-Auth-Token"));
+        assertThat(response.headers().firstValue("x-content-type-options")).contains("nosniff");
     }
 
     @Test
